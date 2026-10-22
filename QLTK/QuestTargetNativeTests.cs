@@ -72,7 +72,7 @@ class TrainTests{
    var f=typeof(NativeJob).GetField(field,System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance);f.SetValue(job,true);Assert(!NativeBackend.ThiQuyPriorityAllowed(job),"protected activity "+field);f.SetValue(job,false);
   }
   foreach(string state in new[]{"queued","starting","waiting_map","waiting_popup","confirming_popup","closed","failed"}){job.State=state;Assert(!NativeBackend.ThiQuyPriorityAllowed(job),"startup/closed focus guard "+state);}job.State="opened";
-  job.FarmEnabled=true;Assert(!NativeBackend.ThiQuyPriorityAllowed(job),"walking to training map protected");job.FarmArrived=true;Assert(NativeBackend.ThiQuyPriorityAllowed(job),"arrived farming permits priority");
+  job.FarmEnabled=true;Assert(NativeBackend.ThiQuyPriorityAllowed(job),"walking to training map can stop for Thi Quy");job.FarmArrived=true;Assert(NativeBackend.ThiQuyPriorityAllowed(job),"arrived farming permits priority");
   job.PrioritizeThiQuy=false;Assert(!NativeBackend.ThiQuyPriorityAllowed(job),"disabled preference inactive");
   Assert(NativeBackend.IsThiQuyName("Thi Quỷ")&&NativeBackend.IsThiQuyName("Thi Quỷ".Normalize(NormalizationForm.FormD))&&!NativeBackend.IsThiQuyName("Thi Quỷ khác"),"exact normalized monster name");
   // A quest transition wins immediately, even before the worker disarms priority.
@@ -99,6 +99,15 @@ class TrainTests{
   Assert(NativeBackend.TrainingPollMs(focus)==150&&NativeBackend.HangingLevelOne(focus)==null,"focus uses quest cadence without builtin supplements");
   r.Write(far+0x78,BitConverter.GetBytes(0));focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(!focus.ThiQuyCombatActive&&!focus.ThiQuyPriorityArmed&&focus.GameAutoWanted&&NativeBackend.GameAutoDesired(focus)&&BitConverter.ToInt32(r.Read(data+12,4),0)==0,"Thi Quy death clears focus and restores requested hanging");
   r.Write(far+0x78,BitConverter.GetBytes(200));focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(focus.ThiQuyCombatActive,"next Thi Quy starts another focus");focus.FarmEnabled=false;focus.FarmArrived=false;focus.GameAutoWanted=false;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(!focus.ThiQuyCombatActive&&!NativeBackend.GameAutoDesired(focus),"manual Auto stop does not get reversed by focus cleanup");
+  // Up sees Thi Quy on the way to its destination, pauses the owned route,
+  // then restarts the same route without dropping Up or Auto selections.
+  long farmData=r.Allocate(4096);focus.FarmEnabled=true;focus.FarmArrived=false;focus.FarmRouteSent=true;focus.GameAutoWanted=true;focus.ThiQuyPriorityAt=DateTime.MinValue;
+  NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(focus.ThiQuyCombatActive,"detect Thi Quy before reaching farming spot");
+  r.Write(data,new byte[4]);pump.Invoke(null,new object[]{r,data,focus});Assert(BitConverter.ToInt32(r.Read(data+12,4),0)==0,"wait until owned Up route is paused before attacking");
+  Assert(NativeBackend.HandleThiQuyFarmPause(r,farmData,focus)&&BitConverter.ToInt32(r.Read(farmData,4),0)==6&&focus.FarmEnabled&&focus.GameAutoWanted,"queue owned-route cancel without disabling Up");
+  NativeBackend.HandleThiQuyFarmPause(r,farmData,focus);Assert(BitConverter.ToInt32(r.Read(farmData,4),0)==6,"no repeated route command while pending");
+  r.Write(farmData,new byte[4]);r.Write(data,new byte[4]);pump.Invoke(null,new object[]{r,data,focus});Assert(BitConverter.ToInt32(r.Read(data+12,4),0)==1,"focused attack allowed after Up route pause");
+  r.Write(far+0x78,BitConverter.GetBytes(0));focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(!NativeBackend.HandleThiQuyFarmPause(r,farmData,focus)&&focus.FarmEnabled&&!focus.FarmRouteSent&&focus.GameAutoWanted&&!focus.ThiQuyFarmPaused,"Thi Quy death resumes original Up route and retains Auto");
   Console.WriteLine("PASS: Thi Quy temporary hanging pause, confirmed-off gate, strict ID/map filter, no wrong-mob fallback, attack completion, selected skill combat, automatic restoration and manual-stop protection.");
   GC.KeepAlive(attack);GC.KeepAlive(barrier);GC.KeepAlive(count);GC.KeepAlive(element);GC.KeepAlive(getter);GC.KeepAlive(distance);GC.KeepAlive(cast);Console.WriteLine("PASS: skill ID survey, nearest live monster, repeat requests, complete animation, reject unusable skills/dead player, popup-independent attacks and continuous support without any monsters. Quest target/map/completion guards passed. Code bytes: "+code.Length);
  }return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
