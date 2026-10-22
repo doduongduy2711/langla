@@ -54,6 +54,7 @@ function Reset-IzanamiQueue {
     $script:izanamiQueuePaused=$true;$script:izanamiBatches=@();$script:izanamiWaiting=@{}
 }
 function Pump-IzanamiQueue {
+    Sync-IzanamiCompletedClose
     if($script:izanamiQueuePaused -or !$script:izanamiBatches.Count){return}
     $script:izanamiAccountIndex=@{};foreach($a in $script:accounts){$script:izanamiAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:izanamiBatches){
@@ -108,4 +109,26 @@ function Update-IzanamiQueueStatus {
     $izanamiQueueHint.Text="Đang giữ lượt: $active / $([int]$izanamiMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:izanamiBatches | Where-Object {$_.error});if($errors.Count){$izanamiQueueHint.Text+="`r`n"+$errors[0].error}
     foreach($row in $grid.Rows){if($null -ne (Get-IzanamiQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt cấm thuật';Update-AccountOpen $row}}
+}
+
+function Test-IzanamiCompletedClose($job,[datetime]$now) {
+    return $null -ne $job -and $job -is [TGLL.NativeJob] -and $job.ProcessId -gt 0 -and $job.IzanamiEnabled -and $job.IzanamiRoundComplete -and $job.IzanamiRunFinished -and !$job.IzanamiQueueOnly -and !$job.SonCapEnabled -and !$job.QuestEnabled -and !$job.CloseRequested -and !$job.CancelRequested -and !$job.ReconnectRequested -and $job.State -notin @('closed','failed','cancelled','reconnecting') -and $job.MapId -eq 59 -and ($now-$job.ZoneReadAt).TotalSeconds -lt 5 -and [TGLL.NativeBackend]::CanAutoCloseBatch([string[]]@($job.Id))
+}
+function Begin-IzanamiCompletedClose($job) {
+    return [TGLL.NativeBackend]::BeginAutoCloseBatch([string[]]@($job.Id))
+}
+function Sync-IzanamiCompletedClose {
+    if(!$izanamiCloseAfter.Checked -or !$script:accountJobs.Count){return}
+    if($null -eq $script:izanamiCompletedClose){$script:izanamiCompletedClose=@{}}
+    $keys=@($script:accountJobs.Keys);$now=[datetime]::UtcNow
+    for($n=0;$n -lt [Math]::Min(24,$keys.Count);$n++){
+        if($script:izanamiCompletedCloseCursor -ge $keys.Count){$script:izanamiCompletedCloseCursor=0}
+        $key=[string]$keys[[int]$script:izanamiCompletedCloseCursor];$script:izanamiCompletedCloseCursor++
+        $job=Get-AccountJob $script:accountJobs[$key]
+        if(!(Test-IzanamiCompletedClose $job $now)){continue}
+        $issued=$script:izanamiCompletedClose[[string]$job.Id]
+        if($issued -and ($issued.operation -or ($now-$issued.at).TotalSeconds -lt 5)){continue}
+        $record=@{at=$now;operation=$null};$script:izanamiCompletedClose[[string]$job.Id]=$record
+        try{$record.operation=Begin-IzanamiCompletedClose $job}catch{$status.Text='Chưa tắt được acc đã xong cấm thuật: '+$job.Username}
+    }
 }

@@ -54,3 +54,5 @@ try{
 . (Join-Path $PSScriptRoot 'AutoHideUiTests.ps1')
 
 . (Join-Path $PSScriptRoot 'GitHubUpdateTests.ps1')
+
+. (Join-Path $PSScriptRoot 'IzanamiCompletedCloseTests.ps1')
