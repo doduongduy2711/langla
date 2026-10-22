@@ -12,7 +12,22 @@ if($script:settings.ContainsKey('distributionItems')){$distributionItems.Text=[s
 if($script:settings.ContainsKey('distributionSeconds')){$distributionDelay.Value=[Math]::Max(1,[Math]::Min(3600,[int]$script:settings.distributionSeconds))}
 function Get-DistributionItems([string]$text){$items=@(Get-MailItems $text);if(@($items | Where-Object {$_.quantity -le 0}).Count){throw 'Chia đồ cần số lượng mỗi acc lớn hơn 0; không dùng -1.'};return $items}
 function Get-DistributionJob($id){if($script:accountJobs.ContainsKey([string]$id)){return Get-AccountJob $script:accountJobs[[string]$id]};return $null}
-function Test-DistributionReady($j){return ($null -ne $j -and $j.GameSettingsReady -and $j.CharacterName -and !$j.CloseRequested -and !$j.CancelRequested -and !$j.ReconnectRequested -and $j.State -notin @('failed','closed','cancelled','reconnecting'))}
+function Test-DistributionSessionLive($j){return ($j.ProcessId -gt 0 -and [TGLL.ManagedGames]::IsRunning([int]$j.ProcessId))}
+function Get-DistributionNow {return [datetime]::UtcNow}
+function Test-DistributionReady($j){
+    if($null -eq $j -or !$j.TrainReady -or !$j.GameSettingsReady -or [string]::IsNullOrWhiteSpace([string]$j.CharacterName) -or $j.CloseRequested -or $j.CancelRequested -or $j.ReconnectRequested){return $false}
+    if($j.State -in @('queued','starting','typing','submitted','selecting_character','character_submitted','waiting_map','waiting_popup','confirming_popup','retrying','reconnecting','manual_entry','startup_unavailable','failed','closed','cancelled')){return $false}
+    if($j.MapId -lt 0 -or $j.ZoneId -lt 0 -or !$j.ZoneReadAt -or ([datetime]::UtcNow-$j.ZoneReadAt).TotalSeconds -gt 5){return $false}
+    return (Test-DistributionSessionLive $j)
+}
+function Get-DistributionSessionKey($j){return ([string]$j.Id+'|'+$j.ProcessId+'|'+$j.CharacterName+'|'+$j.MapId+'|'+$j.ZoneId)}
+function Reset-DistributionConfirmation($owner){$owner | Add-Member NoteProperty readyKey '' -Force;$owner | Add-Member NoteProperty readyAt ([datetime]::MinValue) -Force}
+function Test-DistributionConfirmed($owner,$j){
+    if(!(Test-DistributionReady $j)){Reset-DistributionConfirmation $owner;return $false}
+    $key=Get-DistributionSessionKey $j;$now=Get-DistributionNow
+    if(!$owner.PSObject.Properties['readyKey'] -or $owner.readyKey -ne $key){$owner | Add-Member NoteProperty readyKey $key -Force;$owner | Add-Member NoteProperty readyAt $now -Force;return $false}
+    return (($now-$owner.readyAt).TotalSeconds -ge 2)
+}
 function Open-DistributionAccount($id){
     $a=@($script:accounts | Where-Object {[string]$_.id -eq $id}) | Select-Object -First 1;if(!$a){throw 'Tài khoản đã bị xóa.'}
     $script:distributionLaunchingId=$id;$script:mailLaunchingAccountId=$id
@@ -72,7 +87,8 @@ function Sync-Distribution {
         $source=Get-DistributionJob $run.sourceId
         if(!$source -or (!$run.sourcePrepared -and ($source.CloseRequested -or $source.State -in @('closed','failed','cancelled')))){if(!$run.sourceOpened){$run.sourceOpened=$true;Open-DistributionAccount $run.sourceId};$m.status='Đợi mở acc đầu';return}
         if($run.sourceJob -and $run.sourceJob -ne $source.Id){throw 'Phiên acc gửi đã đổi; kiểm tra thư, không tự gửi lại.'}
-        if(!(Test-DistributionReady $source)){if($run.sourcePrepared -or $source.State -in @('failed','closed','cancelled','reconnecting')){throw 'Acc gửi lỗi hoặc mất kết nối; kiểm tra thư trước khi tiếp tục.'};$m.status='Đợi acc đầu sẵn sàng';return}
+        if(!(Test-DistributionReady $source)){Reset-DistributionConfirmation $run;if($run.sourcePrepared -or $source.State -in @('failed','closed','cancelled','reconnecting')){throw 'Acc gửi lỗi hoặc mất kết nối; kiểm tra thư trước khi tiếp tục.'};$m.status='Đợi acc đầu sẵn sàng';return}
+        if(!(Test-DistributionConfirmed $run $source)){$m.status='Xác nhận acc đầu đã vào game ổn định';return}
         if(!$run.sourcePrepared){Prepare-DistributionJob $source;$run.sourceJob=$source.Id;$run.sourcePrepared=$true}
         if($m.state -eq 'waiting'){
             $m.state='opening';$m.at=[datetime]::UtcNow
@@ -83,8 +99,10 @@ function Sync-Distribution {
         if($m.job -and (!$receiver -or $m.job -ne $receiver.Id)){throw 'Phiên acc nhận đã đổi; kiểm tra thư trước khi gửi tiếp.'}
         if((([datetime]::UtcNow)-$m.at).TotalSeconds -gt [Math]::Max(600,($run.seconds*$run.items.Count*20)+180)){throw 'Quá thời gian mở/gửi/nhận; kiểm tra game và thư trước khi chạy lại.'}
         if(!(Test-DistributionReady $receiver)){
+            Reset-DistributionConfirmation $m
             if($m.job){throw 'Acc nhận lỗi hoặc mất kết nối; không tự gửi lại.'};$m.status='Đợi acc nhận vào game';return
         }
+        if(!(Test-DistributionConfirmed $m $receiver)){$m.status='Xác nhận acc nhận đã vào game ổn định';return}
         if($receiver.CharacterName -eq $source.CharacterName){throw 'Hai acc trùng tên nhân vật; kiểm tra đúng server.'}
         if($m.state -eq 'opening'){
             Prepare-DistributionJob $receiver;$m.job=$receiver.Id;Set-DistributionInbox $receiver $true;$m.state='preparing';$m.scanAt=[datetime]::UtcNow;Request-DistributionInventory $receiver;Request-DistributionInventory $source;$m.status='Đọc túi và xử lý thư cũ';return
@@ -92,13 +110,16 @@ function Sync-Distribution {
         if($m.state -eq 'preparing'){
             if(!$receiver.InboxEnabled){throw ('Không nhận được thư: '+$receiver.InboxStatus)}
             if($receiver.InboxBusy -or $receiver.InboxPendingAttachments -ne 0 -or $receiver.InboxObservedAt -lt $m.scanAt){return}
-            Set-DistributionInbox $receiver $false;$m.scanAt=[datetime]::UtcNow;Request-DistributionInventory $receiver;Request-DistributionInventory $source;$m.state='stock';return
+            Set-DistributionInbox $receiver $false;$m.scanAt=[datetime]::UtcNow;Request-DistributionInventory $receiver;Request-DistributionInventory $source;$m | Add-Member NoteProperty stockReadyKey ((Get-DistributionSessionKey $source)+'>'+(Get-DistributionSessionKey $receiver)) -Force;$m.state='stock';return
         }
         if($m.state -eq 'stock'){
+            $stockKey=(Get-DistributionSessionKey $source)+'>'+ (Get-DistributionSessionKey $receiver)
+            if(!$m.PSObject.Properties['stockReadyKey'] -or $m.stockReadyKey -ne $stockKey){$m | Add-Member NoteProperty stockReadyKey $stockKey -Force;$m.scanAt=[datetime]::UtcNow;Request-DistributionInventory $receiver;Request-DistributionInventory $source;$m.status='Đã xác nhận vào game; đọc lại túi trước khi gửi';return}
             if(!$source.Inventory.Ready -or !$receiver.Inventory.Ready -or $source.Inventory.ReadAt -lt $m.scanAt -or $receiver.Inventory.ReadAt -lt $m.scanAt){return}
             foreach($item in $run.items){if((Get-DistributionStock $source.Inventory $item.id $true) -lt $item.quantity){throw ('Acc đầu thiếu đồ không khóa ID '+$item.id+' để chia đủ cho '+$m.username)};$m.baseline[$item.id]=Get-DistributionStock $receiver.Inventory $item.id}
             $m.received=$receiver.InboxReceived;$m.deleted=$receiver.InboxDeleted
             Set-DistributionInbox $receiver $true
+            if(!(Test-DistributionConfirmed $run $source) -or !(Test-DistributionConfirmed $m $receiver)){$m.status='Đợi xác nhận lại acc trước khi gửi';return}
             Send-DistributionItems $source $receiver.CharacterName $run.items $run.seconds;$m.state='sending';$m.status='Đang gửi tới '+$receiver.CharacterName;return
         }
         if($m.state -eq 'sending'){

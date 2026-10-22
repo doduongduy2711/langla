@@ -1,9 +1,11 @@
 ﻿$distSavedAccounts=$script:accounts;$distSavedRun=$script:distributionRun;$distSavedItems=$distributionItems.Text;$distSavedAuto=$autoLoginCheck.Checked
-$distFunctions=@{};foreach($name in @('Get-DistributionJob','Open-DistributionAccount','Prepare-DistributionJob','Request-DistributionInventory','Set-DistributionInbox','Send-DistributionItems','Begin-DistributionClose','Test-DistributionRunning')){$distFunctions[$name]=(Get-Item ('Function:\'+$name)).ScriptBlock}
+$distFunctions=@{};foreach($name in @('Get-DistributionJob','Open-DistributionAccount','Prepare-DistributionJob','Request-DistributionInventory','Set-DistributionInbox','Send-DistributionItems','Begin-DistributionClose','Test-DistributionRunning','Test-DistributionSessionLive','Get-DistributionNow')){$distFunctions[$name]=(Get-Item ('Function:\'+$name)).ScriptBlock}
 $distSavedQueues=@($script:questBatches,$script:izanamiBatches,$script:dungeonBatches,$script:soncapBatches);$distSavedMail=$script:mailRun;$distSavedCloak=$script:cloakRun
 try {
-    $script:distFakeJobs=@{};$script:distOpens=@();$script:distSends=@();$script:distCloses=@()
-    function New-DistFake($id){return [pscustomobject]@{Id=($id+'-job');CharacterName=('char-'+$id);GameSettingsReady=$true;CloseRequested=$false;CancelRequested=$false;ReconnectRequested=$false;State='opened';MailDone=$false;MailEnabled=$false;MailBusy=$false;MailQuantity=[long]0;MailLetters=0;MailStatus='';InboxEnabled=$false;InboxBusy=$false;InboxPendingAttachments=0;InboxObservedAt=[datetime]::UtcNow;InboxReceived=0;InboxDeleted=0;InboxStatus='';ProcessRunning=$true;Inventory=[pscustomobject]@{Ready=$true;ReadAt=[datetime]::UtcNow;Items=@([pscustomobject]@{TemplateId=277;Quantity=100;Locked=$false;Equipment=$false;Slot=0;BagIndex=0},[pscustomobject]@{TemplateId=434;Quantity=100;Locked=$false;Equipment=$false;Slot=1;BagIndex=1})}}}
+    $script:distClock=[datetime]::UtcNow;$script:distFakeJobs=@{};$script:distOpens=@();$script:distSends=@();$script:distCloses=@()
+    function New-DistFake($id){return [pscustomobject]@{Id=($id+'-job');CharacterName=('char-'+$id);GameSettingsReady=$true;CloseRequested=$false;CancelRequested=$false;ReconnectRequested=$false;State='opened';ProcessId=12345;TrainReady=$true;MapId=59;ZoneId=1;ZoneReadAt=[datetime]::UtcNow;MailDone=$false;MailEnabled=$false;MailBusy=$false;MailQuantity=[long]0;MailLetters=0;MailStatus='';InboxEnabled=$false;InboxBusy=$false;InboxPendingAttachments=0;InboxObservedAt=[datetime]::UtcNow;InboxReceived=0;InboxDeleted=0;InboxStatus='';ProcessRunning=$true;Inventory=[pscustomobject]@{Ready=$true;ReadAt=[datetime]::UtcNow;Items=@([pscustomobject]@{TemplateId=277;Quantity=100;Locked=$false;Equipment=$false;Slot=0;BagIndex=0},[pscustomobject]@{TemplateId=434;Quantity=100;Locked=$false;Equipment=$false;Slot=1;BagIndex=1})}}}
+    function Test-DistributionSessionLive($j){return ($j.ProcessId -gt 0 -and $j.ProcessRunning)}
+    function Get-DistributionNow {$script:distClock=$script:distClock.AddSeconds(1);return $script:distClock}
     function Get-DistributionJob($id){return $script:distFakeJobs[[string]$id]}
     function Open-DistributionAccount($id){$script:distOpens+=@($id);$script:distFakeJobs[$id]=New-DistFake $id}
     function Prepare-DistributionJob($j){}
@@ -24,7 +26,16 @@ try {
         if(!$rejected -or $script:distOpens.Count -ne 0 -or $script:distributionRun){throw 'No selected recipients must reject before opening any game'}
     }
     foreach($row in $grid.Rows){$row.Cells['pick'].Value=([string]$row.Tag.id -in @('dist-two','dist-three'))}
-    Start-Distribution;Drive-Dist 'sending'
+    Start-Distribution;$script:distFakeJobs['dist-source'].State='waiting_popup';for($n=0;$n -lt 3;$n++){Sync-Distribution};if($script:distOpens.Count -ne 1 -or $script:distSends.Count){throw 'Sender login not confirmed before receiver launch/send'};$script:distFakeJobs['dist-source'].State='opened';Drive-Dist 'opening'
+    $loginReceiver=$script:distFakeJobs['dist-two'];$loginMember=$script:distributionRun.members[0]
+    foreach($phase in @('queued','starting','selecting_character','character_submitted','waiting_map','waiting_popup','confirming_popup','manual_entry')){$loginReceiver.State=$phase;Sync-Distribution;if($script:distSends.Count){throw ('Sent during login phase '+$phase)}}
+    $loginReceiver.State='opened';$loginReceiver.TrainReady=$false;Sync-Distribution;if($script:distSends.Count){throw 'Sent before training/world readiness'};$loginReceiver.TrainReady=$true
+    $loginReceiver.ProcessRunning=$false;Sync-Distribution;if($script:distSends.Count){throw 'Sent to exited receiver'};$loginReceiver.ProcessRunning=$true
+    $loginReceiver.MapId=-1;Sync-Distribution;if($script:distSends.Count){throw 'Sent without confirmed map'};$loginReceiver.MapId=59
+    $loginReceiver.ZoneReadAt=[datetime]::UtcNow.AddSeconds(-10);Sync-Distribution;if($script:distSends.Count){throw 'Sent with stale world data'};$loginReceiver.ZoneReadAt=[datetime]::UtcNow
+    Sync-Distribution;if($script:distSends.Count -or $loginMember.state -ne 'opening'){throw 'Receiver bypassed stable login confirmation'}
+    $loginReceiver.State='waiting_popup';Sync-Distribution;$loginReceiver.State='opened';Sync-Distribution;if($script:distSends.Count -or $loginMember.state -ne 'opening'){throw 'Readiness flap did not reset confirmation'}
+    Drive-Dist 'sending'
     if(($script:distributionRun.members.id -join ',') -ne 'dist-two,dist-three'){throw 'Distribution did not snapshot selected recipients in row order'}
     foreach($row in $grid.Rows){$row.Cells['pick'].Value=([string]$row.Tag.id -eq 'dist-skip')}
 
@@ -59,7 +70,7 @@ try {
     $source=New-DistFake 'dist-source';$source.Inventory.Items[0].Locked=$true;$script:distFakeJobs['dist-source']=$source
     Drive-Dist 'stock';Sync-Distribution
     if($script:distributionRun.members[0].state -ne 'blocked' -or $script:distSends.Count -ne 3){throw 'Locked-only inventory was distributed'}
-    Write-Output 'PASS: selected recipients only, empty/source-only selection rejected before launch, selection snapshot and row order, fresh inventory delta alone completes despite inbox stopped/busy, stale inventory and missing ID hold, distribution first sender, multiple item IDs/quantities, actual character names, sequential open/send/verified receipt/delete/close, wait for process exit, source kept online, missing-item hold, locked stock rejection and no resend on session replacement. No game launched.'
+    Write-Output 'PASS: login/world/process/stale snapshot gates, stable confirmation and flap reset before sending; selected recipients only, empty/source-only selection rejected before launch, selection snapshot and row order, fresh inventory delta alone completes despite inbox stopped/busy, stale inventory and missing ID hold, distribution first sender, multiple item IDs/quantities, actual character names, sequential open/send/verified receipt/delete/close, wait for process exit, source kept online, missing-item hold, locked stock rejection and no resend on session replacement. No game launched.'
 }finally {
     $script:distributionRun=$distSavedRun;$script:accounts=$distSavedAccounts;$distributionItems.Text=$distSavedItems;$autoLoginCheck.Checked=$distSavedAuto;$script:mailRun=$distSavedMail;$script:cloakRun=$distSavedCloak
     $script:questBatches=$distSavedQueues[0];$script:izanamiBatches=$distSavedQueues[1];$script:dungeonBatches=$distSavedQueues[2];$script:soncapBatches=$distSavedQueues[3]
