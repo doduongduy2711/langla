@@ -27,9 +27,24 @@ $startTrain=Ui-NewButton 'Bật train đã chọn' {
 $stopTrain=Ui-NewButton 'Dừng train đã chọn' {foreach($row in @(Get-LaunchRows)){Set-AccountAuto $row $false};$status.Text='Đã yêu cầu dừng train các tài khoản được chọn.'};Ui-Place $stopTrain $trainPage 203 145 175 28
 $trainHint=Ui-Label 'Mở tài khoản để đọc chiêu.' $trainPage 16 183 635 42
 $null=Ui-Label 'Dùng chiêu qua nút skill của game • Treo game dùng bộ chiêu; QLTK bổ sung chiêu cấp 1 + ID 219 đã tích, luân phiên mỗi 10 ms. Đợi đòn trước hoàn tất.' $trainPage 16 227 635 24
+$trainPriorityThiQuy=New-Object Windows.Forms.CheckBox
+$trainPriorityThiQuy.Text='Ưu tiên đánh Thi Quỷ';$trainPriorityThiQuy.SetBounds(390,145,245,25);$trainPage.Controls.Add($trainPriorityThiQuy)
+$script:loadingTrainPriority=$false
+function Sync-TrainPriority($account,$job) {
+    if($job -is [TGLL.NativeJob] -and $job.PrioritizeThiQuy -ne [bool]$account.trainPriorityThiQuy){[TGLL.NativeBackend]::SetThiQuyPriority($job.Id,[bool]$account.trainPriorityThiQuy)}
+}
+function Save-TrainPriority {
+    if($script:loadingTrainPriority -or !$grid.SelectedRows.Count){return}
+    $account=$grid.SelectedRows[0].Tag
+    $account | Add-Member NoteProperty trainPriorityThiQuy $trainPriorityThiQuy.Checked -Force
+    if(!$UiTest){Save-Accounts}
+    if($script:accountJobs.ContainsKey([string]$account.id)){Sync-TrainPriority $account (Get-AccountJob $script:accountJobs[[string]$account.id])}
+}
+$trainPriorityThiQuy.Add_CheckedChanged({try{Save-TrainPriority}catch{$status.Text=$_.Exception.Message}})
 function Update-TrainUi {
     if(!$grid.SelectedRows.Count){return}
     $a=$grid.SelectedRows[0].Tag;$key=[string]$a.id
+    $script:loadingTrainPriority=$true;try{$trainPriorityThiQuy.Checked=[bool]$a.trainPriorityThiQuy}finally{$script:loadingTrainPriority=$false}
     if(!$script:accountJobs.ContainsKey($key)){$script:loadingSkills=$true;$skillChoice.Items.Clear();$script:loadingSkills=$false;$script:skillViewKey='';$trainHint.Text='Tài khoản chưa mở trong phiên QLTK này.';return}
     $j=Get-AccountJob $script:accountJobs[$key]
     if(!$j.Skills.Count){$script:loadingSkills=$true;$skillChoice.Items.Clear();$script:loadingSkills=$false;$script:skillViewKey='';$trainHint.Text='Đang đợi danh sách chiêu từ nhân vật...';return}
@@ -42,6 +57,7 @@ function Update-TrainUi {
     }
     $state=@{0='Chưa sẵn sàng trên bản đồ';1='Đã đọc chiêu';2='Không có chiêu đã chọn';3='Chưa có quái sống';4='Đã bắt đầu chiêu';5='Nhân vật đã chết';6='Đang hoàn tất đòn';7='Game chưa cho bắt đầu chiêu (MP/trạng thái/hồi chiêu)'}[$j.TrainStatus]
     $trainHint.Text=$a.username+' • '+$state+"`r`nTrain: "+$(if($j.TrainEnabled){'Bật'}else{'Tắt'})+' • Đang thử ID '+$j.TrainSkillId+' • Bắt đầu: '+$j.TrainAttempts+' • Quái '+$j.TrainTargetId+' HP '+$j.TrainTargetHp
+    if($a.trainPriorityThiQuy){$trainHint.Text+=' • '+$j.ThiQuyPriorityStatus}
 }
 $skillChoice.Add_ItemCheck({
     if($script:loadingSkills){return}

@@ -600,7 +600,20 @@ namespace TGLL {
         // status; records at +128 (32 bytes: ID/template/MP/cast/name/level/type).
         internal static byte[] Train(long data,long canvasSlot,long fcSlot,long charSlot,long mobSlot,long templateGetter,long distance,long skillButton,long barrier=0,long attackButton=0,long directSkill=0){
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x83,0xec,0x20);
-            a.Emit(0x48,0xbb);a.Q(data);a.Emit(0x83,0x3b,0x01);a.J(0x85,"return");a.Emit(0xc7,0x03,2,0,0,0,0xc7,0x43,0x18,0,0,0,0);
+            a.Emit(0x48,0xbb);a.Q(data);
+            // Reserved header +112/+120/+124: preferred mob, expected map, armed.
+            // Retarget builtin hanging before Main.Update, without switching hanging off
+            // or replacing an attack that is still playing its hit frames.
+            a.Emit(0x83,0x7b,80,1);a.J(0x84,"priorityEnd");a.Emit(0x83,0x7b,124,1);a.J(0x85,"priorityEnd");a.Emit(0x4c,0x8b,0x63,112,0x4d,0x85,0xe4);a.J(0x84,"priorityEnd");
+            Slot(a,canvasSlot,"priorityEnd");a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"priorityEnd");a.Emit(0x48,0x8b,0x30,0x48,0x85,0xf6);a.J(0x84,"priorityEnd");a.Emit(0x48,0x8b,0xbe,0xb8,1,0,0,0x48,0x85,0xff);a.J(0x84,"priorityEnd");
+            Slot(a,fcSlot,"priorityEnd");a.Emit(0x48,0x39,0x07);a.J(0x85,"priorityEnd");a.Emit(0x0f,0xbf,0x87,0x34,1,0,0,0x3b,0x43,120);a.J(0x85,"priorityEnd");
+            // Check membership before dereferencing a worker-sampled object pointer.
+            a.Emit(0x48,0x8b,0x8f,0x50,1,0,0,0x48,0x85,0xc9);a.J(0x84,"priorityEnd");a.Emit(0x48,0x8b,0x01,0x49,0x8b,0xd4,0x4c,0x8b,0x80,0x10,2,0,0,0xff,0x90,0x08,2,0,0,0x84,0xc0);a.J(0x84,"priorityEnd");
+            Slot(a,mobSlot,"priorityEnd");a.Emit(0x49,0x39,0x04,0x24);a.J(0x85,"priorityEnd");a.Emit(0x41,0x80,0x7c,0x24,0x3d,4);a.J(0x83,"priorityEnd");a.Emit(0x41,0x83,0x7c,0x24,0x78,0);a.J(0x8e,"priorityEnd");a.Emit(0x66,0x41,0x81,0x7c,0x24,0x50,0x05,0x01);a.J(0x85,"priorityEnd");
+            Slot(a,charSlot,"priorityEnd");a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"priorityEnd");a.Emit(0x4c,0x8b,0x68,8,0x4d,0x85,0xed);a.J(0x84,"priorityEnd");a.Emit(0x41,0x83,0xbd,0xa8,0,0,0,0);a.J(0x8e,"priorityEnd");a.Emit(0x49,0x83,0xbd,0x68,1,0,0,0);a.J(0x85,"priorityEnd");a.Emit(0x49,0x83,0xbd,0x70,1,0,0,0);a.J(0x85,"priorityEnd");
+            a.Emit(0x4c,0x39,0xa7,0xb0,2,0,0);a.J(0x84,"priorityEnd");a.Emit(0x4c,0x89,0xa7,0xb0,2,0,0);
+            if(barrier!=0){a.Emit(0x48,0x8d,0x8f,0xb0,2,0,0,0x49,0x8b,0xd4);a.Call(barrier);}
+            a.Label("priorityEnd");a.Emit(0x83,0x3b,0x01);a.J(0x85,"return");a.Emit(0xc7,0x03,2,0,0,0,0xc7,0x43,0x18,0,0,0,0);
             a.Rax(canvasSlot);a.Emit(0x48,0x8b,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0xa8,1);a.J(0x85,"done");a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x30,0x48,0x85,0xf6);a.J(0x84,"done");
             a.Emit(0x48,0x8b,0xbe,0xb8,1,0,0,0x48,0x85,0xff);a.J(0x84,"done");a.Rax(fcSlot);a.Emit(0x48,0x8b,0,0x48,0x39,0x07);a.J(0x85,"done");
             a.Emit(0xff,0x43,4,0xc7,0x43,8,0,0,0,0,0x48,0xc7,0x43,0x20,0,0,0,0,0xc7,0x43,0x18,1,0,0,0);
@@ -631,12 +644,13 @@ namespace TGLL {
             // Danh sách +0x160 thuộc treo mặc định và rỗng khi treo tắt.
             // Nhiệm vụ dùng +0x150: toàn bộ quái trên map, lọc ID và HP bên dưới.
             a.Emit(0x83,0x7b,80,1);a.J(0x85,"ordinaryMobList");a.Emit(0x4c,0x8b,0xbf,0x50,1,0,0);a.Jump("mobListReady");
-            a.Label("ordinaryMobList");a.Emit(0x83,0x7b,88,1);a.J(0x85,"builtinMobList");a.Emit(0x4c,0x8b,0xbf,0x50,1,0,0);a.Jump("mobListReady");a.Label("builtinMobList");a.Emit(0x4c,0x8b,0xbf,0x60,1,0,0);a.Label("mobListReady");a.Emit(0x4d,0x85,0xff);a.J(0x84,"done");a.Emit(0x45,0x33,0xf6);
+            a.Label("ordinaryMobList");a.Emit(0x83,0x7b,124,1);a.J(0x85,"priorityMobListDone");a.Emit(0x48,0x83,0x7b,112,0);a.J(0x84,"priorityMobListDone");a.Emit(0x4c,0x8b,0xbf,0x50,1,0,0);a.Jump("mobListReady");a.Label("priorityMobListDone");a.Emit(0x83,0x7b,88,1);a.J(0x85,"builtinMobList");a.Emit(0x4c,0x8b,0xbf,0x50,1,0,0);a.Jump("mobListReady");a.Label("builtinMobList");a.Emit(0x4c,0x8b,0xbf,0x60,1,0,0);a.Label("mobListReady");a.Emit(0x4d,0x85,0xff);a.J(0x84,"done");a.Emit(0x45,0x33,0xf6);
             a.Label("mobs");a.Emit(0x41,0x81,0xfe,0,2,0,0);a.J(0x8d,"target");a.Emit(0x49,0x8b,0x07,0x49,0x8b,0xcf,0x48,0x8b,0x90,0xf0,1,0,0,0xff,0x90,0xe8,1,0,0,0x44,0x3b,0xf0);a.J(0x8d,"target");
             a.Emit(0x49,0x8b,0x07,0x49,0x8b,0xcf,0x41,0x8b,0xd6,0x4c,0x8b,0x80,0x60,2,0,0,0xff,0x90,0x58,2,0,0,0x4c,0x8b,0xe0,0x48,0x85,0xc0);a.J(0x84,"nextMob");
             a.Rax(mobSlot);a.Emit(0x48,0x8b,0,0x49,0x39,0x04,0x24);a.J(0x85,"nextMob");a.Emit(0x41,0x80,0x7c,0x24,0x3d,4);a.J(0x83,"nextMob");a.Emit(0x41,0x83,0x7c,0x24,0x78,0);a.J(0x8e,"nextMob");
             // Chỉ chọn quái sống có đúng template nhiệm vụ; không tìm thấy thì chờ hồi sinh.
             a.Emit(0x83,0x7b,84,0);a.J(0x88,"mobFilterDone");a.Emit(0x41,0x0f,0xbf,0x44,0x24,0x50,0x3b,0x43,84);a.J(0x85,"nextMob");a.Label("mobFilterDone");
+            a.Emit(0x83,0x7b,124,1);a.J(0x85,"priorityDistanceDone");a.Emit(0x83,0x7b,80,1);a.J(0x84,"priorityDistanceDone");a.Emit(0x4c,0x3b,0x63,112);a.J(0x85,"priorityDistanceDone");a.Emit(0x0f,0xbf,0x87,0x34,1,0,0,0x3b,0x43,120);a.J(0x85,"priorityDistanceDone");a.Emit(0x66,0x41,0x81,0x7c,0x24,0x50,0x05,0x01);a.J(0x85,"priorityDistanceDone");a.Emit(0x49,0x8b,0xcd,0x49,0x8b,0xd4,0x45,0x33,0xc0);a.Call(distance);a.Emit(0x89,0x43,0x40,0x4c,0x89,0x63,0x38);a.Jump("target");a.Label("priorityDistanceDone");
             a.Emit(0x49,0x8b,0xcd,0x49,0x8b,0xd4,0x45,0x33,0xc0);a.Call(distance);a.Emit(0x3b,0x43,0x40);a.J(0x8d,"nextMob");a.Emit(0x89,0x43,0x40,0x4c,0x89,0x63,0x38);
             a.Label("nextMob");a.Emit(0x41,0xff,0xc6);a.Jump("mobs");
             a.Label("target");a.Emit(0x48,0x8b,0x43,0x38,0x48,0x85,0xc0);a.J(0x84,"done");
@@ -1001,7 +1015,7 @@ namespace TGLL {
         public volatile bool FollowActive;public volatile string FollowStatus="";public volatile int FollowDistance=-1,FollowMoves;internal bool FollowStopPending;internal DateTime FollowPollAt=DateTime.MinValue;
         public volatile bool PersistentUp;internal bool UpRepeatDaily;internal DateTime UpDay;internal bool[] UpCompleted=new bool[5];internal string[] UpSonCapTeamIds=new string[0];internal bool UpIzanamiFull,UpSonCapFull;public volatile bool DailyManaged,DailyActive,DailyExecuting;internal bool DailyApplying;public volatile int DailyStage;public volatile string DailyStatus="";internal bool[] DailyPlan=new bool[4],DailyRunPlan=new bool[4];internal DateTime DailyLastDate;internal string[] DailyTeamIds=new string[0];internal FarmSpot DailyReturnSpot;internal bool DailyReturnQuiet;public volatile bool KeyReceiptVerified;public volatile bool CurseActive;public DateTime CurseReadAt=DateTime.MinValue;internal DateTime CursePollAt=DateTime.MinValue;public volatile int MapId=-1,ZoneId=-1;public DateTime ZoneReadAt=DateTime.MinValue;public volatile string ZoneStatus="";public volatile bool ZoneSyncActive;
         internal int PlannedZone=-1,ZonePlanMap=-1,ZoneAttempts;internal volatile bool ZonePrepared;internal DateTime ZoneActionAt=DateTime.MinValue,ZonePollAt=DateTime.MinValue;internal long ZoneOldPopup;internal bool ZoneListWaiting;
-        public volatile VitalsSnapshot Vitals;internal DateTime VitalsPollAt,IdentityPollAt;public volatile string CharacterName="",TeamStatus="";public volatile string[] TeamMembers=new string[0],Friends=new string[0];
+        public volatile VitalsSnapshot Vitals;internal DateTime VitalsPollAt,IdentityPollAt;public volatile bool PrioritizeThiQuy;public volatile string ThiQuyPriorityStatus="Tắt";internal DateTime ThiQuyPriorityAt=DateTime.MinValue;internal bool ThiQuyPriorityArmed;public volatile string CharacterName="",TeamStatus="";public volatile string[] TeamMembers=new string[0],Friends=new string[0];
         internal string LeaderZoneJob="";internal int LeaderZoneMap=-1,LeaderZoneTarget=-1;internal bool LeaderZoneConfirmed;
         internal string[] TeamJobIds=new string[0];internal DateTime TeamReadAt=DateTime.MinValue,TeamActionAt=DateTime.MinValue;internal int TeamAttempts,TeamAttemptCommand;internal bool TeamFriendRequested;internal string TeamTarget="";internal bool TeamManaged,TeamConfirmed;internal long TeamAcceptedPopup;
         public volatile bool CloseAfterKey,KeyReceiptPending;internal int KeyReceiptBefore=-1,KeyReceiptLastCount=-1;internal DateTime KeyReceiptAt,KeyReceiptPollAt,KeyBaselineAt;internal string KeyReceiptReadError="";public volatile bool QuestQueueOnly,QuestFinished;public volatile bool QuestEnabled,QuestPauseAuto;public volatile int QuestCompleted,QuestRemaining=-1;public volatile string QuestStatus="Tắt";internal CloseBatchOperation QuestAutoCloseOperation;internal DateTime SonCapReadErrorAt;internal string SonCapReadError="";internal int QuestMobId=-1,QuestKind=-1;internal int QuestPhase,QuestBaseRemaining=-1,QuestCommand;internal bool QuestReturn,QuestHadTask,QuestWasDone,QuestInFlight;internal DateTime QuestAt,QuestRetryAt,QuestBusyAt;internal int QuestBusyRetries;
@@ -1714,6 +1728,28 @@ namespace TGLL {
                 foreach(SkillInfo skill in j.Skills)if(skill.Level==1&&skill.Usable&&Array.IndexOf(j.TrainSkillIds,skill.Id)>=0)return 50;
             }
             return 150;
+        }
+        public static void SetThiQuyPriority(string id,bool enabled){NativeJob j=Get(id);if(j==null)throw new Exception("train_session_unavailable");j.PrioritizeThiQuy=enabled;j.ThiQuyPriorityAt=DateTime.MinValue;}
+        internal static bool ThiQuyPriorityAllowed(NativeJob j){return j!=null&&j.PrioritizeThiQuy&&j.Auto&&j.TrainReady&&j.GameSettingsReady&&(j.TrainEnabled||j.GameAutoEnabled&&j.GameAutoWanted)&&!j.QuestEnabled&&!j.QuestPauseAuto&&!j.DailyActive&&!j.IzanamiEnabled&&!j.SonCapEnabled&&!j.DungeonHighEnabled&&!j.ReceiveFlowActive&&!j.ReceiveKeyRequested&&!j.ReplayRequested&&!j.CloseRequested&&!j.CancelRequested&&!j.ReconnectRequested&&!j.CurseActive&&!j.CloakEnabled&&!j.ChestEnabled&&!j.MailEnabled&&!j.MailBusy&&!j.MailQueueOnly&&!j.CloakQueueOnly&&!j.ZoneSyncActive&&!j.FollowActive&&(!j.FarmEnabled||j.FarmArrived);}
+        internal static bool IsThiQuyName(string name){return String.Equals((name??"").Normalize(NormalizationForm.FormC).Trim(),"Thi Quỷ",StringComparison.OrdinalIgnoreCase);}
+        internal static long ReadThiQuyTarget(Remote r,long game,out int map){
+            long fcClass=ResolvedClass(r,game+0x16ee888),canvasClass=ResolvedClass(r,game+0x16ed658),charClass=ResolvedClass(r,game+0x16ee330),mobClass=ResolvedClass(r,game+TrainingMobSlotRva);
+            long fc=r.Ptr(r.Ptr(fcClass+0xb8)+16),canvas=r.Ptr(r.Ptr(canvasClass+0xb8)),player=r.Ptr(r.Ptr(charClass+0xb8)+8);map=-1;
+            if(fc==0||canvas==0||player==0||r.Ptr(fc)!=fcClass||r.Ptr(player)!=charClass||r.Ptr(canvas+0x1b8)!=fc)return 0;
+            map=BitConverter.ToInt16(r.Read(fc+0x134,2),0);long catalog=r.Ptr(canvas+0xd8);if(catalog==0||BitConverter.ToInt32(r.Read(catalog+24,4),0)<=261)return 0;long template=r.Ptr(catalog+32+261*8);
+            if(template==0||!IsThiQuyName(ReadLabel(r,r.Ptr(template+48))))return 0;
+            byte[] position=r.Read(player+16,4);int x=BitConverter.ToInt16(position,0),y=BitConverter.ToInt16(position,2),bestDistance=Int32.MaxValue;long best=0,current=r.Ptr(fc+0x2b0);
+            foreach(long mob in ReadVector(r,r.Ptr(fc+0x150)).Take(512)){
+                if(mob==0||r.Ptr(mob)!=mobClass)continue;byte[] b=r.Read(mob+0x38,68);if(b[5]>=4||BitConverter.ToInt32(b,64)<=0||BitConverter.ToInt16(b,24)!=261)continue;
+                if(mob==current){best=mob;break;}int distance=Math.Abs(x-BitConverter.ToInt16(b,32))+Math.Abs(y-BitConverter.ToInt16(b,34));if(distance<bestDistance){best=mob;bestDistance=distance;}
+            }
+            if(r.Ptr(canvas+0x1b8)!=fc||BitConverter.ToInt16(r.Read(fc+0x134,2),0)!=map)return 0;return best;
+        }
+        internal static void PumpThiQuyPriority(Remote r,long game,long data,NativeJob j){
+            if(data==0)return;bool allowed=ThiQuyPriorityAllowed(j);DateTime now=DateTime.UtcNow;
+            if(!allowed){if(j.ThiQuyPriorityArmed){r.Write(data+124,new byte[4]);r.Write(data+112,new byte[8]);j.ThiQuyPriorityArmed=false;}j.ThiQuyPriorityStatus=j.PrioritizeThiQuy?"Chờ train quái sẵn sàng":"Tắt";return;}
+            if((now-j.ThiQuyPriorityAt).TotalMilliseconds<750)return;j.ThiQuyPriorityAt=now;
+            try{int map;long target=ReadThiQuyTarget(r,game,out map);r.Write(data+124,new byte[4]);r.Write(data+112,BitConverter.GetBytes(target));r.Write(data+120,BitConverter.GetBytes(map));if(target!=0)r.Write(data+124,BitConverter.GetBytes(1));j.ThiQuyPriorityArmed=target!=0;j.ThiQuyPriorityStatus=target!=0?"Ưu tiên Thi Quỷ":"Không có Thi Quỷ sống; đánh quái thường";}catch{r.Write(data+124,new byte[4]);j.ThiQuyPriorityArmed=false;j.ThiQuyPriorityStatus="Chờ dữ liệu quái mới";}
         }
         static void PumpTraining(Remote r,long data,NativeJob j){
             if(data==0)return;
@@ -2595,7 +2631,7 @@ namespace TGLL {
                         j.Stage="popup";j.State="waiting_map";r.Write(data,BitConverter.GetBytes(13));timer.Restart();Stopwatch mapDelay=null;bool popupReady=false,popupLogged=false;
                         while(timer.ElapsedMilliseconds<90000){
                             if(j.CancelRequested){j.Error="cancelled";break;}if(p.HasExited){j.Error="game_exited";break;}
-                            PumpCharacterIdentity(r,game,j);PumpTraining(r,trainData,j);PumpGameSettings(r,settingsData,j);byte[] gate=r.Read(data,8);int gateState=BitConverter.ToInt32(gate,0);j.ReadyPhase=BitConverter.ToInt32(gate,4);
+                            PumpCharacterIdentity(r,game,j);PumpThiQuyPriority(r,game,trainData,j);PumpTraining(r,trainData,j);PumpGameSettings(r,settingsData,j);byte[] gate=r.Read(data,8);int gateState=BitConverter.ToInt32(gate,0);j.ReadyPhase=BitConverter.ToInt32(gate,4);
                             if(gateState==14){if(mapDelay==null){mapDelay=Stopwatch.StartNew();j.State="waiting_popup";Log(j,"map_ready",",\"delay_ms\":5000");}if(mapDelay.ElapsedMilliseconds>=5000){Log(j,"popup_delay_elapsed",",\"elapsed_ms\":"+mapDelay.ElapsedMilliseconds);j.State="confirming_popup";r.Write(data,BitConverter.GetBytes(15));}}
                             if(!popupLogged&&BitConverter.ToInt32(r.Read(data+3264,4),0)>0){popupLogged=true;Log(j,"popup_confirmed",",\"label\":\"Xác nhận\"");}
                             if(gateState==16){popupReady=true;Log(j,"popup_clear","");break;}Thread.Sleep(100);
@@ -2616,7 +2652,7 @@ namespace TGLL {
 
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
                     if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpQuest(keep,questData,j);PumpGameSettings(keep,settingsData,j);}
-                    PumpTraining(keep,trainData,j);
+                    PumpThiQuyPriority(keep,game,trainData,j);PumpTraining(keep,trainData,j);
                     if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);PumpAutoItem(keep,itemData,j);PumpInventory(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
                     ReadDiagnostics(keep,data,j);PumpIzanamiAttemptLimit(keep,game,j);PumpDungeonCycle(keep,data,game,j,npcTimer);PumpReceiveKey(keep,data,j,npcTimer,game);if(j.ReplayRequested){Replay(keep,data,j);npcTimer.Restart();}
                     if(npcTimer.IsRunning&&!j.TravelActive&&(j.ReceiveKeyEnabled||j.DungeonHighEnabled||j.IzanamiEnabled)){int state=BitConverter.ToInt32(keep.Read(data,4),0);if(state==9)j.State=j.NpcAction==2?"choosing_izanami":j.NpcAction==0?"choosing_key":"choosing_dungeon";

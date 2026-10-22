@@ -51,6 +51,46 @@ class TrainTests{
   r.Write(task+24,BitConverter.GetBytes(0));r.Write(task+36,BitConverter.GetBytes(179));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"new quest ID invalidates previous target immediately");
   Put(r,fc+0x318,0);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"absent task blocks attack");
   r.Write(data+80,BitConverter.GetBytes(0));Put(r,fc+0x160,mobs);expected=near;r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==9,"ordinary training still chooses nearest living mob");
+  // Thi Quy preference: retarget builtin hanging without requesting a skill.
+  Assert(code.Length<4096,"train callback allocation size");
+  r.Write(player+0xa8,BitConverter.GetBytes(100));Put(r,player+0x168,0);
+  r.Write(near+0x50,BitConverter.GetBytes((short)180));r.Write(far+0x50,BitConverter.GetBytes((short)261));
+  Put(r,data+112,far);r.Write(data+120,BitConverter.GetBytes(74));r.Write(data+124,BitConverter.GetBytes(1));
+  Put(r,fc+0x2b0,near);tick();Assert(r.Ptr(fc+0x2b0)==far&&calls==9,"builtin focus prioritizes farther Thi Quy without casting or disabling hanging");
+  Put(r,fc+0x2b0,near);Put(r,player+0x168,name);tick();Assert(r.Ptr(fc+0x2b0)==near,"active attack target retained until hit frames complete");Put(r,player+0x168,0);
+  Put(r,player+0x170,name);tick();Assert(r.Ptr(fc+0x2b0)==near,"active support retained");Put(r,player+0x170,0);
+  r.Write(data+120,BitConverter.GetBytes(75));tick();Assert(r.Ptr(fc+0x2b0)==near,"stale map cannot retarget builtin");r.Write(data+120,BitConverter.GetBytes(74));
+  overlayVisible=false;Put(r,data+112,1);tick();Assert(r.Ptr(fc+0x2b0)==near,"removed pointer rejected before dereference");overlayVisible=true;Put(r,data+112,far);
+  Put(r,far,npcClass);tick();Assert(r.Ptr(fc+0x2b0)==near,"wrong class cannot retarget");Put(r,far,mobClass);
+  r.Write(far+0x78,BitConverter.GetBytes(0));tick();Assert(r.Ptr(fc+0x2b0)==near,"dead priority mob ignored");r.Write(far+0x78,BitConverter.GetBytes(200));
+  r.Write(far+0x3d,new byte[]{4});tick();Assert(r.Ptr(fc+0x2b0)==near,"disappearing priority mob ignored");r.Write(far+0x3d,new byte[]{0});
+  r.Write(player+0xa8,BitConverter.GetBytes(0));tick();Assert(r.Ptr(fc+0x2b0)==near,"dead player cannot retarget");r.Write(player+0xa8,BitConverter.GetBytes(100));
+  expected=far;r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==10&&r.Ptr(fc+0x2b0)==far,"supplemental skill selects priority mob over nearest ordinary mob");
+  Put(r,player+0x168,0);r.Write(far+0x78,BitConverter.GetBytes(0));expected=near;r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==11,"dead priority falls back to ordinary living mob");
+  Put(r,player+0x168,0);r.Write(far+0x78,BitConverter.GetBytes(200));r.Write(data+124,BitConverter.GetBytes(0));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==12&&r.Ptr(fc+0x2b0)==near,"unchecked preference restores nearest mob");
+  // Worker eligibility protects quest/instances/navigation even with a saved preference.
+  NativeJob job=new NativeJob("synthetic.exe","test","unused",null,true);job.PrioritizeThiQuy=true;job.TrainReady=true;job.GameSettingsReady=true;job.TrainEnabled=true;
+  Assert(NativeBackend.ThiQuyPriorityAllowed(job),"normal training permits priority");
+  foreach(string field in new string[]{"QuestEnabled","QuestPauseAuto","DailyActive","IzanamiEnabled","SonCapEnabled","DungeonHighEnabled","ReceiveFlowActive","ReceiveKeyRequested","ReplayRequested","CloseRequested","CancelRequested","ReconnectRequested","CurseActive","ZoneSyncActive","FollowActive","MailBusy"}){
+   var f=typeof(NativeJob).GetField(field,System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance);f.SetValue(job,true);Assert(!NativeBackend.ThiQuyPriorityAllowed(job),"protected activity "+field);f.SetValue(job,false);
+  }
+  job.FarmEnabled=true;Assert(!NativeBackend.ThiQuyPriorityAllowed(job),"walking to training map protected");job.FarmArrived=true;Assert(NativeBackend.ThiQuyPriorityAllowed(job),"arrived farming permits priority");
+  job.PrioritizeThiQuy=false;Assert(!NativeBackend.ThiQuyPriorityAllowed(job),"disabled preference inactive");
+  Assert(NativeBackend.IsThiQuyName("Thi Quỷ")&&NativeBackend.IsThiQuyName("Thi Quỷ".Normalize(NormalizationForm.FormD))&&!NativeBackend.IsThiQuyName("Thi Quỷ khác"),"exact normalized monster name");
+  // A quest transition wins immediately, even before the worker disarms priority.
+  Put(r,fc+0x318,task);r.Write(task+36,BitConverter.GetBytes(180));r.Write(task+24,BitConverter.GetBytes(0));r.Write(data+80,BitConverter.GetBytes(1));r.Write(data+124,BitConverter.GetBytes(1));Put(r,player+0x168,0);Put(r,fc+0x2b0,near);
+  r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==13&&r.Ptr(fc+0x2b0)==near,"quest target wins over Thi Quy preference");
+  // Worker samples a normal managed vector and verifies the live catalogue name.
+  long game=r.Allocate(0x1700000),fcStatics=r.Allocate(32),catalog=r.Allocate(32+297*8),entry=r.Allocate(96),label=r.Allocate(96),worldVector=r.Allocate(32),list=r.Allocate(32),array=r.Allocate(48);
+  Put(r,game+0x16ee888,fcClass);Put(r,fcClass+0xb8,fcStatics);Put(r,fcStatics+16,fc);Put(r,game+0x16ed658,canvasClass);Put(r,game+0x16ee330,charClass);Put(r,game+0x16ee310,mobClass);Put(r,player,charClass);
+  Put(r,canvas+0xd8,catalog);r.Write(catalog+24,BitConverter.GetBytes(297));Put(r,catalog+32+261*8,entry);Put(r,entry+48,label);r.Write(label+16,BitConverter.GetBytes(7));r.Write(label+20,Encoding.Unicode.GetBytes("Thi Quỷ"));
+  Put(r,worldVector+16,list);Put(r,list+16,array);r.Write(list+24,BitConverter.GetBytes(2));r.Write(array+24,BitConverter.GetBytes(2));Put(r,array+32,near);Put(r,array+40,far);Put(r,fc+0x150,worldVector);
+  int map;Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==far&&map==74,"worker finds ID261 with exact live catalogue name");
+  r.Write(near+0x50,BitConverter.GetBytes((short)261));r.Write(far+0x58,BitConverter.GetBytes((short)100));Put(r,fc+0x2b0,0);Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==near,"nearest Thi Quy chosen among multiple");
+  Put(r,fc+0x2b0,far);Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==far,"existing live Thi Quy focus retained");
+  r.Write(near+0x78,BitConverter.GetBytes(0));r.Write(far+0x78,BitConverter.GetBytes(0));Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==0,"no living Thi Quy returns ordinary fallback");
+  r.Write(far+0x78,BitConverter.GetBytes(200));r.Write(label+20,Encoding.Unicode.GetBytes("Sai tên"));Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==0,"different catalogue name blocks priority");
+  Console.WriteLine("PASS: Thi Quy priority, builtin target without cast, attack-frame safety, stale/removed/dead pointers, fallback, disabled preference, protected activities and quest transition.");
   GC.KeepAlive(attack);GC.KeepAlive(barrier);GC.KeepAlive(count);GC.KeepAlive(element);GC.KeepAlive(getter);GC.KeepAlive(distance);GC.KeepAlive(cast);Console.WriteLine("PASS: skill ID survey, nearest live monster, repeat requests, complete animation, reject unusable skills/dead player, popup-independent attacks and continuous support without any monsters. Quest target/map/completion guards passed. Code bytes: "+code.Length);
  }return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
 }

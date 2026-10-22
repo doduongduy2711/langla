@@ -18,6 +18,14 @@ jobs:
       - name: Windows Forms regression checks
         shell: powershell
         run: powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File QLTK/AccountManager.ps1 -UiTest
+      - name: Native combat target checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:QuestTargetNativeTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/QuestTargetNativeTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Native test compilation failed'}
+          ./QuestTargetNativeTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Native target tests failed'}
       - name: Build program-only update and portable bundles
         shell: powershell
         run: ./scripts/Build-Release.ps1 -Version ([int]$env:QLTK_VERSION) -Repository $env:GITHUB_REPOSITORY
