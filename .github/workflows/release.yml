@@ -1,0 +1,29 @@
+name: Build and release QLTK
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release tag
+        shell: powershell
+        run: |
+          if ($env:GITHUB_REF_NAME -notmatch '^v([1-9][0-9]{0,8})$') { throw 'Run this workflow on a version tag such as v209' }
+          "QLTK_VERSION=$($Matches[1])" >> $env:GITHUB_ENV
+      - name: Windows Forms regression checks
+        shell: powershell
+        run: powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File QLTK/AccountManager.ps1 -UiTest
+      - name: Build program-only update and portable bundles
+        shell: powershell
+        run: ./scripts/Build-Release.ps1 -Version ([int]$env:QLTK_VERSION) -Repository $env:GITHUB_REPOSITORY
+      - name: Publish release assets
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME dist/QLTK-update.zip dist/QLTK-portable.zip --repo $env:GITHUB_REPOSITORY --title "QLTK $env:GITHUB_REF_NAME" --generate-notes

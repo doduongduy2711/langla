@@ -1,0 +1,12 @@
+﻿using System;using System.Reflection;using System.Collections.Concurrent;using TGLL;
+class IzanamiMapTests129 {
+ static void C(bool b,string m){if(!b)throw new Exception(m);}
+ static void Main(){var jobs=(ConcurrentDictionary<string,NativeJob>)typeof(NativeBackend).GetField("jobs",BindingFlags.Static|BindingFlags.NonPublic).GetValue(null);var j=new NativeJob("synthetic.exe","fixture","unused",null,true);jobs[j.Id]=j;j.TrainReady=true;j.GameSettingsReady=true;j.IzanamiEnabled=true;j.State="waiting_popup";j.ReceiveFlowActive=true;var t=DateTime.UtcNow;
+ NativeBackend.ObserveEntryAuto(j,89,t);C(!j.GameAutoWanted&&j.IzanamiRoundEntered&&!j.IzanamiRequested&&j.EntryCombatMap==89,"entry setup or early auto failed");
+ NativeBackend.ObserveEntryAuto(j,89,t.AddSeconds(2));C(!j.IzanamiMapAutoActive,"enabled before 3s");NativeBackend.ObserveEntryAuto(j,89,t.AddSeconds(3));C(j.IzanamiMapAutoActive&&j.GameAutoWanted&&NativeBackend.GameAutoDesired(j)&&!j.ReceiveFlowActive,"3s map rule blocked by stale NPC state");
+ int n=j.EntryAutoActivations;NativeBackend.SetGameAuto(j.Id,false);C(j.GameAutoWanted,"old Auto preference disabled combat");NativeBackend.ObserveEntryAuto(j,89,t.AddSeconds(4));C(j.EntryAutoActivations==n,"activation repeatedly counted");
+ NativeBackend.ObserveEntryAuto(j,59,t.AddSeconds(5));C(!j.IzanamiMapAutoActive&&!j.GameAutoWanted,"outside map keeps forced idle");NativeBackend.ObserveEntryAuto(j,59,t.AddSeconds(8));C(j.IzanamiRoundComplete,"return completion broken");
+ NativeBackend.ObserveEntryAuto(j,89,t.AddSeconds(10));C(!j.IzanamiMapAutoActive,"new entry skipped delay");NativeBackend.ObserveEntryAuto(j,89,t.AddSeconds(13));C(j.IzanamiMapAutoActive&&!j.IzanamiRoundComplete,"reentry not resumed");NativeBackend.SetIzanami(j.Id,false);C(!j.IzanamiMapAutoActive,"untick not respected");NativeBackend.SetGameAuto(j.Id,false);C(!j.GameAutoWanted,"manual stop after untick broken");
+ j.IzanamiEnabled=true;j.SonCapEnabled=true;NativeBackend.ObserveEntryAuto(j,89,t.AddSeconds(20));C(!j.IzanamiMapAutoActive,"SonCap received Izanami guard");j.SonCapEnabled=false;j.CloseRequested=true;NativeBackend.ObserveEntryAuto(j,89,t.AddSeconds(24));C(!j.IzanamiMapAutoActive,"closed account received guard");
+ Console.WriteLine("PASS: map 89 stable 3s, missing entry acknowledgement, stale NPC pause, steady activation, Auto override protection, exit/reentry, untick, SonCap isolation and closed account.");}
+}
