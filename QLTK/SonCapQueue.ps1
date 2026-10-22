@@ -76,11 +76,17 @@ function Pump-SonCapQueue {
         if($batch.state -eq 'finished' -and ($batch.limitClose -or ($soncapCloseAfter.Checked -and [TGLL.NativeBackend]::CanAutoCloseBatch([string[]]@($batch.members | ForEach-Object {$_.job}))))){
             try{$batch.closeOperation=Begin-SonCapTeamClose $batch;$batch.state='closing';$batch.error=''}catch{$batch.state='blocked';$batch.error='Không bắt đầu được việc đóng tổ đội.'}
         }
-        if($batch.state -eq 'closing' -and $batch.closeOperation.Completed){
-            if($batch.closeOperation.Failed -or $batch.closeOperation.Error){$batch.state='blocked';$batch.error='Chưa tắt đủ game của tổ. Hàng chờ giữ lượt của tổ.'}
-            else{$anyRunning=$false;foreach($m in $batch.members){if(Test-SonCapMemberRunning $m){$anyRunning=$true}}
-                if(!$anyRunning){$batch.state='done'}
+        if($batch.state -in @('closing','blocked') -and $batch.closeOperation -and $batch.closeOperation.Completed){
+            # A close timeout is historical; processes can exit after the close worker finishes.
+            # Recheck blocked closes too, and never release a reopened/retrying session.
+            $allClosed=$true
+            foreach($m in $batch.members){
+                $j=Get-SonCapMemberJob $m;$a=$script:soncapAccountIndex[$m.id]
+                if(!$j -or (Test-SonCapMemberRunning $m) -or ($a -and (Test-AccountOpenBlocked $a)) -or
+                    (!$j.CloseRequested -and !$j.CancelRequested -and $j.State -notin @('closed','cancelled'))){$allClosed=$false}
             }
+            if($allClosed){$batch.state='done';$batch.error=''}
+            elseif($batch.closeOperation.Failed -or $batch.closeOperation.Error){$batch.state='blocked';$batch.error='Chưa tắt đủ game của tổ. Hàng chờ giữ lượt của tổ.'}
         }
     }
     $active=0;foreach($b in $script:soncapBatches){if($b.state -notin @('waiting','done')){$active+=$b.members.Count}}

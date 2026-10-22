@@ -46,9 +46,25 @@ try {
     if($limitBatch.state -ne 'closing' -or $script:queueClosedSizes.Count -ne 1){throw 'No attempts must close finished refused team with option off'}
     for($n=0;$n -lt 3;$n++){Pump-SonCapQueue}
     if($script:queueClosedSizes.Count -ne 1 -or $script:queueStarted.Count -ne 12){throw 'No-attempt close duplicated or released occupied slots'}
+    # Regression: a completed close timeout must not reserve a dead six-person team forever.
+    Reset-SonCapQueue;$script:queueFakeJobs=@{};$script:queueStarted=@();$script:queueClosedSizes=@();$soncapMax.Value=60;$soncapCloseAfter.Checked=$true
+    Add-SonCapQueue @($script:accounts[0..71]);for($i=0;$i -lt 35;$i++){Pump-SonCapQueue}
+    if($script:queueStarted.Count -ne 60){throw 'Max 60 did not admit ten teams'}
+    $timedOut=$script:soncapBatches[0]
+    foreach($m in $timedOut.members){$script:queueFakeJobs[$m.job].SonCapFinished=$true};Pump-SonCapQueue
+    $timedOut.closeOperation.Completed=$true;$timedOut.closeOperation.Failed=1;Pump-SonCapQueue
+    if($timedOut.state -ne 'blocked' -or $script:queueStarted.Count -ne 60){throw 'Close failure released live team'}
+    foreach($m in $timedOut.members[0..4]){$script:queueFakeJobs[$m.job].State='closed'};Pump-SonCapQueue
+    if($script:queueStarted.Count -ne 60){throw 'Five closed members released the remaining live member'}
+    $lastMember=$timedOut.members[5];$script:queueFakeJobs[$lastMember.job].State='retrying';Pump-SonCapQueue
+    if($script:queueStarted.Count -ne 60){throw 'Retrying session lost its reservation'}
+    $script:queueFakeJobs[$lastMember.job].State='closed'
+    for($i=0;$i -lt 6;$i++){Pump-SonCapQueue}
+    if($timedOut.state -ne 'done' -or $timedOut.error -or $script:queueStarted.Count -ne 66 -or @($script:queueFakeJobs.Values | Where-Object {$_.State -eq 'opened'}).Count -ne 60){throw '54 live / 60 held after close timeout did not refill exactly six slots'}
+    $startedBeforeCancel=$script:queueStarted.Count
     # Cancellation stops pending accounts without closing active games.
     Reset-SonCapQueue;for($i=0;$i -lt 10;$i++){Pump-SonCapQueue}
-    if($script:queueStarted.Count -ne 12 -or $script:soncapWaiting.Count){throw 'Cancelled queue continued launching'}
+    if($script:queueStarted.Count -ne $startedBeforeCancel -or $script:soncapWaiting.Count){throw 'Cancelled queue continued launching'}
     if(@($script:soncapBatches | Where-Object {$_.groupSize -ne 6}).Count){throw 'SonCap teams must stay fixed at six'}
     Write-Output 'PASS: SonCap fixed groups of six, selected row order, final partial team and cancellation.'
     Write-Output 'PASS: 152 selected / max 12; FIFO teams, all-member completion, asynchronous closing, process-exit confirmation, final two members, duplicate submission, auto-close off and cancellation.'
