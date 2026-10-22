@@ -3,9 +3,13 @@ function Get-LiveUpdateHash([string]$path) {
     if(![IO.File]::Exists($path)){throw ('Không tìm thấy tệp cập nhật: '+[IO.Path]::GetFileName($path))}
     return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
 }
+function Test-LiveUpdateNamedParser {
+    return @([Management.Automation.Language.Parser].GetMethods([Reflection.BindingFlags]'Public,Static') | Where-Object {$_.Name -eq 'ParseInput' -and $_.GetParameters().Count -eq 4}).Count -gt 0
+}
 function Read-LiveUpdateSource([string]$path) {
     $initialHash=Get-LiveUpdateHash $path;$text=[IO.File]::ReadAllText($path);$tokens=$null;$errors=$null
-    $ast=[Management.Automation.Language.Parser]::ParseInput($text,$path,[ref]$tokens,[ref]$errors)
+    # ParseFile preserves source paths and is available on older VPS PowerShell.
+    $ast=[Management.Automation.Language.Parser]::ParseFile($path,[ref]$tokens,[ref]$errors)
     if($errors.Count){throw ('Tệp '+[IO.Path]::GetFileName($path)+' lỗi cú pháp, dòng '+$errors[0].Extent.StartLineNumber+'. Chưa áp dụng cập nhật.')}
     $definitions=@{};$root=$text
     $functions=@($ast.EndBlock.Statements | Where-Object {$_ -is [Management.Automation.Language.FunctionDefinitionAst]})
@@ -53,6 +57,9 @@ function Apply-LiveUpdate {
                 throw ('Hàm mới bị trùng: '+$name+'. Chưa áp dụng cập nhật.')
             }
             if($definitions.ContainsKey($name)){throw ('Hai tệp cùng sửa hàm '+$name+'. Chưa áp dụng cập nhật.')}
+            # Older hosts can download/install updates, but cannot preserve the
+            # source context when compiling changed function text in memory.
+            if(!(Test-LiveUpdateNamedParser)){$pending+=[IO.Path]::GetFileName($path);continue}
             $definition=$next.Functions[$name] -replace ('(?i)^(function|filter)\s+'+[regex]::Escape($name)+'\b'),('$1 script:'+$name)
             $tokens=$null;$errors=$null
             $body=[Management.Automation.Language.Parser]::ParseInput($definition,$path,[ref]$tokens,[ref]$errors)

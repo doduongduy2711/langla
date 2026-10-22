@@ -19,6 +19,17 @@ try{
  $liveClick.PerformClick()
  if($script:liveClickResult -ne ('new:event:'+$liveDir)){throw 'Existing handler did not invoke new function'}
  if((Apply-LiveUpdate).Applied -ne 0){throw 'Unchanged update reapplied'}
+ # VPS PowerShell may only expose ParseInput with three arguments. Startup
+ # snapshots still work; changed functions require restart without partial apply.
+ $liveParserOriginal=(Get-Item Function:Test-LiveUpdateNamedParser).ScriptBlock
+ try{
+  function Test-LiveUpdateNamedParser { return $false }
+  & $liveFile 'function Live-Fixture($value) { return "vps:"+$value }; $script:fixtureStartup=1'
+  $vpsSnapshot=Read-LiveUpdateSource $livePath
+  if(!$vpsSnapshot.Functions.ContainsKey('Live-Fixture')){throw 'VPS source snapshot failed'}
+  $vpsResult=Apply-LiveUpdate
+  if(!$vpsResult.RestartRequired -or $vpsResult.Applied -ne 0 -or (Live-Fixture 'x') -ne ('new:x:'+$liveDir) -or $script:fixtureStartup -ne 9){throw 'VPS compatibility fallback lost context or applied a partial update'}
+ }finally{Set-Item Function:Test-LiveUpdateNamedParser $liveParserOriginal}
  # Whole batch must be rejected on a syntax error, including an earlier valid file.
  $liveBadPath=Join-Path $liveDir 'Bad.ps1';[IO.File]::WriteAllText($liveBadPath,'function Live-Bad { 1 }')
  $script:liveUpdateSources[$liveBadPath]=Read-LiveUpdateSource $liveBadPath
