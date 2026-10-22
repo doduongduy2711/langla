@@ -45,16 +45,16 @@ try {
         Sync-Distribution;if($script:distCloses.Count -ne $r){throw 'Unconfirmed send closed receiver'}
         $source.MailDone=$true;$source.MailEnabled=$false;$source.MailQuantity=7;$source.MailLetters=2
         Sync-Distribution;if($m.state -ne 'receiving'){throw 'Send completion did not wait for receipt'}
-        $m.sentAt=[datetime]::UtcNow.AddSeconds(-4);$receiver.InboxObservedAt=[datetime]::UtcNow
-        $receiver.Inventory.Items[0].Quantity+=5;$receiver.InboxReceived+=1;$receiver.InboxDeleted+=2
-        Sync-Distribution;if($m.state -ne 'receiving'){throw 'Missing second item was treated as received'}
-        $receiver.Inventory.Items[1].Quantity+=2
-        # Đủ đồ cũ trước lượt gửi không phải thành công; snapshot phải mới hơn lúc gửi xong.
-        $receiver.InboxEnabled=$false;$receiver.InboxBusy=$true;$receiver.InboxPendingAttachments=9
-        $receiver.InboxReceived=0;$receiver.InboxDeleted=0;$receiver.InboxObservedAt=[datetime]::MinValue
-        $receiver.Inventory.ReadAt=$m.sentAt.AddSeconds(-1);$m.scanAt=[datetime]::UtcNow;Sync-Distribution
-        if($m.state -ne 'receiving'){throw 'Stale inventory allowed receiver close'}
-        Request-DistributionInventory $receiver;Sync-Distribution
+        # A changed bag or deleted old letters cannot substitute for confirmed receipt.
+        $receiver.Inventory.Items[0].Quantity+=5;$receiver.Inventory.Items[1].Quantity+=2
+        $receiver.InboxDeleted+=2;$receiver.InboxReceived=$m.received+1
+        Sync-Distribution;if($m.state -ne 'receiving'){throw 'Partial mailbox receipt closed receiver'}
+        # All sent letters confirmed: close even with an unavailable/stale inventory.
+        $receiver.Inventory.Ready=$false;$receiver.Inventory.ReadAt=[datetime]::MinValue
+        $receiver.InboxReceived=$m.received+$m.letters;$receiver.InboxBusy=$true
+        Sync-Distribution;if($m.state -ne 'receiving'){throw 'Closed during an in-flight inbox operation'}
+        $receiver.InboxBusy=$false;$receiver.InboxEnabled=$false
+        Sync-Distribution
         if($m.state -ne 'closing' -or $script:distCloses.Count -ne ($r+1)){throw 'Verified receipt did not close receiver exactly once'}
         $m.closeOperation.Completed=$true;Sync-Distribution;if($run.cursor -ne $r){throw 'Live receiver released queue slot'}
         $receiver.ProcessRunning=$false;$receiver.State='closed';Sync-Distribution
@@ -64,13 +64,13 @@ try {
     Sync-Distribution;if($script:distributionRun.active -or !$script:distFakeJobs['dist-source'].ProcessRunning -or ($script:distSends -join ',') -ne 'char-dist-two,char-dist-three'){throw 'Distribution completion/order/source preservation failed'}
     if($script:distOpens -contains 'dist-skip'){throw 'Unchecked recipient was opened'}
     foreach($row in $grid.Rows){$row.Cells['pick'].Value=([string]$row.Tag.id -in @('dist-two','dist-three'))}
-    Start-Distribution;Drive-Dist 'sending';$script:distFakeJobs['dist-source'].Id='replaced-job';Sync-Distribution
+    foreach($job in $script:distFakeJobs.Values){$job.Inventory.Ready=$true};Start-Distribution;Drive-Dist 'sending';$script:distFakeJobs['dist-source'].Id='replaced-job';Sync-Distribution
     if($script:distributionRun.members[0].state -ne 'blocked' -or $script:distSends.Count -ne 3){throw 'Session replacement caused an automatic resend'}
     $script:distributionRun=$null;$script:distFakeJobs=@{};Start-Distribution
     $source=New-DistFake 'dist-source';$source.Inventory.Items[0].Locked=$true;$script:distFakeJobs['dist-source']=$source
     Drive-Dist 'stock';Sync-Distribution
     if($script:distributionRun.members[0].state -ne 'blocked' -or $script:distSends.Count -ne 3){throw 'Locked-only inventory was distributed'}
-    Write-Output 'PASS: login/world/process/stale snapshot gates, stable confirmation and flap reset before sending; selected recipients only, empty/source-only selection rejected before launch, selection snapshot and row order, fresh inventory delta alone completes despite inbox stopped/busy, stale inventory and missing ID hold, distribution first sender, multiple item IDs/quantities, actual character names, sequential open/send/verified receipt/delete/close, wait for process exit, source kept online, missing-item hold, locked stock rejection and no resend on session replacement. No game launched.'
+    Write-Output 'PASS: login/world/process/stale snapshot gates, stable confirmation and flap reset before sending; selected recipients only, empty/source-only selection rejected before launch, selection snapshot and row order, confirmed mailbox receipt closes without a fresh bag snapshot, partial receipts and in-flight inbox operation hold, distribution first sender, multiple item IDs/quantities, actual character names, sequential open/send/verified receipt/close, wait for process exit, source kept online, locked stock rejection and no resend on session replacement. No game launched.'
 }finally {
     $script:distributionRun=$distSavedRun;$script:accounts=$distSavedAccounts;$distributionItems.Text=$distSavedItems;$autoLoginCheck.Checked=$distSavedAuto;$script:mailRun=$distSavedMail;$script:cloakRun=$distSavedCloak
     $script:questBatches=$distSavedQueues[0];$script:izanamiBatches=$distSavedQueues[1];$script:dungeonBatches=$distSavedQueues[2];$script:soncapBatches=$distSavedQueues[3]

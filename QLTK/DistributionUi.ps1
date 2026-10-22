@@ -82,7 +82,7 @@ function Sync-Distribution {
             if(!$m.closeOperation.Completed){return}
             if($m.closeOperation.Failed -or $m.closeOperation.Error){throw 'Không tắt được acc nhận; giữ hàng chờ.'}
             if(Test-DistributionRunning $m){return}
-            $m.state='done';$m.status='Đã nhận đủ và tắt game';$run.cursor++;return
+            $m.state='done';$m.status='Đã nhận thư và tắt game';$run.cursor++;return
         }
         $source=Get-DistributionJob $run.sourceId
         if(!$source -or (!$run.sourcePrepared -and ($source.CloseRequested -or $source.State -in @('closed','failed','cancelled')))){if(!$run.sourceOpened){$run.sourceOpened=$true;Open-DistributionAccount $run.sourceId};$m.status='Đợi mở acc đầu';return}
@@ -126,18 +126,22 @@ function Sync-Distribution {
             if(!$source.MailDone){if(!$source.MailEnabled -and !$source.MailBusy){throw ('Gửi chưa hoàn tất: '+$source.MailStatus)};return}
             if($source.MailBusy){return}
             [long]$expected=0;foreach($item in $run.items){$expected+=$item.quantity};if($source.MailQuantity -ne $expected -or $source.MailLetters -lt 1){throw 'Số đồ gửi chưa đủ cấu hình; giữ acc nhận để kiểm tra, không gửi bù tự động.'}
-            $m.letters=$source.MailLetters;$m.sentAt=[datetime]::UtcNow;$m.scanAt=$m.sentAt;Request-DistributionInventory $receiver;$m.state='receiving';$m.status='Đã gửi đủ; đợi túi tăng đủ từng ID';return
+            $m.letters=$source.MailLetters;$m.sentAt=[datetime]::UtcNow;$m.state='receiving';$m.status='Đã gửi đủ; đợi xác nhận nhận thư';return
         }
         if($m.state -eq 'receiving'){
-            if((([datetime]::UtcNow)-$m.scanAt).TotalSeconds -ge 2){Request-DistributionInventory $receiver;$m.scanAt=[datetime]::UtcNow}
-            # Hoàn tất dựa vào túi mới đọc sau khi gửi, không phụ thuộc trạng thái/bộ đếm thư.
-            if(!$receiver.Inventory.Ready -or $receiver.Inventory.ReadAt -lt $m.sentAt){return}
-            foreach($item in $run.items){if((Get-DistributionStock $receiver.Inventory $item.id) -lt ([long]$m.baseline[$item.id]+$item.quantity)){return}}
-            Set-DistributionInbox $receiver $false;$m.closeOperation=Begin-DistributionClose $m;$m.state='closing';$m.status='Đã xác nhận nhận đủ; đang tắt game'
+            # InboxReceived advances only after the inbox worker confirms receipt, not on send/click.
+            # The baseline is captured before sending; receipts may arrive before MailDone.
+            if(([long]$receiver.InboxReceived-[long]$m.received) -lt $m.letters){
+                if(!$receiver.InboxEnabled -and !$receiver.InboxBusy){throw ('Nhận thư chưa hoàn tất: '+$receiver.InboxStatus)}
+                return
+            }
+            if($receiver.InboxBusy){return}
+            Set-DistributionInbox $receiver $false;$m.closeOperation=Begin-DistributionClose $m;$m.state='closing';$m.status='Đã xác nhận nhận thư; đang tắt game'
         }
     }catch{$run.error=$_.Exception.Message;if($run.cursor -lt $run.members.Count){$run.members[$run.cursor].state='blocked';$run.members[$run.cursor].status=$run.error}}
 }
 function Update-DistributionUi {
+    foreach($control in $distributionPage.Controls){if($control -is [Windows.Forms.Label] -and $control.Text.StartsWith('Chỉ gửi đồ không khóa.')){$control.Text='Chỉ gửi đồ không khóa. Mở từng acc → xác nhận gửi đủ → xác nhận nhận thư → tắt acc nhận. Giữ acc đầu online.'}}
     $run=$script:distributionRun;$active=$run -and $run.active;$distributionStart.Enabled=!$active;$distributionItems.Enabled=!$active;$distributionDelay.Enabled=!$active
     if($run){$lines=@('Đã xong: '+$run.cursor+'/'+$run.members.Count+' • '+$run.error);$lines+=@($run.members | ForEach-Object {$_.username+': '+$_.status});$text=$lines -join "`r`n";if($distributionReport.Text -ne $text){$distributionReport.Text=$text}}
 }
