@@ -14,6 +14,7 @@ class TrainTests{
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)]delegate bool Contains(IntPtr self,IntPtr item,IntPtr info);
  static void Assert(bool b,string s){if(!b)throw new Exception(s);}
  static void Put(Remote r,long p,long v){r.Write(p,BitConverter.GetBytes(v));}
+ static void Hp(Remote r,long mob,int value){r.Write(mob+0x70,BitConverter.GetBytes(value));r.Write(mob+0x78,BitConverter.GetBytes(value));}
  static long Fn(Delegate d){return Marshal.GetFunctionPointerForDelegate(d).ToInt64();}
  static int Main(){try{using(Remote r=new Remote(Process.GetCurrentProcess())){
   long data=r.Allocate(4096),canvasSlot=r.Allocate(8),canvasClass=r.Allocate(256),statics=r.Allocate(16),canvas=r.Allocate(512),fcClass=r.Allocate(512),fcSlot=r.Allocate(8),fc=r.Allocate(1024),charClass=r.Allocate(256),charSlot=r.Allocate(8),charStatics=r.Allocate(16),player=r.Allocate(512),mobSlot=r.Allocate(8),mobClass=r.Allocate(512),npcClass=r.Allocate(512);
@@ -33,20 +34,20 @@ class TrainTests{
   r.Write(data,BitConverter.GetBytes(1));tick();Assert(BitConverter.ToInt32(r.Read(data+8,4),0)==2&&BitConverter.ToInt32(r.Read(data+128,4),0)==901&&calls==0,"survey IDs without attacking");
   r.Write(data+12,BitConverter.GetBytes(1));r.Write(data+16,BitConverter.GetBytes(901));for(int i=0;i<3;i++){Put(r,player+0x168,0);r.Write(data,BitConverter.GetBytes(1));tick();}Assert(calls==3,"repeat requests without an external cooldown wait");tick();Assert(calls==3,"request consumed once");r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==3,"active animation must finish before next cast");Put(r,player+0x168,0);
   r.Write(data+16,BitConverter.GetBytes(902));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==3,"reject support skill");
-  r.Write(data+16,BitConverter.GetBytes(901));r.Write(near+0x78,BitConverter.GetBytes(0));r.Write(far+0x78,BitConverter.GetBytes(0));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==3,"no live mob means no attack");
-  Put(r,fc+0x90,name);r.Write(near+0x78,BitConverter.GetBytes(200));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==4,"visible popup cannot block direct server packet");
+  r.Write(data+16,BitConverter.GetBytes(901));Hp(r,near,0);Hp(r,far,0);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==3,"no live mob means no attack");
+  Put(r,fc+0x90,name);Hp(r,near,200);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==4,"visible popup cannot block direct server packet");
   r.Write(player+0xac,BitConverter.GetBytes(0));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==4,"pause dead player");GC.KeepAlive(contains);
   r.Write(player+0xac,BitConverter.GetBytes(100));Put(r,player+0x168,0);r.Write(buffTemplate+0x2c,new byte[]{1});r.Write(data+16,BitConverter.GetBytes(902));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==5,"support skill accepted and correct type retained across later records");
-  Put(r,player+0x168,0);r.Write(near+0x78,BitConverter.GetBytes(0));r.Write(far+0x78,BitConverter.GetBytes(0));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==6,"support casts without living monsters");
+  Put(r,player+0x168,0);Hp(r,near,0);Hp(r,far,0);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==6,"support casts without living monsters");
   Put(r,player+0x168,0);Put(r,fc+0x160,0);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==7,"support casts without a monster list");
   // Synthetic multi-mob quest: nearest mob is wrong, farther mob matches.
   Put(r,fc+0x150,mobs);Put(r,fc+0x160,0);Put(r,player+0x168,0);r.Write(data+16,BitConverter.GetBytes(901));
-  r.Write(near+0x78,BitConverter.GetBytes(200));r.Write(far+0x78,BitConverter.GetBytes(200));
+  Hp(r,near,200);Hp(r,far,200);
   r.Write(near+0x50,BitConverter.GetBytes((short)261));r.Write(far+0x50,BitConverter.GetBytes((short)180));
   long task=r.Allocate(128);Put(r,fc+0x318,task);r.Write(task+20,BitConverter.GetBytes(1));r.Write(task+24,BitConverter.GetBytes(23));r.Write(task+36,BitConverter.GetBytes(180));r.Write(task+40,BitConverter.GetBytes(74));r.Write(task+52,BitConverter.GetBytes(40));r.Write(fc+0x134,BitConverter.GetBytes((short)74));r.Write(data+80,BitConverter.GetBytes(1));
   expected=far;r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8&&r.Ptr(fc+0x2b0)==far,"quest attacks matching map mob even when builtin idle mob list is empty");
-  Put(r,player+0x168,0);r.Write(far+0x78,BitConverter.GetBytes(0));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"missing/dead quest mob never falls back to wrong live mob");
-  r.Write(far+0x78,BitConverter.GetBytes(200));r.Write(fc+0x134,BitConverter.GetBytes((short)88));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"live map change blocks attack before worker catches up");
+  Put(r,player+0x168,0);Hp(r,far,0);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"missing/dead quest mob never falls back to wrong live mob");
+  Hp(r,far,200);r.Write(fc+0x134,BitConverter.GetBytes((short)88));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"live map change blocks attack before worker catches up");
   r.Write(fc+0x134,BitConverter.GetBytes((short)74));r.Write(task+24,BitConverter.GetBytes(40));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"completion stops native combat immediately");
   r.Write(task+24,BitConverter.GetBytes(0));r.Write(task+36,BitConverter.GetBytes(179));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"new quest ID invalidates previous target immediately");
   Put(r,fc+0x318,0);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"absent task blocks attack");
@@ -54,14 +55,14 @@ class TrainTests{
   // Focus mode waits for confirmed builtin stop, then strictly filters ID261.
   Assert(code.Length<4096,"train callback allocation size");
   r.Write(player+0xa8,BitConverter.GetBytes(100));Put(r,player+0x168,0);
-  r.Write(near+0x50,BitConverter.GetBytes((short)180));r.Write(far+0x50,BitConverter.GetBytes((short)261));
+  r.Write(near+0x50,BitConverter.GetBytes((short)180));r.Write(far+0x50,BitConverter.GetBytes((short)261));Hp(r,far,200);r.Write(far+0x78,BitConverter.GetBytes(0));
   Put(r,data+112,far);r.Write(data+120,BitConverter.GetBytes(74));r.Write(data+124,BitConverter.GetBytes(2));
   Put(r,fc+0x2b0,near);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==9&&r.Ptr(fc+0x2b0)==near,"waiting for builtin stop cannot attack or retarget");
-  r.Write(data+124,BitConverter.GetBytes(1));expected=far;r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==10&&r.Ptr(fc+0x2b0)==far,"focus targets farther Thi Quy by ID instead of nearest ordinary mob");
+  r.Write(data+124,BitConverter.GetBytes(1));expected=far;r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==10&&r.Ptr(fc+0x2b0)==far,"focus targets farther Thi Quy by ID instead of nearest ordinary mob");Assert(BitConverter.ToInt32(r.Read(data+72,4),0)==200,"Thi Quy target HUD publishes real HP while display HP is zero");
   r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==10,"focus leaves active attack hit frames intact");Put(r,player+0x168,0);
   r.Write(data+120,BitConverter.GetBytes(75));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==10,"changed map blocks stale focus");r.Write(data+120,BitConverter.GetBytes(74));
   Put(r,far,npcClass);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==10,"wrong class never falls back to ordinary mob");Put(r,far,mobClass);
-  r.Write(far+0x78,BitConverter.GetBytes(0));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==10,"dead Thi Quy never falls back to ordinary mob while focus active");r.Write(far+0x78,BitConverter.GetBytes(200));
+  Hp(r,far,0);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==10,"dead Thi Quy never falls back to ordinary mob while focus active");Hp(r,far,200);
   r.Write(far+0x3d,new byte[]{4});r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==10,"disappearing Thi Quy ignored");r.Write(far+0x3d,new byte[]{0});
   Put(r,data+112,1);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==11&&r.Ptr(fc+0x2b0)==far,"stale sampled pointer not dereferenced; live vector ID filter still finds Thi Quy");Put(r,player+0x168,0);Put(r,data+112,far);
   r.Write(data+124,BitConverter.GetBytes(0));expected=near;r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==12&&r.Ptr(fc+0x2b0)==near,"finished focus restores ordinary target selection");
@@ -83,11 +84,12 @@ class TrainTests{
   Put(r,game+0x16ee888,fcClass);Put(r,fcClass+0xb8,fcStatics);Put(r,fcStatics+16,fc);Put(r,game+0x16ed658,canvasClass);Put(r,game+0x16ee330,charClass);Put(r,game+0x16ee310,mobClass);Put(r,player,charClass);
   Put(r,canvas+0xd8,catalog);r.Write(catalog+24,BitConverter.GetBytes(297));Put(r,catalog+32+261*8,entry);Put(r,entry+48,label);r.Write(label+16,BitConverter.GetBytes(7));r.Write(label+20,Encoding.Unicode.GetBytes("Thi Quỷ"));
   Put(r,worldVector+16,list);Put(r,list+16,array);r.Write(list+24,BitConverter.GetBytes(2));r.Write(array+24,BitConverter.GetBytes(2));Put(r,array+32,near);Put(r,array+40,far);Put(r,fc+0x150,worldVector);
+  r.Write(far+0x78,new byte[4]);
   int map;Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==far&&map==74,"worker finds ID261 with exact live catalogue name");
   r.Write(near+0x50,BitConverter.GetBytes((short)261));r.Write(far+0x58,BitConverter.GetBytes((short)100));Put(r,fc+0x2b0,0);Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==near,"nearest Thi Quy chosen among multiple");
   Put(r,fc+0x2b0,far);Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==far,"existing live Thi Quy focus retained");
-  r.Write(near+0x78,BitConverter.GetBytes(0));r.Write(far+0x78,BitConverter.GetBytes(0));Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==0,"no living Thi Quy returns ordinary fallback");
-  r.Write(far+0x78,BitConverter.GetBytes(200));r.Write(label+20,Encoding.Unicode.GetBytes("Sai tên"));Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==0,"different catalogue name blocks priority");
+  Hp(r,near,0);Hp(r,far,0);Assert(NativeBackend.ReadThiQuyTarget(r,game,out map)==0,"no living Thi Quy returns ordinary fallback");
+  Hp(r,far,200);r.Write(label+20,Encoding.Unicode.GetBytes("Sai tên"));bool invalidCatalog=false;try{NativeBackend.ReadThiQuyTarget(r,game,out map);}catch{invalidCatalog=true;}Assert(invalidCatalog,"different catalogue name is unverified, not proof of death");
   // Worker phases preserve user Auto intent, wait for stop acknowledgement,
   // rotate the selected skills without mutating normal training and restore Auto.
   r.Write(label+20,Encoding.Unicode.GetBytes("Thi Quỷ"));r.Write(data,new byte[4]);r.Write(data+80,new byte[4]);Put(r,player+0x168,0);
@@ -97,8 +99,8 @@ class TrainTests{
   pump.Invoke(null,new object[]{r,data,focus});Assert(BitConverter.ToInt32(r.Read(data+12,4),0)==0,"no focus cast before builtin stop confirmed");
   r.Write(data,new byte[4]);focus.GameAutoEnabled=false;NativeBackend.PumpThiQuyPriority(r,game,data,focus);pump.Invoke(null,new object[]{r,data,focus});Assert(focus.ThiQuyCombatActive&&focus.ThiQuyPriorityArmed&&BitConverter.ToInt32(r.Read(data+12,4),0)==1&&BitConverter.ToInt32(r.Read(data+80,4),0)==0&&!focus.TrainEnabled,"confirmed stop arms dedicated focus without changing normal training or quest");
   Assert(NativeBackend.TrainingPollMs(focus)==150&&NativeBackend.HangingLevelOne(focus)==null,"focus uses quest cadence without builtin supplements");
-  r.Write(far+0x78,BitConverter.GetBytes(0));focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(!focus.ThiQuyCombatActive&&!focus.ThiQuyPriorityArmed&&focus.GameAutoWanted&&NativeBackend.GameAutoDesired(focus)&&BitConverter.ToInt32(r.Read(data+12,4),0)==0,"Thi Quy death clears focus and restores requested hanging");
-  r.Write(far+0x78,BitConverter.GetBytes(200));focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(focus.ThiQuyCombatActive,"next Thi Quy starts another focus");focus.FarmEnabled=false;focus.FarmArrived=false;focus.GameAutoWanted=false;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(!focus.ThiQuyCombatActive&&!NativeBackend.GameAutoDesired(focus),"manual Auto stop does not get reversed by focus cleanup");
+  Hp(r,far,0);focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);focus.ThiQuyMissingAt=DateTime.UtcNow.AddSeconds(-1);focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(!focus.ThiQuyCombatActive&&!focus.ThiQuyPriorityArmed&&focus.GameAutoWanted&&NativeBackend.GameAutoDesired(focus)&&BitConverter.ToInt32(r.Read(data+12,4),0)==0,"Thi Quy death clears focus and restores requested hanging");
+  Hp(r,far,200);focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(focus.ThiQuyCombatActive,"next Thi Quy starts another focus");focus.FarmEnabled=false;focus.FarmArrived=false;focus.GameAutoWanted=false;NativeBackend.PumpThiQuyPriority(r,game,data,focus);focus.ThiQuyMissingAt=DateTime.UtcNow.AddSeconds(-1);focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(!focus.ThiQuyCombatActive&&!NativeBackend.GameAutoDesired(focus),"manual Auto stop does not get reversed by focus cleanup");
   // Up sees Thi Quy on the way to its destination, pauses the owned route,
   // then restarts the same route without dropping Up or Auto selections.
   long farmData=r.Allocate(4096);focus.FarmEnabled=true;focus.FarmArrived=false;focus.FarmRouteSent=true;focus.GameAutoWanted=true;focus.ThiQuyPriorityAt=DateTime.MinValue;
@@ -107,7 +109,14 @@ class TrainTests{
   Assert(NativeBackend.HandleThiQuyFarmPause(r,farmData,focus)&&BitConverter.ToInt32(r.Read(farmData,4),0)==6&&focus.FarmEnabled&&focus.GameAutoWanted,"queue owned-route cancel without disabling Up");
   NativeBackend.HandleThiQuyFarmPause(r,farmData,focus);Assert(BitConverter.ToInt32(r.Read(farmData,4),0)==6,"no repeated route command while pending");
   r.Write(farmData,new byte[4]);r.Write(data,new byte[4]);pump.Invoke(null,new object[]{r,data,focus});Assert(BitConverter.ToInt32(r.Read(data+12,4),0)==1,"focused attack allowed after Up route pause");
-  r.Write(far+0x78,BitConverter.GetBytes(0));focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(!NativeBackend.HandleThiQuyFarmPause(r,farmData,focus)&&focus.FarmEnabled&&!focus.FarmRouteSent&&focus.GameAutoWanted&&!focus.ThiQuyFarmPaused,"Thi Quy death resumes original Up route and retains Auto");
+  Hp(r,far,0);focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);focus.ThiQuyMissingAt=DateTime.UtcNow.AddSeconds(-1);focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(!NativeBackend.HandleThiQuyFarmPause(r,farmData,focus)&&focus.FarmEnabled&&!focus.FarmRouteSent&&focus.GameAutoWanted&&!focus.ThiQuyFarmPaused,"Thi Quy death resumes original Up route and retains Auto");
+  // A dropped/changing monster snapshot must not be interpreted as death.
+  Hp(r,far,200);focus.FarmEnabled=false;focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(focus.ThiQuyCombatActive,"focus reacquired for snapshot retry");
+  Put(r,fc+0x150,0);focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(focus.ThiQuyCombatActive&&focus.ThiQuyReadSuspended&&!NativeBackend.GameAutoDesired(focus)&&BitConverter.ToInt32(r.Read(data+124,4),0)==2,"transient read error holds focus without attacking stale memory or resuming hanging");
+  Put(r,fc+0x150,worldVector);focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(focus.ThiQuyCombatActive&&!focus.ThiQuyReadSuspended&&focus.ThiQuyPriorityArmed,"valid snapshot resumes same live Thi Quy");
+  Hp(r,far,0);r.Write(far+0x78,BitConverter.GetBytes(999));focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(focus.ThiQuyCombatActive&&focus.ThiQuyReadSuspended,"single empty snapshot does not falsely declare death");
+  focus.ThiQuyMissingAt=DateTime.UtcNow.AddSeconds(-1);focus.ThiQuyPriorityAt=DateTime.MinValue;NativeBackend.PumpThiQuyPriority(r,game,data,focus);Assert(!focus.ThiQuyCombatActive&&NativeBackend.GameAutoDesired(focus),"confirmed dead/disappeared target restores hanging");
+  Assert(focus.ThiQuyScanLast.Contains("thi_seen=2")&&focus.ThiQuyScanLast.Contains("thi_alive=0"),"scan diagnostics distinguish seen monster from living monster");
   Console.WriteLine("PASS: Thi Quy temporary hanging pause, confirmed-off gate, strict ID/map filter, no wrong-mob fallback, attack completion, selected skill combat, automatic restoration and manual-stop protection.");
   GC.KeepAlive(attack);GC.KeepAlive(barrier);GC.KeepAlive(count);GC.KeepAlive(element);GC.KeepAlive(getter);GC.KeepAlive(distance);GC.KeepAlive(cast);Console.WriteLine("PASS: skill ID survey, nearest live monster, repeat requests, complete animation, reject unusable skills/dead player, popup-independent attacks and continuous support without any monsters. Quest target/map/completion guards passed. Code bytes: "+code.Length);
  }return 0;}catch(Exception e){Console.WriteLine(e);return 1;}}
