@@ -2731,7 +2731,7 @@ namespace TGLL {
         }
         public static void StopMapFarm(string id){NativeJob j=Get(id);if(j!=null){j.UpRequested=false;if(j.DailyManaged)CancelDailyPriority(j);StopFarm(j);}}
         static void StopFarm(NativeJob j){j.TrainEnabled=false;j.FarmZoneWaiting=false;j.FarmEnabled=false;j.FarmArrived=false;j.FarmStopPending=true;j.GameAutoWanted=false;j.FarmStatus="Đã dừng chạy bãi";}
-        // Đọc lại số người mỗi 5 phút; giữ treo trong lúc đọc, chỉ ngừng khi cần đổi khu.
+        // Đọc lại số người mỗi 5 phút; giữ treo cả khi đọc và chuyển khu trên cùng bãi.
         internal static bool BeginFarmZoneRecheck(NativeJob j,DateTime now){
             if(!j.FarmEnabled||!j.FarmArrived||!j.FarmQuietZone||j.FarmZoneWaiting||j.CloseRequested||j.CancelRequested||CurseDisplayStatus(j).Length>0)return false;
             if(j.FarmZoneCheckAt==DateTime.MinValue){j.FarmZoneCheckAt=now;return false;}
@@ -2757,7 +2757,7 @@ namespace TGLL {
                 }
                 if(j.ZoneId==j.PlannedZone&&(j.ZonePrepared||state==4&&j.ZoneAttempts>0)){j.ZonePrepared=true;j.ZoneSyncActive=false;j.ZoneStatus="Đã chọn khu ít người: "+j.ZoneId;return;}
                 j.ZoneSyncActive=true;j.ZoneStatus="Chuyển tới khu "+j.PlannedZone+"; chờ xác nhận";
-                if((now-j.ZoneActionAt).TotalSeconds<8)return;if(j.ZoneAttempts>=3){j.ZoneStatus="Chưa đổi được khu sau 3 lần";return;}if(j.PlannedZone!=j.ZoneId){j.FarmArrived=false;j.FarmStableAt=DateTime.MinValue;}QueueZone(r,data,j,2,j.PlannedZone);
+                if((now-j.ZoneActionAt).TotalSeconds<8)return;if(j.ZoneAttempts>=3){j.ZoneStatus="Chưa đổi được khu sau 3 lần";return;}QueueZone(r,data,j,2,j.PlannedZone);
             }catch{j.ZoneSyncActive=true;j.ZoneStatus="Chưa đọc được danh sách khu";}
         }
 
