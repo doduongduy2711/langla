@@ -69,3 +69,5 @@ try{
 . (Join-Path $PSScriptRoot 'IzanamiCompletedCloseTests.ps1')
 
 . (Join-Path $PSScriptRoot 'ThiQuyPriorityUiTests.ps1')
+
+. (Join-Path $PSScriptRoot 'BiMaUiTests.ps1')

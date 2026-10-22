@@ -2,6 +2,7 @@
 if (!('TGLL.AutoLogin' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'AutoLogin.cs') -ReferencedAssemblies System.dll,System.Core.dll,System.Drawing.dll }
 if (!('TGLL.NativeBackend' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'NativeBackend.cs') -ReferencedAssemblies System.dll,System.Core.dll }
 [TGLL.NativeBackend]::LogDirectory=Join-Path $PSScriptRoot 'logs'
+if(!$UiTest){[TGLL.NativeBackend]::BiMaDataDirectory=Join-Path $script:dataDir 'bi-ma-counts'}
 function Get-AccountJob([string]$id) {
     $job=[TGLL.NativeBackend]::Get($id)
     if ($null -eq $job) {$job=[TGLL.AutoLogin]::Get($id)}

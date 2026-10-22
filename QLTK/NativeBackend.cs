@@ -250,9 +250,9 @@ namespace TGLL {
             lock(Gate){if(!games.TryGetValue(pid,out game))return result;}
                 try{using(Process p=Process.GetProcessById(game.Id)){
                     if(!Matches(p,game)){RemoveClosedIdentity(pid,game);return result;}
-                    p.CloseMainWindow();if(!p.WaitForExit(100))p.Kill();
+                    NativeBackend.CaptureBiMaBeforeClose(pid);p.CloseMainWindow();if(!p.WaitForExit(100))p.Kill();
                     if(!p.WaitForExit(1000)){result.Failed++;return result;}
-                    result.Closed++;RemoveClosedIdentity(pid,game);
+                    result.Closed++;NativeBackend.RecordBiMaClosed(pid,"manager_close");RemoveClosedIdentity(pid,game);
                 }}catch(ArgumentException){RemoveClosedIdentity(pid,game);}catch{result.Failed++;}
                 return result;
         }
@@ -2681,13 +2681,13 @@ namespace TGLL {
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
                     if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpQuest(keep,questData,j);PumpGameSettings(keep,settingsData,j);}
                     PumpThiQuyPriority(keep,game,trainData,j);PumpTraining(keep,trainData,j);
-                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);PumpAutoItem(keep,itemData,j);PumpInventory(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
+                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);PumpAutoItem(keep,itemData,j);PumpInventory(keep,game,j);PumpBiMa(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
                     ReadDiagnostics(keep,data,j);PumpIzanamiAttemptLimit(keep,game,j);PumpDungeonCycle(keep,data,game,j,npcTimer);PumpReceiveKey(keep,data,j,npcTimer,game);if(j.ReplayRequested){Replay(keep,data,j);npcTimer.Restart();}
                     if(npcTimer.IsRunning&&!j.TravelActive&&(j.ReceiveKeyEnabled||j.DungeonHighEnabled||j.IzanamiEnabled)){int state=BitConverter.ToInt32(keep.Read(data,4),0);if(state==9)j.State=j.NpcAction==2?"choosing_izanami":j.NpcAction==0?"choosing_key":"choosing_dungeon";
                         if(state==11){FinishNpcAction(keep,data,j,npcTimer);}
                         else if(npcTimer.ElapsedMilliseconds>60000){j.ReceiveFlowActive=false;j.Error=state==8?(j.NpcAction==2?"onoki_not_found":"npc_not_found"):state==13||state==14||state==15||state==17?"startup_popup_not_ready":(j.NpcAction==2?"npc_izanami_menu_not_ready":j.NpcAction==1?"npc_dungeon_menu_not_ready":"npc_key_menu_not_ready");j.State=j.NpcAction==2?"izanami_unavailable":"npc_unavailable";keep.Write(data,BitConverter.GetBytes(12));npcTimer.Stop();}}
                     }
-                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
+                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
             }catch{
                 bool stopped=true;
                 if(p!=null){try{if(!p.HasExited){p.Kill();stopped=p.WaitForExit(3000);}}catch{stopped=false;}finally{p.Dispose();}}
@@ -3768,5 +3768,71 @@ namespace TGLL {
    }
    if(j.Error.Length>0)j.DailyStatus="Hoạt động đang chờ kiểm tra: "+j.Error;
   }
+ }
+}
+
+
+namespace TGLL {
+ public sealed class BiMaSnapshot {
+  public readonly long Count;public readonly DateTime ReadAt;public readonly string Session;
+  internal BiMaSnapshot(long count,DateTime at,string session){Count=count;ReadAt=at;Session=session;}
+ }
+ public sealed partial class NativeJob {
+  internal readonly object BiMaGate=new object();internal string BiMaAccountId="";internal long BiMaCount=-1;internal DateTime BiMaReadAt=DateTime.MinValue,BiMaPollAt=DateTime.MinValue;internal bool BiMaCloseLogged,BiMaSavePending;
+ }
+ public static partial class NativeBackend {
+  public static string BiMaDataDirectory="";
+  static readonly object biMaStoreGate=new object();
+  static readonly Dictionary<string,BiMaSnapshot> biMaStore=new Dictionary<string,BiMaSnapshot>();
+  static readonly Dictionary<string,string> biMaSessions=new Dictionary<string,string>();
+  static bool BiMaKey(string key){return !String.IsNullOrEmpty(key)&&key.Length<=128&&System.Text.RegularExpressions.Regex.IsMatch(key,@"^[A-Za-z0-9_-]+$");}
+  static BiMaSnapshot LoadBiMa(string key){
+   BiMaSnapshot saved;if(biMaStore.TryGetValue(key,out saved))return saved;
+   saved=new BiMaSnapshot(-1,DateTime.MinValue,"");
+   try{if(BiMaDataDirectory.Length>0){string[] lines=File.ReadAllLines(Path.Combine(BiMaDataDirectory,key+".txt"));long count;DateTime at;
+    if(lines.Length==3&&Int64.TryParse(lines[0],out count)&&count>=0&&DateTime.TryParse(lines[1],System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.RoundtripKind,out at))saved=new BiMaSnapshot(count,at,lines[2]);}}
+   catch{}biMaStore[key]=saved;return saved;
+  }
+  public static BiMaSnapshot GetBiMaSnapshot(string key){if(!BiMaKey(key))return new BiMaSnapshot(-1,DateTime.MinValue,"");lock(biMaStoreGate)return LoadBiMa(key);}
+  public static void BindBiMaAccount(string id,string key){
+   if(!BiMaKey(key))return;NativeJob j=Get(id);if(j==null)return;
+   lock(j.BiMaGate){if(j.BiMaAccountId==key)return;j.BiMaAccountId=key;lock(biMaStoreGate){biMaSessions[key]=j.Id;LoadBiMa(key);}if(j.BiMaCount>=0)PersistBiMa(j,false);}
+  }
+  static void PersistBiMa(NativeJob j,bool force){
+   if(!BiMaKey(j.BiMaAccountId)||j.BiMaCount<0)return;
+   lock(biMaStoreGate){string current;if(!biMaSessions.TryGetValue(j.BiMaAccountId,out current)||current!=j.Id)return;
+    BiMaSnapshot old=LoadBiMa(j.BiMaAccountId);bool changed=force||j.BiMaSavePending||old.Count!=j.BiMaCount||old.Session!=j.Id;
+    var next=new BiMaSnapshot(j.BiMaCount,j.BiMaReadAt,j.Id);biMaStore[j.BiMaAccountId]=next;if(!changed||BiMaDataDirectory.Length==0)return;
+    string temporary="";try{Directory.CreateDirectory(BiMaDataDirectory);string path=Path.Combine(BiMaDataDirectory,j.BiMaAccountId+".txt");temporary=path+"."+Guid.NewGuid().ToString("N")+".tmp";
+     File.WriteAllLines(temporary,new[]{next.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),next.ReadAt.ToString("o"),next.Session},new UTF8Encoding(false));
+     if(File.Exists(path))File.Replace(temporary,path,null);else File.Move(temporary,path);j.BiMaSavePending=false;
+    }catch{j.BiMaSavePending=true;j.LogError="bi_ma_save_failed";}finally{if(temporary.Length>0)try{if(File.Exists(temporary))File.Delete(temporary);}catch{}}
+   }
+  }
+  internal static long ReadBiMaCount(Remote r,long game){
+   long cc=ResolvedClass(r,game+0x16ed658),pc=ResolvedClass(r,game+0x16ee330),ic=ResolvedClass(r,game+0x16ee578),fcClass=ResolvedClass(r,game+0x16ee888);
+   long cs=r.Ptr(cc+0xb8),ps=r.Ptr(pc+0xb8);if(cs==0||ps==0)throw new Exception("bi_ma_not_ready");
+   long canvas=r.Ptr(cs),player=r.Ptr(ps+8);if(canvas==0||player==0||r.Ptr(player)!=pc)throw new Exception("bi_ma_not_ready");
+   long world=r.Ptr(canvas+0x1b8);if(world==0||r.Ptr(world)!=fcClass)throw new Exception("bi_ma_not_ready");
+   long bag=r.Ptr(player+0x128);int capacity;byte[] slots=InventoryArray(r,bag,512,out capacity);long count=0;var addresses=new List<long>();var records=new List<byte[]>();
+   for(int n=0;n<capacity;n++){long item=BitConverter.ToInt64(slots,n*8);if(item==0)continue;if(r.Ptr(item)!=ic)throw new Exception("bi_ma_bag_changed");
+    byte[] b=r.Read(item+20,8);int id=BitConverter.ToInt32(b,0),amount=BitConverter.ToInt32(b,4);if(id<0||amount<0)throw new Exception("bi_ma_bag_changed");if(id==1276)count+=amount;addresses.Add(item+20);records.Add(b);
+   }
+   for(int n=0;n<addresses.Count;n++)if(!SameBytes(records[n],r.Read(addresses[n],8)))throw new Exception("bi_ma_bag_changed");
+   if(r.Ptr(cs)!=canvas||r.Ptr(ps+8)!=player||r.Ptr(player+0x128)!=bag||r.Ptr(canvas+0x1b8)!=world||BitConverter.ToInt32(r.Read(bag+24,4),0)!=capacity||!SameBytes(slots,r.Read(bag+32,slots.Length)))throw new Exception("bi_ma_bag_changed");return count;
+  }
+  internal static void AcceptBiMa(NativeJob j,long count,DateTime at){if(count<0)throw new ArgumentOutOfRangeException("count");lock(j.BiMaGate){j.BiMaCount=count;j.BiMaReadAt=at;PersistBiMa(j,false);}}
+  internal static void PumpBiMa(Remote r,long game,NativeJob j){
+   DateTime now=DateTime.UtcNow;if(!UpSessionReady(j)||(now-j.BiMaPollAt).TotalSeconds<10)return;j.BiMaPollAt=now;
+   try{lock(j.BiMaGate){AcceptBiMa(j,ReadBiMaCount(r,game),now);}}catch{ /* Keep the last verified count, including zero. */ }
+  }
+  internal static void CaptureBiMaBeforeClose(int pid){
+   NativeJob j=jobs.Values.FirstOrDefault(x=>x.ProcessId==pid);if(j==null)return;
+   try{lock(j.BiMaGate){using(Process p=Process.GetProcessById(pid))using(Remote r=new Remote(p)){long game=0;foreach(ProcessModule m in p.Modules)if(m.ModuleName=="GameAssembly.dll"){game=m.BaseAddress.ToInt64();break;}if(game!=0)AcceptBiMa(j,ReadBiMaCount(r,game),DateTime.UtcNow);}}}catch{}
+  }
+  internal static void RecordBiMaClosed(int pid,string reason){foreach(NativeJob j in jobs.Values)if(j.ProcessId==pid)RecordBiMaClosed(j,reason);}
+  internal static void RecordBiMaClosed(NativeJob j,string reason){lock(j.BiMaGate){if(j.BiMaCloseLogged)return;j.BiMaCloseLogged=true;PersistBiMa(j,true);
+   Log(j,"bi_ma_at_close",",\"pid\":"+j.ProcessId+",\"account_id\":"+Quote(j.BiMaAccountId)+",\"character\":"+Quote(j.CharacterName)+",\"item_id\":1276,\"quantity\":"+(j.BiMaCount<0?"null":j.BiMaCount.ToString(System.Globalization.CultureInfo.InvariantCulture))+",\"read_at\":"+Quote(j.BiMaReadAt==DateTime.MinValue?"":j.BiMaReadAt.ToString("o"))+",\"reason\":"+Quote(reason));
+  }}
  }
 }

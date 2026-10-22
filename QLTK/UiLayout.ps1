@@ -101,6 +101,7 @@ $closeGameCol=New-Object Windows.Forms.DataGridViewButtonColumn;$closeGameCol.Na
 $characterCol=New-Object Windows.Forms.DataGridViewTextBoxColumn;$characterCol.Name='character';$characterCol.HeaderText='Tên nhân vật';$characterCol.ReadOnly=$true;$characterCol.SortMode='NotSortable';$characterCol.FillWeight=110;$null=$grid.Columns.Add($characterCol);$characterCol.DisplayIndex=4
 $upCol=New-Object Windows.Forms.DataGridViewCheckBoxColumn;$upCol.Name='up';$upCol.HeaderText='Up';$upCol.ReadOnly=$false;$upCol.SortMode='NotSortable';$null=$grid.Columns.Add($upCol)
 $zoneCol=New-Object Windows.Forms.DataGridViewTextBoxColumn;$zoneCol.Name='zone';$zoneCol.HeaderText='Khu';$zoneCol.ReadOnly=$true;$zoneCol.SortMode='NotSortable';$null=$grid.Columns.Add($zoneCol)
+$biMaCol=New-Object Windows.Forms.DataGridViewTextBoxColumn;$biMaCol.Name='bima';$biMaCol.HeaderText='Bí ma';$biMaCol.ReadOnly=$true;$biMaCol.SortMode='NotSortable';$biMaCol.DefaultCellStyle.Alignment='MiddleRight';$null=$grid.Columns.Add($biMaCol)
 function Test-AccountOpenBlocked($account) {
     if($null -eq $account){return $false}
     $key=[string]$account.id
@@ -179,7 +180,7 @@ $grid.Columns['proxy'].HeaderText='Proxy SOCKS5';$grid.Columns['proxy'].FillWeig
 $grid.Columns['status'].FillWeight=215;$openCol.HeaderText='Mở';$openCol.Text='OPEN';$openCol.FillWeight=65
 # Keep the reference column widths and order independent of window size.
 $grid.AutoSizeColumnsMode='None';$grid.AllowUserToResizeColumns=$false;$grid.AllowUserToResizeRows=$false;$grid.AllowUserToOrderColumns=$false
-$fixedAccountColumns=@(@('number',38),@('pick',41),@('auto',47),@('up',41),@('username',123),@('character',109),@('zone',55),@('password',109),@('proxy',157),@('status',210),@('open',66),@('visibility',68),@('closegame',68))
+$fixedAccountColumns=@(@('number',38),@('pick',41),@('auto',47),@('up',41),@('username',123),@('character',109),@('zone',55),@('bima',75),@('password',109),@('proxy',157),@('status',210),@('open',66),@('visibility',68),@('closegame',68))
 for($i=0;$i -lt $fixedAccountColumns.Count;$i++){
     $col=$grid.Columns[$fixedAccountColumns[$i][0]];$col.AutoSizeMode='None';$col.Width=[int]$fixedAccountColumns[$i][1];$col.Resizable='False';$col.DisplayIndex=$i;$col.SortMode='NotSortable'
 }
@@ -218,7 +219,17 @@ $bottomButtons=@($bottomOpen,$cancelButton,$replayNpcButton,$npcIdsButton,$menuL
 $buttons[3].Text='Copy username';$buttons[4].Text='Copy password'
 foreach($b in $topButtons+$bottomButtons+@($clearUpAllButton,$importShortcut,$editShortcut,$proxyEdit,$proxySettings,$logShortcut,$npcShortcut)) {$b.Font=$form.Font;$b.ForeColor=[Drawing.Color]::FromArgb(0,35,75);$b.UseVisualStyleBackColor=$true}
 function Get-OpenGamePids {return [TGLL.ManagedGames]::RunningProcessIds()}
+function Update-AccountBiMa($row,$j) {
+    if(!$grid.Columns.Contains('bima') -or $null -eq $row.Tag){return}
+    $key=[string]$row.Tag.id
+    if($j -is [TGLL.NativeJob]){[TGLL.NativeBackend]::BindBiMaAccount($j.Id,$key)}
+    $snapshot=[TGLL.NativeBackend]::GetBiMaSnapshot($key)
+    $text=if($snapshot.Count -ge 0){[string]$snapshot.Count}else{'—'}
+    if($row.Cells['bima'].Value -ne $text){$row.Cells['bima'].Value=$text}
+    $row.Cells['bima'].ToolTipText=if($snapshot.Count -ge 0){'ID 1276 • Số lượng đã đọc gần nhất: '+$snapshot.ReadAt.ToLocalTime().ToString('dd/MM/yyyy HH:mm:ss')}else{'ID 1276 • Chưa có số lượng được xác nhận'}
+}
 function Update-AccountCharacter($row,$j) {
+    Update-AccountBiMa $row $j
     $newCharacter=if($j){[string]$j.CharacterName}else{''}
     if($row.Cells['character'].Value -ne $newCharacter){$row.Cells['character'].Value=$newCharacter}
 }
