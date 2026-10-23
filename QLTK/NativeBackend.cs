@@ -1686,7 +1686,7 @@ namespace TGLL {
             // Fresh/copied accounts can have an empty saved selection and a different
             // Phi level/ID. Resolve the learned templates instead of silently disabling combat.
             if(selected==null||selected.Length==0){
-                foreach(int template in new[]{26,28,24}){
+                foreach(int template in new[]{26,28}){
                     SkillInfo learned=(skills??new SkillInfo[0]).Where(x=>x.Usable&&x.TemplateId==template).OrderByDescending(x=>x.Level).FirstOrDefault();
                     if(learned!=null&&!result.Contains(learned.Id)&&result.Count<4)result.Add(learned.Id);
                 }
@@ -1710,11 +1710,9 @@ namespace TGLL {
         internal static SkillInfo HangingLevelOne(NativeJob j){
             if(j.ThiQuyCombatActive||j.CurseActive||j.FarmEnabled&&!j.FarmArrived||j.SonCapEnabled&&(!j.SonCapMapAutoActive||j.SonCapMoving||j.SonCapStopPending||j.SonCapFinished))return null;
             if(!j.GameAutoEnabled||!(j.GameAutoWanted||j.FarmEnabled&&j.FarmArrived||j.IzanamiMapAutoActive&&j.IzanamiEnabled)||!j.GameSettingsReady||j.ReceiveFlowActive||j.ReceiveKeyRequested||j.ReplayRequested||j.CloseRequested||j.CancelRequested||j.ReconnectRequested||j.QuestPauseAuto||j.CloakEnabled||j.MailEnabled||j.MailBusy||j.MailQueueOnly||j.CloakQueueOnly||DungeonEntryBlocked(j)||AuxiliaryActionBlocked(j)||j.ZoneSyncActive||j.FollowActive&&(j.FollowDistance<0||j.FollowDistance>48))return null;
-            // Treo mặc định xử lý chiêu còn lại; bổ sung chiêu cấp 1 và ID 219 đã chọn.
-            // Ưu tiên Kiếm thuật cơ bản ID 1 rồi luân phiên Thiên sát thủy phi ID 219.
+            // Treo mặc định xử lý chiêu còn lại; chỉ bổ sung chiêu cấp 1 đã chọn.
             int[] ids=j.HangingSkillIds;var extra=new List<SkillInfo>();
             SkillInfo basic=j.Skills.Where(x=>x.Level==1&&x.Usable&&Array.IndexOf(ids,x.Id)>=0).OrderBy(x=>x.Id).FirstOrDefault();if(basic!=null)extra.Add(basic);
-            SkillInfo water=j.Skills.FirstOrDefault(x=>x.Id==219&&x.Usable&&Array.IndexOf(ids,x.Id)>=0);if(water!=null&&!extra.Any(x=>x.Id==219))extra.Add(water);
             return extra.Count==0?null:extra[j.HangingSkillCursor%extra.Count];
         }
         internal static int TrainingPollMs(NativeJob j){

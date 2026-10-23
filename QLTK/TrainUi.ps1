@@ -1,10 +1,10 @@
 ﻿$trainPage=New-Object Windows.Forms.TabPage;$trainPage.Text='Train quái';$trainPage.BackColor=$form.BackColor;$tabs.TabPages.Add($trainPage)
-$null=Ui-Label 'Tự chọn 4 chiêu đã học khi cấu hình trống' $trainPage 16 12 630 24
+$null=Ui-Label 'Tự chọn 3 chiêu đã học khi cấu hình trống' $trainPage 16 12 630 24
 $skillChoice=New-Object Windows.Forms.CheckedListBox;$skillChoice.CheckOnClick=$true;$skillChoice.SetBounds(16,43,455,95);$trainPage.Controls.Add($skillChoice)
 $scanSkills=Ui-NewButton 'Đọc ID chiêu' {
     try {$a=Selected-Account;if(!$script:accountJobs.ContainsKey($a.id)){throw 'Mở tài khoản bằng phiên QLTK này trước.'};[TGLL.NativeBackend]::ScanSkills($script:accountJobs[$a.id]);$trainHint.Text='Đang đọc danh sách chiêu...'}catch{Show-Error $_.Exception.Message}
 };Ui-Place $scanSkills $trainPage 483 43 150 27
-$null=Ui-Label 'Tự chọn Phi Lôi, phân thân, thủy phi và kiếm cơ bản khi chưa chọn chiêu.' $trainPage 483 78 150 60
+$null=Ui-Label 'Tự chọn Phi Lôi, phân thân và kiếm cơ bản khi chưa chọn chiêu.' $trainPage 483 78 150 60
 $script:trainSelections=@{};$script:skillViewKey='';$script:loadingSkills=$false
 function Get-CheckedSkillIds {return [int[]]@($skillChoice.CheckedItems | ForEach-Object {$_.Id})}
 function Save-TrainChoice {if($grid.SelectedRows.Count){$script:trainSelections[[string]$grid.SelectedRows[0].Tag.id]=@(Get-CheckedSkillIds)}}
@@ -26,7 +26,7 @@ $startTrain=Ui-NewButton 'Bật train đã chọn' {
 };Ui-Place $startTrain $trainPage 16 145 175 28
 $stopTrain=Ui-NewButton 'Dừng train đã chọn' {foreach($row in @(Get-LaunchRows)){Set-AccountAuto $row $false};$status.Text='Đã yêu cầu dừng train các tài khoản được chọn.'};Ui-Place $stopTrain $trainPage 203 145 175 28
 $trainHint=Ui-Label 'Mở tài khoản để đọc chiêu.' $trainPage 16 183 635 42
-$null=Ui-Label 'Dùng chiêu qua nút skill của game • Treo game dùng bộ chiêu; QLTK bổ sung chiêu cấp 1 + ID 219 đã tích, luân phiên mỗi 10 ms. Đợi đòn trước hoàn tất.' $trainPage 16 227 635 24
+$null=Ui-Label 'Dùng chiêu qua nút skill của game • Treo game dùng bộ chiêu; QLTK chỉ bổ sung chiêu cấp 1 đã tích, mỗi 10 ms. Đợi đòn trước hoàn tất.' $trainPage 16 227 635 24
 $trainPriorityThiQuy=New-Object Windows.Forms.CheckBox
 $trainPriorityThiQuy.Text='Ưu tiên đánh Thi Quỷ';$trainPriorityThiQuy.SetBounds(390,145,245,25);$trainPage.Controls.Add($trainPriorityThiQuy)
 $script:loadingTrainPriority=$false
