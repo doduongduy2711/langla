@@ -45,7 +45,7 @@ function Paste-AccountConfigAll {
         throw
     }
     $copiedQueue=$script:copiedAccountConfig | ConvertFrom-Json
-    if($copiedQueue.PSObject.Properties['beastMaxOnline']){$beastMax.Value=[Math]::Max(6,[Math]::Min(9996,[int]$copiedQueue.beastMaxOnline));$beastCloseAfter.Checked=[bool]$copiedQueue.beastCloseAfter;Save-BeastSettings}
+    if($copiedQueue.PSObject.Properties['beastMaxOnline']){$beastMax.Value=[Math]::Max(1,[Math]::Min(9999,[int]$copiedQueue.beastMaxOnline));$beastCloseAfter.Checked=[bool]$copiedQueue.beastCloseAfter;Save-BeastSettings}
     if($copiedQueue.PSObject.Properties['soncapGroupSize'] -or $copiedQueue.PSObject.Properties['soncapPortals']){
         $script:loadingSonCap=$true
         try{
