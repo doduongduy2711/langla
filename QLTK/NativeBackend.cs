@@ -1865,11 +1865,22 @@ namespace TGLL {
             Log(j,"dungeon_returned",",\"map_id\":"+map);
         }
         internal static bool ObserveDungeonProbeRefusal(NativeJob j,int map,string text){
-            if(!j.DungeonHighEnabled||!j.DungeonResumeProbe||!j.DungeonResumeChecked||j.DungeonKeyCount!=0||j.DungeonEntries<1||j.DungeonLeftOrigin||map!=j.DungeonOriginMap)return false;
+            if(!j.DungeonHighEnabled||!j.DungeonCycleWaiting||!j.DungeonResumeChecked||j.DungeonEntries<1||j.DungeonLeftOrigin||map!=j.DungeonOriginMap)return false;
             StringBuilder b=new StringBuilder();foreach(char c in (text??"").ToLowerInvariant().Normalize(NormalizationForm.FormD))if(System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)!=System.Globalization.UnicodeCategory.NonSpacingMark)b.Append(c=='đ'?'d':c);
             string n=System.Text.RegularExpressions.Regex.Replace(b.ToString(),@"\s+"," ");
             if(!n.Contains("khong co chia khoa dia cung")&&!n.Contains("khong du chia khoa dia cung"))return false;
-            j.DungeonProbeRefused=true;j.DungeonCycleWaiting=false;Log(j,"dungeon_last_run_refused",",\"notice\":"+Quote(text));return true;
+            j.DungeonKeyCount=0;j.DungeonProbeRefused=true;j.DungeonCycleWaiting=false;Log(j,"dungeon_last_run_refused",",\"notice\":"+Quote(text));return true;
+        }
+        internal static void TrackDungeonEntrySubmission(NativeJob j,DateTime now){
+            j.State="dungeon_submitted";j.DungeonResumeChecked=true;j.DungeonEntries++;j.DungeonFinished=false;j.DungeonCycleWaiting=true;j.DungeonLeftOrigin=false;j.DungeonReturnAt=DateTime.MinValue;j.DungeonCycleAt=now;j.DungeonPollAt=DateTime.MinValue;j.Stage="dungeon_wait_enter";
+        }
+        // A new NPC submission is not proof of entering another round. Keep the prior
+        // confirmed return until a real map transition, then refresh keys before timeout.
+        internal static bool RecheckReturnedDungeonKeys(NativeJob j,int map,Func<InventorySnapshot> reader){
+            if(!j.DungeonHighEnabled||!j.DungeonCycleWaiting||!j.DungeonReturnConfirmed||j.DungeonLeftOrigin||map!=j.DungeonOriginMap)return false;
+            try{InventorySnapshot snapshot=reader();int count=CountHighDungeonKeys(snapshot);int before=j.DungeonKeyCount;j.Inventory=snapshot;j.DungeonKeyCount=count;
+                Log(j,"dungeon_entry_keys_rechecked",",\"before\":"+before+",\"keys\":"+count);return count==0;
+            }catch(Exception e){Log(j,"dungeon_entry_keys_unavailable",",\"detail\":"+Quote(e.Message));return false;}
         }
         static void PumpDungeonCycle(Remote r,long data,long game,NativeJob j,Stopwatch timer){
             if(j.QuestEnabled)return;
@@ -1878,10 +1889,15 @@ namespace TGLL {
             DateTime now=DateTime.UtcNow;if((now-j.DungeonPollAt).TotalSeconds<1)return;j.DungeonPollAt=now;
             try{
                 int map=ReadDungeonMap(r,game);
-                if(j.DungeonResumeProbe&&!j.DungeonLeftOrigin){
+                if(!j.DungeonLeftOrigin){
                     string popup=ReadKeyNotice(r,game);bool refused=popup!=j.DungeonProbePopupBefore&&ObserveDungeonProbeRefusal(j,map,popup);
                     if(!refused)foreach(var notice in ReadKeyNotifications(r,game))if(j.DungeonProbeNotices.Add(notice.Key)&&ObserveDungeonProbeRefusal(j,map,notice.Value)){refused=true;break;}
                     if(refused){StopDungeon(r,data,j,timer,"dungeon_no_keys");return;}
+                }
+                if((now-j.DungeonCycleAt).TotalSeconds>=30&&RecheckReturnedDungeonKeys(j,map,delegate{return ReadInventorySnapshot(r,game);})){
+                    // The map can change while reading the bag. Never close on the origin snapshot alone.
+                    map=ReadDungeonMap(r,game);
+                    if(map==j.DungeonOriginMap){j.DungeonCycleWaiting=false;StopDungeon(r,data,j,timer,"dungeon_no_keys");return;}
                 }
                 ObserveDungeonCycle(r,data,j,timer,map,now);
             }catch{if((now-j.DungeonCycleAt).TotalSeconds>=30&&!j.DungeonLeftOrigin)StopDungeon(r,data,j,timer,"dungeon_map_unavailable");}
@@ -2310,7 +2326,7 @@ namespace TGLL {
                 if(j.DungeonHighEnabled){j.State="waiting_dungeon";j.DungeonStartAt=DateTime.UtcNow.AddMilliseconds(750);timer.Restart();return;}
                 j.State="key_submitted";
             }else if(j.NpcAction==2){if(j.SonCapEnabled){foreach(string id in j.TeamJobIds){NativeJob peer=Get(id);if(peer!=null&&peer.SonCapEnabled){peer.SonCapEntrySubmitted=true;peer.SonCapStatus="Đã gửi vào Sơn Cáp; đợi map hang";}}Log(j,"npc_soncap_selected",",\"npc_id\":"+j.NpcId+",\"template_id\":"+j.NpcTemplateId+",\"index\":"+j.MenuSelectedIndex);}SubmitIzanamiAuto(j);j.State="izanami_submitted";j.IzanamiEntries++;j.Stage="izanami_done";Log(j,"npc_izanami_selected",",\"npc_id\":"+j.NpcId+",\"template_id\":"+j.NpcTemplateId+",\"index\":"+j.MenuSelectedIndex);}
-            else{PrepareEntryAuto(j,1,j.DungeonOriginMap);SubmitEntryAuto(j);j.State="dungeon_submitted";j.DungeonResumeChecked=true;j.DungeonEntries++;j.DungeonReturnConfirmed=false;j.DungeonFinished=false;j.DungeonCycleWaiting=true;j.DungeonLeftOrigin=false;j.DungeonReturnAt=DateTime.MinValue;j.DungeonCycleAt=DateTime.UtcNow;j.DungeonPollAt=DateTime.MinValue;j.Stage="dungeon_wait_enter";Log(j,"npc_dungeon_selected",",\"npc_id\":"+j.NpcId+",\"index\":"+j.MenuSelectedIndex);}
+            else{PrepareEntryAuto(j,1,j.DungeonOriginMap);SubmitEntryAuto(j);TrackDungeonEntrySubmission(j,DateTime.UtcNow);Log(j,"npc_dungeon_selected",",\"npc_id\":"+j.NpcId+",\"index\":"+j.MenuSelectedIndex);}
             j.ReceiveFlowActive=false;j.DungeonStartAt=DateTime.MinValue;timer.Stop();
         }
         internal static string StartupPopupFailureState(NativeJob j){return j.ReceiveKeyEnabled||j.DungeonHighEnabled?"npc_unavailable":"startup_unavailable";}

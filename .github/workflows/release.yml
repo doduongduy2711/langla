@@ -26,6 +26,14 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Native test compilation failed'}
           ./QuestTargetNativeTests.exe
           if($LASTEXITCODE -ne 0){throw 'Native target tests failed'}
+      - name: Dungeon entry and key exhaustion checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:DungeonEntryTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/DungeonEntryTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Dungeon entry test compilation failed'}
+          ./DungeonEntryTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Dungeon entry tests failed'}
       - name: Inventory count persistence checks
         shell: powershell
         run: |
