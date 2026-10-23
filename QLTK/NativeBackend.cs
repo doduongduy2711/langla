@@ -1100,11 +1100,11 @@ namespace TGLL {
             if(now<j.QuestRetryAt&&j.QuestPhase!=1)return;j.QuestInFlight=false;
             if(j.QuestPhase==0){j.QuestHadTask=present;j.QuestWasDone=done;j.QuestReturn=!present||done||(j.BeastQuestEnabled&&!j.BeastTeamStarted);j.GameAutoManaged=true;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestStatus=j.QuestReturn?(j.BeastQuestEnabled?"Linh thú: cả nhóm về Rasa":"Tắt treo; quay về Mei Terumi"):"Đi tới quái của nhiệm vụ";j.QuestAt=now;QuestSend(r,data,j,j.QuestReturn?1:2);j.QuestPhase=1;return;}
             if(j.QuestPhase==1){if(route)return;if(j.QuestReturn&&BitConverter.ToInt32(b,80)>=0&&BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,80)){if(now>=j.QuestRetryAt)QuestSend(r,data,j,1);return;}if(!j.QuestReturn&&present&&BitConverter.ToInt32(b,76)>=0&&BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,76)){if(now>=j.QuestRetryAt)QuestSend(r,data,j,2);return;}if(ack&&result!=1){j.QuestPhase=0;return;}if(j.QuestReturn){if(j.BeastQuestEnabled){if(!BeastPartyReady(j,true)){j.QuestAt=now;j.QuestStatus="Linh thú: đợi đủ thành viên đứng gần Rasa • "+j.TeamStatus;return;}j.BeastTeamStarted=true;if(present&&!done){j.QuestReturn=false;QuestSend(r,data,j,2);return;}}QuestSend(r,data,j,3);j.QuestPhase=2;j.QuestStatus=j.BeastQuestEnabled?"Trưởng nhóm mở menu Rasa":"Mở menu Mei Terumi";}else{j.QuestPauseAuto=false;j.GameAutoManaged=true;j.GameAutoWanted=false;j.QuestPhase=6;ArmQuestCombat(j);j.QuestRetryAt=DateTime.MinValue;j.QuestStatus="Treo đánh quái; đợi nhiệm vụ hoàn thành";}return;}
-            if(j.QuestPhase==2){if(ack&&result==1){QuestSend(r,data,j,4);j.QuestPhase=3;}else{QuestSend(r,data,j,1);j.QuestPhase=1;j.QuestStatus="Chưa gặp Mei; thử lại đường về trả nhiệm vụ";}return;}
-            if(j.QuestPhase==3){bool turnIn=present&&done;if(j.BeastQuestEnabled&&!BeastPartyReady(j,true)){j.QuestPhase=0;j.QuestAt=now;j.QuestStatus="Linh thú: nhóm chưa đủ thành viên gần Rasa";return;}QuestSend(r,data,j,turnIn?7:5);j.QuestPhase=4;j.QuestStatus=turnIn?"Chọn Hoàn Thành để trả nhiệm vụ":"Chọn Nhận nhiệm vụ tuần hoàn";return;}
+            if(j.QuestPhase==2){if(ack&&result==1){QuestSend(r,data,j,4);j.QuestPhase=3;}else{QuestSend(r,data,j,1);j.QuestPhase=1;j.QuestStatus=j.BeastQuestEnabled?"Chưa mở được menu Rasa; thử lại":"Chưa gặp Mei; thử lại đường về trả nhiệm vụ";}return;}
+            if(j.QuestPhase==3){if(j.BeastQuestEnabled&&present&&!done){j.QuestPhase=0;j.QuestAt=now;j.QuestStatus="Đã có nhiệm vụ linh thú; giữ nguyên nhiệm vụ và đi cùng nhóm";return;}bool turnIn=present&&done;if(j.BeastQuestEnabled&&!BeastPartyReady(j,true)){j.QuestPhase=0;j.QuestAt=now;j.QuestStatus="Linh thú: nhóm chưa đủ thành viên gần Rasa";return;}QuestSend(r,data,j,turnIn?7:5);j.QuestPhase=4;j.QuestStatus=j.BeastQuestEnabled?(turnIn?"Rasa → Nhiệm vụ thu phục mãnh thú → Hoàn Thành":"Rasa → Nhiệm vụ thu phục mãnh thú → Nhận"):(turnIn?"Chọn Hoàn Thành để trả nhiệm vụ":"Chọn Nhận nhiệm vụ tuần hoàn");return;}
             if(j.QuestPhase==4){if(ack&&result==1){j.QuestPhase=j.QuestCommand==7?7:5;j.QuestAt=now;j.QuestStatus=j.QuestCommand==7?"Đợi server xác nhận trả nhiệm vụ":"Đợi server cập nhật nhiệm vụ";}else{QuestSend(r,data,j,4);j.QuestPhase=3;}return;}
-            if(j.QuestPhase==5){if((present&&!done&&(!j.QuestHadTask||j.QuestWasDone))){j.QuestPhase=0;j.QuestAt=now;return;}if(!present&&remaining<j.QuestBaseRemaining){j.QuestPhase=0;j.QuestAt=now;return;}if((now-j.QuestAt).TotalSeconds>30)StopQuest(j,"Đã chọn Nhận nhưng server chưa đổi nhiệm vụ; kiểm tra menu Mei");return;}
-            if(j.QuestPhase==7){if(!present||(present&&!done)){if(present){j.QuestPhase=0;}else{QuestSend(r,data,j,3);j.QuestPhase=2;j.QuestStatus="Đã trả nhiệm vụ; mở menu nhận lượt tiếp theo";}j.QuestAt=now;return;}if((now-j.QuestAt).TotalSeconds>30)StopQuest(j,"Đã chọn Hoàn Thành nhưng server chưa xác nhận trả nhiệm vụ; kiểm tra menu Mei");return;}
+            if(j.QuestPhase==5){if((present&&!done&&(!j.QuestHadTask||j.QuestWasDone))){j.QuestPhase=0;j.QuestAt=now;return;}if(!present&&remaining<j.QuestBaseRemaining){j.QuestPhase=0;j.QuestAt=now;return;}if((now-j.QuestAt).TotalSeconds>30)StopQuest(j,"Đã chọn Nhận nhưng server chưa đổi nhiệm vụ; kiểm tra menu NPC");return;}
+            if(j.QuestPhase==7){if(!present||(present&&!done)){if(present){j.QuestPhase=0;}else{QuestSend(r,data,j,3);j.QuestPhase=2;j.QuestStatus="Đã trả nhiệm vụ; mở menu nhận lượt tiếp theo";}j.QuestAt=now;return;}if((now-j.QuestAt).TotalSeconds>30)StopQuest(j,"Đã chọn Hoàn Thành nhưng server chưa xác nhận trả nhiệm vụ; kiểm tra menu NPC");return;}
             if(j.QuestPhase==6){
                 if(!present||done){j.QuestPhase=0;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestAt=now;}
                 else if(route||BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,76)){j.QuestPhase=0;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestAt=now;j.QuestStatus="Sai map nhiệm vụ; đang đi lại bãi yêu cầu";}
@@ -3933,8 +3933,18 @@ namespace TGLL {
    DateTime now=DateTime.UtcNow;bool gather=!leader.BeastTeamStarted||leader.QuestReturn||leader.QuestPhase==0;
    bool route=BitConverter.ToInt32(b,24)!=0;int map=BitConverter.ToInt32(b,72);
    if(gather){
-    j.QuestPhase=1;j.QuestReturn=true;j.QuestStatus="Linh thú: đứng gần Rasa, đợi trưởng nhóm";
-    if((!j.BeastNearRasa||j.BeastFollowerMode!=1)&&!route&&now>=j.QuestRetryAt){QuestSend(r,data,j,1);j.BeastFollowerMode=1;}return;
+    j.QuestPhase=1;j.QuestReturn=true;
+    if(!leader.BeastNearRasa){j.QuestStatus="Linh thú: chờ trưởng nhóm tới Rasa";return;}
+    if(map==leader.MapId&&j.ZoneSyncActive){j.QuestStatus=j.ZoneStatus;return;}
+    int gatherDistance=Math.Abs(j.BeastX-leader.BeastX)+Math.Abs(j.BeastY-leader.BeastY);
+    if(map!=leader.MapId||gatherDistance>90){
+     j.QuestStatus="Linh thú: tập trung Rasa cùng "+leader.CharacterName+" • map "+leader.MapId+", khu "+leader.ZoneId;
+     // Rasa also exists in other villages. NPC navigation alone can stop at the wrong Rasa.
+     if(route&&j.BeastFollowerMode!=3&&j.BeastFollowerMode!=-3&&now>=j.QuestRetryAt){QuestSend(r,data,j,6);j.BeastFollowerMode=-3;return;}
+     if(!route&&now>=j.QuestRetryAt&&(now-j.BeastRouteAt).TotalSeconds>=3){r.Write(data+96,BitConverter.GetBytes(leader.MapId));r.Write(data+100,BitConverter.GetBytes(leader.BeastX));r.Write(data+104,BitConverter.GetBytes(leader.BeastY));QuestSend(r,data,j,8);j.BeastRouteAt=now;j.BeastFollowerMode=3;}return;
+    }
+    j.QuestStatus="Linh thú: đứng gần Rasa, đợi trưởng nhóm";
+    if(!j.BeastNearRasa&&!route&&now>=j.QuestRetryAt){QuestSend(r,data,j,1);j.BeastFollowerMode=1;}return;
    }
    j.QuestReturn=false;
    if(j.ZoneSyncActive){j.QuestStatus=j.ZoneStatus;return;}
