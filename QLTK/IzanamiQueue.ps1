@@ -59,17 +59,30 @@ function Pump-IzanamiQueue {
     if($script:izanamiQueuePaused -or !$script:izanamiBatches.Count){return}
     $script:izanamiAccountIndex=@{};foreach($a in $script:accounts){$script:izanamiAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:izanamiBatches){
+        # Fault shutdown is per account; free a whole batch only after every game really exited.
+        if($batch.state -ne 'waiting' -and $batch.state -ne 'done'){
+            $faultCount=0;$allFaultClosed=$true
+            foreach($m in $batch.members){$faultJob=Get-IzanamiMemberJob $m
+                if($faultJob -is [TGLL.NativeJob] -and $faultJob.ActivityTimeoutClosed){$faultCount++}
+                else{$allFaultClosed=$false}
+                if(!$faultJob -or (Test-IzanamiMemberRunning $m)){$allFaultClosed=$false}
+                $faultAccount=$script:izanamiAccountIndex[$m.id]
+                if($faultAccount -and (Test-AccountOpenBlocked $faultAccount)){$allFaultClosed=$false}
+            }
+            if($faultCount -gt 0 -and $allFaultClosed){$batch.state='done';$batch.error='Đã tắt do auto lỗi/chờ quá 10 phút';continue}
+        }
         if(!$batch.closeOperation -and $batch.state -in @('launching','running','finished','blocked')){
             $limited=$false;foreach($m in $batch.members){$j=Get-IzanamiMemberJob $m;if($j -and $j.IzanamiNoAttempts){$limited=$true}}
             if($limited){$batch | Add-Member NoteProperty limitClose $true -Force;$batch.state='finished';$batch.error='Hết lượt cấm thuật: tắt tổ đội, bỏ qua số lượt còn lại.'}
         }
-        if($batch.state -eq 'running'){
+        if($batch.state -eq 'running' -or ($batch.state -eq 'blocked' -and !$batch.closeOperation)){
             $allComplete=$true;$unavailable=$false
             foreach($m in $batch.members){$j=Get-IzanamiMemberJob $m
-                if($null -eq $j -or !$j.IzanamiRoundComplete -or ($j.PSObject.Properties['IzanamiRunFinished'] -and !$j.IzanamiRunFinished)){$allComplete=$false}
-                if($null -eq $j -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled')){$unavailable=$true}
+                if(($null -eq $j -or !$j.IzanamiRoundComplete -or ($j.PSObject.Properties['IzanamiRunFinished'] -and !$j.IzanamiRunFinished)) -and !($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed)){$allComplete=$false}
+                if(!($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed) -and ($null -eq $j -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled'))){$unavailable=$true}
             }
             if($allComplete){$batch.state='finished'}
+            elseif(!$unavailable -and $batch.state -eq 'blocked'){$batch.state='running';$batch.error=''}
             elseif($unavailable){$batch.state='blocked';$batch.error='Một thành viên lỗi/thoát trước khi hoàn tất. Giữ lượt của tổ, không mở đội khác.'}
         }
         if($batch.state -eq 'finished' -and ($batch.limitClose -or ($izanamiCloseAfter.Checked -and [TGLL.NativeBackend]::CanAutoCloseBatch([string[]]@($batch.members | ForEach-Object {$_.job}))))){

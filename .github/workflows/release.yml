@@ -50,6 +50,14 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'BiMa test compilation failed'}
           ./BiMaTests.exe
           if($LASTEXITCODE -ne 0){throw 'BiMa tests failed'}
+      - name: Activity timeout recovery checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:ActivityWatchdogTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/ActivityWatchdogTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Watchdog test compilation failed'}
+          ./ActivityWatchdogTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Watchdog tests failed'}
       - name: Build program-only update and portable bundles
         shell: powershell
         run: ./scripts/Build-Release.ps1 -Version ([int]$env:QLTK_VERSION) -Repository $env:GITHUB_REPOSITORY

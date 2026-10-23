@@ -63,12 +63,24 @@ function Pump-SonCapQueue {
     if($script:soncapQueuePaused -or !$script:soncapBatches.Count){return}
     $script:soncapAccountIndex=@{};foreach($a in $script:accounts){$script:soncapAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:soncapBatches){
+        # Fault shutdown is per account; free a whole batch only after every game really exited.
+        if($batch.state -ne 'waiting' -and $batch.state -ne 'done'){
+            $faultCount=0;$allFaultClosed=$true
+            foreach($m in $batch.members){$faultJob=Get-SonCapMemberJob $m
+                if($faultJob -is [TGLL.NativeJob] -and $faultJob.ActivityTimeoutClosed){$faultCount++}
+                else{$allFaultClosed=$false}
+                if(!$faultJob -or (Test-SonCapMemberRunning $m)){$allFaultClosed=$false}
+                $faultAccount=$script:soncapAccountIndex[$m.id]
+                if($faultAccount -and (Test-AccountOpenBlocked $faultAccount)){$allFaultClosed=$false}
+            }
+            if($faultCount -gt 0 -and $allFaultClosed){$batch.state='done';$batch.error='Đã tắt do auto lỗi/chờ quá 10 phút';continue}
+        }
         if($batch.state -in @('running','blocked','finished')){foreach($m in $batch.members){$j=Get-SonCapMemberJob $m;if($j -and $j.SonCapNoAttempts){$batch | Add-Member NoteProperty limitClose $true -Force;break}}}
         if($batch.state -eq 'running' -or ($batch.state -eq 'blocked' -and !$batch.closeOperation)){
             $allComplete=$true;$unavailable=$false
             foreach($m in $batch.members){$j=Get-SonCapMemberJob $m
-                if($null -eq $j -or !$j.SonCapFinished){$allComplete=$false}
-                if($null -eq $j -or $j.SonCapFailure -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled')){$unavailable=$true}
+                if(($null -eq $j -or !$j.SonCapFinished) -and !($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed)){$allComplete=$false}
+                if(!($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed) -and ($null -eq $j -or $j.SonCapFailure -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled'))){$unavailable=$true}
             }
             if($allComplete){$batch.state='finished';$batch.error=''}
             elseif(!$unavailable -and $batch.state -eq 'blocked'){$batch.state='running';$batch.error=''}

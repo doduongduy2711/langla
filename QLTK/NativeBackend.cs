@@ -1022,7 +1022,12 @@ namespace TGLL {
         public volatile VitalsSnapshot Vitals;internal DateTime VitalsPollAt,IdentityPollAt;public volatile bool PrioritizeThiQuy,ThiQuyCombatActive;internal int ThiQuySkillCursor,ThiQuyNativeMode;public volatile string ThiQuyPriorityStatus="Tắt";internal DateTime ThiQuyPriorityAt=DateTime.MinValue;internal bool ThiQuyPriorityArmed,ThiQuyFarmPaused,ThiQuyReadSuspended;internal DateTime ThiQuyMissingAt=DateTime.MinValue,ThiQuyScanLogAt=DateTime.MinValue;internal string ThiQuyScanLast="";public volatile string CharacterName="",TeamStatus="";public volatile string[] TeamMembers=new string[0],Friends=new string[0];
         internal string LeaderZoneJob="";internal int LeaderZoneMap=-1,LeaderZoneTarget=-1;internal bool LeaderZoneConfirmed;
         internal string[] TeamJobIds=new string[0];internal DateTime TeamReadAt=DateTime.MinValue,TeamActionAt=DateTime.MinValue;internal int TeamAttempts,TeamAttemptCommand;internal bool TeamFriendRequested;internal string TeamTarget="";internal bool TeamManaged,TeamConfirmed;internal long TeamAcceptedPopup;
-        public volatile bool CloseAfterKey,KeyReceiptPending;internal int KeyReceiptBefore=-1,KeyReceiptLastCount=-1;internal DateTime KeyReceiptAt,KeyReceiptPollAt,KeyBaselineAt;internal string KeyReceiptReadError="";public volatile bool QuestQueueOnly,QuestFinished;public volatile bool QuestEnabled,QuestPauseAuto;public volatile int QuestCompleted,QuestRemaining=-1;public volatile string QuestStatus="Tắt";internal CloseBatchOperation QuestAutoCloseOperation;internal DateTime SonCapReadErrorAt;internal string SonCapReadError="";internal int QuestMobId=-1,QuestKind=-1;internal int QuestPhase,QuestBaseRemaining=-1,QuestCommand;internal bool QuestReturn,QuestHadTask,QuestWasDone,QuestInFlight;internal DateTime QuestAt,QuestRetryAt,QuestBusyAt;internal int QuestBusyRetries;
+        public volatile bool CloseAfterKey,KeyReceiptPending;internal int KeyReceiptBefore=-1,KeyReceiptLastCount=-1;internal DateTime KeyReceiptAt,KeyReceiptPollAt,KeyBaselineAt;internal string KeyReceiptReadError="";public volatile bool QuestQueueOnly,QuestFinished;public volatile bool QuestEnabled,QuestPauseAuto;public volatile int QuestCompleted,QuestRemaining=-1;public volatile string QuestStatus="Tắt";internal CloseBatchOperation QuestAutoCloseOperation;
+        internal bool QuestFaultStopped;internal DateTime QuestSnapshotAt;internal int QuestObservedCount,QuestObservedTotal;
+        internal DateTime ActivityFaultAt,ActivityVillageAt,ActivityCloseAt;internal string ActivityWatchKind="",ActivityProgress="";
+        internal bool ActivityRetryIssued;internal volatile bool ActivityRetryPending;
+        public volatile bool ActivityTimeoutClosed;public volatile string ActivityWatchStatus="";
+        internal CloseBatchOperation ActivityTimeoutCloseOperation;internal DateTime SonCapReadErrorAt;internal string SonCapReadError="";internal int QuestMobId=-1,QuestKind=-1;internal int QuestPhase,QuestBaseRemaining=-1,QuestCommand;internal bool QuestReturn,QuestHadTask,QuestWasDone,QuestInFlight;internal DateTime QuestAt,QuestRetryAt,QuestBusyAt;internal int QuestBusyRetries;
         internal long TravelData;internal bool TravelActive,TravelReady,TravelMapWaiting;internal int TravelPhase;internal DateTime TravelAt;internal string KeyNoticeBefore="",KeyNoticeLast="";
         internal HashSet<string> KeyNotificationSeen=new HashSet<string>();
         public volatile bool IzanamiTravelReady,IzanamiTravelStopped;
@@ -1080,7 +1085,7 @@ namespace TGLL {
             if(j.DailyManaged&&!j.DailyApplying){j.DailyPlan[3]=enabled;return;}
             if((j.MailQueueOnly||j.CloakQueueOnly)||j.DungeonQueueOnly||j.IzanamiQueueOnly||(!j.QuestQueueOnly&&(j.ReceiveKeyEnabled||j.DungeonHighEnabled||j.IzanamiEnabled)))enabled=false;
             if(enabled&&!j.QuestEnabled){j.QuestFinished=false;j.QuestPhase=0;j.QuestCompleted=0;j.QuestBaseRemaining=-1;j.QuestAt=DateTime.UtcNow;j.QuestRetryAt=DateTime.MinValue;j.QuestInFlight=false;j.QuestBusyAt=DateTime.MinValue;j.QuestBusyRetries=0;}
-            bool wasEnabled=j.QuestEnabled;j.QuestEnabled=enabled;j.QuestPauseAuto=enabled;j.QuestStatus=enabled?"Đợi dữ liệu nhiệm vụ":"Đã dừng";
+            j.QuestFaultStopped=false;bool wasEnabled=j.QuestEnabled;j.QuestEnabled=enabled;j.QuestPauseAuto=enabled;j.QuestStatus=enabled?"Đợi dữ liệu nhiệm vụ":"Đã dừng";
             if(!enabled&&wasEnabled){j.GameAutoWanted=false;j.TrainEnabled=false;}
         }
         public static string QuestDisplayStatus(NativeJob j){
@@ -1088,7 +1093,7 @@ namespace TGLL {
             string title=j.BeastQuestEnabled?"Linh thú":"Nhiệm vụ tuần hoàn";string progress=j.QuestFinished?"Đã xong "+title:j.QuestRemaining>=0?title+": "+j.QuestRemaining+"/"+(j.BeastQuestEnabled?3:10):title+": chờ đọc số lượt";
             return progress+" • "+j.QuestStatus;
         }
-        static void StopQuest(NativeJob j,string reason){j.QuestEnabled=false;j.QuestPauseAuto=false;j.GameAutoManaged=true;j.GameAutoWanted=false;j.TrainEnabled=false;j.QuestStatus=reason;Log(j,"quest_stop",",\"reason\":"+Quote(reason)+",\"completed\":"+j.QuestCompleted);}
+        static void StopQuest(NativeJob j,string reason){j.QuestFaultStopped=!j.BeastQuestEnabled&&!j.QuestFinished;j.QuestEnabled=false;j.QuestPauseAuto=false;j.GameAutoManaged=true;j.GameAutoWanted=false;j.TrainEnabled=false;j.QuestStatus=reason;Log(j,"quest_stop",",\"reason\":"+Quote(reason)+",\"completed\":"+j.QuestCompleted);}
         internal static void QuestSend(Remote r,long data,NativeJob j,int command){r.Write(data,BitConverter.GetBytes(command));j.QuestCommand=command;j.QuestInFlight=true;j.QuestRetryAt=DateTime.UtcNow.AddMilliseconds(command==1||command==2?3000:750);Log(j,"quest_command",",\"command\":"+command+",\"phase\":"+j.QuestPhase+",\"remaining\":"+j.QuestRemaining);}
         internal static void PumpQuest(Remote r,long data,NativeJob j){
             if(data==0)return;r.Write(data+116,BitConverter.GetBytes(j.BeastQuestEnabled?1:0));bool soloReady=!j.BeastQuestEnabled||j.BeastSoloReady&&(DateTime.UtcNow-j.TeamReadAt).TotalSeconds<4;bool canRun=soloReady&&j.QuestEnabled&&!j.CloseRequested&&!j.CancelRequested&&!j.ReceiveFlowActive&&j.GameSettingsReady&&(j.QuestQueueOnly||(!j.ReceiveKeyEnabled&&!j.DungeonHighEnabled&&!j.IzanamiEnabled));
@@ -1098,7 +1103,7 @@ namespace TGLL {
             j.QuestBusyAt=DateTime.MinValue;if(request!=0)return;
             int generation=BitConverter.ToInt32(r.Read(data+64,4),0);if((generation&1)!=0||BitConverter.ToInt32(r.Read(data+120,4),0)!=(j.BeastQuestEnabled?1:0))return;byte[] b=r.Read(data+8,108);if(generation!=BitConverter.ToInt32(r.Read(data+64,4),0)||BitConverter.ToInt32(b,0)!=1)return;
             int remaining=BitConverter.ToInt32(b,4),result=BitConverter.ToInt32(b,28);bool present=BitConverter.ToInt32(b,8)!=0,done=BitConverter.ToInt32(b,12)!=0,route=BitConverter.ToInt32(b,24)!=0;
-            if(remaining<0||remaining>(j.BeastQuestEnabled?3:10)){j.QuestStatus="Chưa đọc được số lượt nhiệm vụ";return;}if(j.QuestRemaining!=remaining)Log(j,"quest_progress",",\"display\":"+Quote(remaining+"/"+(j.BeastQuestEnabled?3:10))+",\"remaining\":"+remaining);j.QuestRemaining=remaining;j.QuestMobId=BitConverter.ToInt32(b,100);j.QuestKind=BitConverter.ToInt32(b,104);
+            if(remaining<0||remaining>(j.BeastQuestEnabled?3:10)){j.QuestStatus="Chưa đọc được số lượt nhiệm vụ";return;}if(j.QuestRemaining!=remaining)Log(j,"quest_progress",",\"display\":"+Quote(remaining+"/"+(j.BeastQuestEnabled?3:10))+",\"remaining\":"+remaining);j.QuestObservedCount=BitConverter.ToInt32(b,16);j.QuestObservedTotal=BitConverter.ToInt32(b,20);j.QuestSnapshotAt=DateTime.UtcNow;j.QuestRemaining=remaining;j.QuestMobId=BitConverter.ToInt32(b,100);j.QuestKind=BitConverter.ToInt32(b,104);
             if(j.QuestBaseRemaining<0){j.QuestBaseRemaining=remaining;j.QuestAt=DateTime.UtcNow;}j.QuestCompleted=Math.Max(j.QuestCompleted,j.QuestBaseRemaining-remaining);
             if(remaining==0&&!present){if(j.BeastQuestEnabled)ResetBeastCombatZone(j);j.QuestFinished=true;StopQuest(j,j.BeastQuestEnabled?"Đã hết nhiệm vụ linh thú; server xác nhận acc đã trả xong":"Đã hết nhiệm vụ tuần hoàn; server đã xác nhận trả xong");return;}
             if(j.BeastQuestEnabled&&ShouldCloseBeastRasaMenu(j)&&j.BeastRasaMenu!=0&&DateTime.UtcNow>=j.QuestRetryAt){r.Write(data+128,BitConverter.GetBytes(j.BeastRasaMenu));r.Write(data+56,BitConverter.GetBytes(j.BeastRasaTag));QuestSend(r,data,j,9);j.BeastRasaMenu=0;return;}
@@ -2705,7 +2710,7 @@ namespace TGLL {
                     if((DateTime.UtcNow-j.CursePollAt).TotalSeconds>=1){j.CursePollAt=DateTime.UtcNow;ObserveCurseNotice(j,ReadDisconnectNotice(keep,game),j.CursePollAt);}
 
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
-                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpQuest(keep,questData,j);PumpGameSettings(keep,settingsData,j);}
+                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpActivityRetry(keep,data,questData,j,npcTimer);PumpQuest(keep,questData,j);PumpGameSettings(keep,settingsData,j);}
                     PumpThiQuyPriority(keep,game,trainData,j);PumpTraining(keep,trainData,j);
                     if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);PumpAutoItem(keep,itemData,j);PumpInventory(keep,game,j);PumpBiMa(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
                     ReadDiagnostics(keep,data,j);PumpIzanamiAttemptLimit(keep,game,j);PumpDungeonCycle(keep,data,game,j,npcTimer);PumpReceiveKey(keep,data,j,npcTimer,game);if(j.ReplayRequested){Replay(keep,data,j);npcTimer.Restart();}
@@ -3952,4 +3957,138 @@ namespace TGLL {
    }}
   }
  }
+}
+
+namespace TGLL {
+    public static partial class NativeBackend {
+        // Timers belong to the fault episode, not to the command being retried.
+        internal static string WatchedActivity(NativeJob j){
+            if(j.BeastQuestEnabled||j.MailQueueOnly||j.CloakQueueOnly)return "";
+            if(j.SonCapEnabled&&!j.SonCapFinished&&!j.SonCapNoAttempts)return "soncap";
+            if(j.IzanamiEnabled&&!j.SonCapEnabled&&!j.IzanamiRunFinished)return "izanami";
+            if(j.DungeonHighEnabled&&!j.DungeonFinished)return "dungeon";
+            if(!j.DungeonHighEnabled&&j.ReceiveKeyEnabled&&j.State!="key_submitted"&&j.State!="key_received")return "key";
+            if((j.QuestEnabled||j.QuestFaultStopped)&&!j.QuestFinished)return "quest";
+            // Up may be waiting for enough team members before enabling its activity.
+            if(j.DailyActive&&j.DailyStage>=1&&j.DailyStage<=5)return "daily_wait";
+            return "";
+        }
+        static void ClearActivityFault(NativeJob j){j.ActivityFaultAt=DateTime.MinValue;j.ActivityRetryIssued=false;j.ActivityRetryPending=false;j.ActivityWatchStatus="";}
+        internal static string ActivityFaultReason(NativeJob j,string kind,DateTime now){
+            if(!j.GameSettingsReady)return "game_not_ready";
+            if(j.MapId<0||j.ZoneReadAt==DateTime.MinValue||(now-j.ZoneReadAt).TotalSeconds>=30)return "map_data_unavailable";
+            if(!String.IsNullOrEmpty(j.Error))return j.Error;
+            if(kind=="quest"){
+                if(j.QuestFaultStopped)return "quest_stopped";
+                if(j.QuestPhase==6&&(j.QuestMobId<0||j.QuestKind!=1||!j.TrainEnabled))return "quest_combat_not_ready";
+                if(j.QuestSnapshotAt==DateTime.MinValue||(now-j.QuestSnapshotAt).TotalSeconds>=30)return "quest_data_unavailable";
+            }
+            if(kind=="dungeon"&&j.DungeonStopped)return "dungeon_stopped";
+            if(kind=="dungeon"&&j.DungeonCycleWaiting&&j.DungeonLeftOrigin&&!j.GameAutoEnabled)return "dungeon_auto_not_enabled";
+            if(kind=="soncap"){
+                if(!String.IsNullOrEmpty(j.SonCapFailure))return j.SonCapFailure;
+                if(!String.IsNullOrEmpty(j.SonCapReadError))return j.SonCapReadError;
+                if(j.SonCapStage>=0&&!j.SonCapMoving&&j.SonCapAlive>0&&!j.GameAutoEnabled)return "soncap_auto_not_enabled";
+            }
+            if(kind=="izanami"&&j.MapId==89&&!j.GameAutoEnabled)return "izanami_auto_not_enabled";
+            return "";
+        }
+        internal static string ActivityProgressKey(NativeJob j,string kind){
+            // Only server/game observations count. Retry counters, command phases and status text do not.
+            if(kind=="quest")return j.MapId+":"+j.QuestRemaining+":"+j.QuestCompleted+":"+j.QuestObservedCount+":"+j.QuestObservedTotal+":"+j.QuestMobId;
+            if(kind=="soncap")return j.MapId+":"+j.SonCapStage+":"+j.SonCapAlive+":"+j.GameAutoEnabled;
+            if(kind=="izanami")return j.MapId+":"+j.IzanamiStage+":"+j.IzanamiRoundsCompleted+":"+j.GameAutoEnabled;
+            return j.MapId+":"+(kind=="dungeon"?j.GameAutoEnabled.ToString():"");
+        }
+        public static void PulseActivityWatchdog(){PulseActivityWatchdog(DateTime.UtcNow,null);}
+        internal static void PulseActivityWatchdog(DateTime now,Action<NativeJob> close){foreach(NativeJob j in jobs.Values)ObserveActivityWatchdog(j,now,close);}
+        internal static void ObserveActivityWatchdog(NativeJob j,DateTime now,Action<NativeJob> close){
+            if(j.ActivityTimeoutClosed){
+                // A failed close holds its queue slot and can be retried, without reopening the game.
+                if(j.ProcessId>0&&(j.ActivityTimeoutCloseOperation==null||j.ActivityTimeoutCloseOperation.Completed)&&
+                   (now-j.ActivityCloseAt).TotalSeconds>=5&&(close!=null||ManagedGames.IsRunning(j.ProcessId)))CloseTimedOutActivity(j,now,close);
+                return;
+            }
+            if(!j.Auto||j.ProcessId<=0||j.CloseRequested||j.CancelRequested||j.ReconnectRequested||j.State=="closed"||j.State=="cancelled"){
+                ClearActivityFault(j);j.ActivityVillageAt=DateTime.MinValue;return;
+            }
+            string kind=WatchedActivity(j);
+            if(kind.Length==0){ClearActivityFault(j);j.ActivityVillageAt=DateTime.MinValue;j.ActivityWatchKind="";return;}
+            bool fresh=j.MapId>=0&&j.ZoneReadAt!=DateTime.MinValue&&(now-j.ZoneReadAt).TotalSeconds<5;
+            if(fresh){
+                if(j.MapId==59){if(j.ActivityVillageAt==DateTime.MinValue)j.ActivityVillageAt=now;}
+                else j.ActivityVillageAt=DateTime.MinValue;
+            }
+            string progress=ActivityProgressKey(j,kind),reason=ActivityFaultReason(j,kind,now);
+            bool changed=j.ActivityWatchKind!=kind||j.ActivityProgress!=progress;
+            // Changing the selected activity does not extend a continuous stay in Sand village.
+            if(j.ActivityWatchKind!=kind)ClearActivityFault(j);
+            j.ActivityWatchKind=kind;j.ActivityProgress=progress;
+            if(reason.Length>0){if(j.ActivityFaultAt==DateTime.MinValue)j.ActivityFaultAt=now;}
+            else if(j.ActivityFaultAt!=DateTime.MinValue&&changed)ClearActivityFault(j);
+            DateTime since=j.ActivityFaultAt;
+            if(j.ActivityVillageAt!=DateTime.MinValue&&(since==DateTime.MinValue||j.ActivityVillageAt<since))since=j.ActivityVillageAt;
+            if(since==DateTime.MinValue)return;
+            double seconds=(now-since).TotalSeconds;
+            string cause=j.ActivityVillageAt==since?"sand_village_wait":reason.Length>0?reason:"awaiting_recovery";
+            if(seconds>=600){
+                j.ActivityTimeoutClosed=true;j.ActivityRetryPending=false;
+                j.ActivityWatchStatus="Auto lỗi/chờ quá 10 phút: tắt game";
+                Log(j,"activity_timeout_close",",\"activity\":"+Quote(kind)+",\"reason\":"+Quote(cause)+",\"elapsed_seconds\":"+(int)seconds);
+                CloseTimedOutActivity(j,now,close);return;
+            }
+            if(seconds>=300&&!j.ActivityRetryIssued){
+                j.ActivityRetryIssued=true;j.ActivityRetryPending=true;j.ActivityWatchStatus="Auto lỗi/chờ quá 5 phút: đang chạy lại";
+                Log(j,"activity_timeout_retry",",\"activity\":"+Quote(kind)+",\"reason\":"+Quote(cause)+",\"elapsed_seconds\":"+(int)seconds);
+            }
+        }
+        static void CloseTimedOutActivity(NativeJob j,DateTime now,Action<NativeJob> close){
+            j.ActivityCloseAt=now;j.CloseRequested=true;j.CancelRequested=true;
+            if(close!=null){j.ActivityTimeoutCloseOperation=new CloseBatchOperation{Completed=true};close(j);}
+            else j.ActivityTimeoutCloseOperation=BeginCloseBatch(new[]{j.Id});
+        }
+        internal static bool PrepareActivityRetry(NativeJob j,DateTime now){
+            if(!j.ActivityRetryPending||j.CloseRequested||j.CancelRequested)return false;
+            j.ActivityRetryPending=false;string kind=WatchedActivity(j);if(kind.Length==0)return false;
+            j.Error="";j.ReplayRequested=false;j.ReceiveFlowActive=false;j.ReceiveKeyRequested=false;j.KeyReceiptPending=false;
+            j.PartyReady=false;j.TeamAttempts=0;j.TeamAttemptCommand=0;j.TeamFriendRequested=false;j.TeamConfirmed=false;
+            j.ZonePrepared=false;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;
+            if(kind=="quest"){
+                j.QuestFaultStopped=false;j.QuestEnabled=true;j.QuestPauseAuto=true;j.QuestPhase=0;j.QuestInFlight=false;
+                j.QuestBusyAt=DateTime.MinValue;j.QuestBusyRetries=0;j.QuestRetryAt=DateTime.MinValue;j.QuestAt=now;
+                j.TrainEnabled=false;j.QuestStatus="Thử lại nhiệm vụ sau 5 phút bị lỗi";
+            }else if(kind=="dungeon"){
+                j.DungeonStopped=false;j.DungeonFinished=false;j.DungeonEntryRetries=0;j.DungeonKeyChecked=false;
+                if(j.MapId==59){j.DungeonCycleWaiting=false;j.DungeonRepeatRequested=false;j.DungeonStartAt=now;j.NpcAction=1;}else if(!j.DungeonCycleWaiting)j.ReceiveKeyRequested=true;
+                else if(j.DungeonLeftOrigin){j.GameAutoManaged=true;j.GameAutoWanted=true;}
+                // In the dungeon keep the current run and observe its return; never submit entry from inside.
+            }else if(kind=="key"){j.ReceiveKeyRequested=true;}
+            else if(kind=="soncap"||kind=="izanami"){
+                j.IzanamiTravelStopped=false;
+                if(j.MapId==59){
+                    j.IzanamiRoundEntered=false;j.IzanamiRoundComplete=false;j.IzanamiTravelReady=true;
+                    j.TravelReady=true;j.EntryAutoWaiting=false;j.IzanamiRequested=IsIzanamiLeader(j);
+                    if(kind=="soncap"){j.SonCapStage=-1;j.SonCapMoving=false;j.SonCapEntrySubmitted=false;}
+                }
+                if(kind=="soncap"){
+                    j.SonCapFailure="";j.SonCapReadError="";j.SonCapPollAt=DateTime.MinValue;
+                    j.SonCapRouteRetries=0;j.SonCapRightAttempts=0;j.SonCapStopPending=j.SonCapMoving;
+                    j.SonCapMoving=false;j.SonCapEmptyAt=DateTime.MinValue;j.SonCapAutoRetryAt=DateTime.MinValue;
+                    j.SonCapAutoConfirmed=false;j.SonCapAutoSeenAt=DateTime.MinValue;
+                }else{j.IzanamiMapSeenAt=DateTime.MinValue;j.IzanamiMapPollAt=DateTime.MinValue;}
+            }
+            j.State="opened";return true;
+        }
+        static void PumpActivityRetry(Remote r,long data,long questData,NativeJob j,Stopwatch npcTimer){
+            if(!j.ActivityRetryPending||j.ReconnectRequested)return;
+            if(WatchedActivity(j)!=j.ActivityWatchKind){j.ActivityRetryPending=false;return;}
+            // Run on the session worker, alongside the native commands it resets.
+            // A quest command still executing must finish before its buffer can be reused.
+            if(j.ActivityWatchKind=="quest"&&BitConverter.ToInt32(r.Read(questData,4),0)==99)return;
+            if(!PrepareActivityRetry(j,DateTime.UtcNow))return;
+            CancelTravel(r,j);npcTimer.Reset();r.Write(data,BitConverter.GetBytes(12));
+            if(j.ActivityWatchKind=="quest")r.Write(questData,new byte[4]);
+            if(j.ActivityWatchKind=="dungeon"&&j.MapId==59)npcTimer.Start();
+        }
+    }
 }

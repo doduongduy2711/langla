@@ -51,13 +51,26 @@ function Pump-DungeonQueue {
     if($script:dungeonQueuePaused -or !$script:dungeonBatches.Count){return}
     $script:dungeonAccountIndex=@{};foreach($a in $script:accounts){$script:dungeonAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:dungeonBatches){
-        if($batch.state -eq 'running'){
+        # Fault shutdown is per account; free a whole batch only after every game really exited.
+        if($batch.state -ne 'waiting' -and $batch.state -ne 'done'){
+            $faultCount=0;$allFaultClosed=$true
+            foreach($m in $batch.members){$faultJob=Get-DungeonMemberJob $m
+                if($faultJob -is [TGLL.NativeJob] -and $faultJob.ActivityTimeoutClosed){$faultCount++}
+                else{$allFaultClosed=$false}
+                if(!$faultJob -or (Test-DungeonMemberRunning $m)){$allFaultClosed=$false}
+                $faultAccount=$script:dungeonAccountIndex[$m.id]
+                if($faultAccount -and (Test-AccountOpenBlocked $faultAccount)){$allFaultClosed=$false}
+            }
+            if($faultCount -gt 0 -and $allFaultClosed){$batch.state='done';$batch.error='Đã tắt do auto lỗi/chờ quá 10 phút';continue}
+        }
+        if($batch.state -eq 'running' -or ($batch.state -eq 'blocked' -and !$batch.closeOperation)){
             $allComplete=$true;$unavailable=$false
             foreach($m in $batch.members){$j=Get-DungeonMemberJob $m
-                if($null -eq $j -or !$j.DungeonFinished){$allComplete=$false}
-                if($null -eq $j -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled') -or ($j.State -notin @('failed','reconnecting') -and $j.GameSettingsReady -and !$j.DungeonHighEnabled -and !$j.DungeonFinished)){$unavailable=$true}
+                if(($null -eq $j -or !$j.DungeonFinished) -and !($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed)){$allComplete=$false}
+                if(!($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed) -and ($null -eq $j -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled') -or ($j.State -notin @('failed','reconnecting') -and $j.GameSettingsReady -and !$j.DungeonHighEnabled -and !$j.DungeonFinished))){$unavailable=$true}
             }
             if($allComplete){$batch.state='finished'}
+            elseif(!$unavailable -and $batch.state -eq 'blocked'){$batch.state='running';$batch.error=''}
             elseif($unavailable){$batch.state='blocked';$batch.error='Tài khoản lỗi/thoát trước khi hoàn tất; giữ lượt để kiểm tra.'}
         }
         if($batch.state -eq 'finished' -and $dungeonCloseAfter.Checked -and [TGLL.NativeBackend]::CanAutoCloseBatch([string[]]@($batch.members | ForEach-Object {$_.job}))){
