@@ -17,6 +17,7 @@ class BeastQuestTests {
  Snapshot(r,fd,74,false);follower.BeastX=1180;follower.BeastY=186;NativeBackend.PumpQuest(r,fd,follower);Check(follower.QuestPhase==6&&follower.QuestMobId==196&&follower.TrainEnabled,"follower failed to support exact leader target");
  leader.QuestFinished=true;leader.QuestEnabled=false;Snapshot(r,fd,68,false);NativeBackend.PumpQuest(r,fd,follower);Check(follower.QuestFinished&&!follower.QuestEnabled,"follower did not finish with leader");
  }
+ foreach(int size in new[]{1,2,5}){var tail=peers.Take(size).ToArray();NativeBackend.ConfigureBeastTeam(tail.Select(x=>x.Id).ToArray());var tailNames=tail.Select(x=>x.CharacterName).ToArray();foreach(var member in tail){member.TeamMembers=size==1?new string[0]:tailNames;member.TeamReadAt=DateTime.UtcNow;member.MapId=68;member.ZoneId=17;member.BeastNearRasa=true;}Check(NativeBackend.IsBeastLeader(tail[0])&&NativeBackend.BeastPartyReady(tail[0],true),"final partial/solo group did not allow actual membership");tail[size-1].BeastNearRasa=false;Check(!NativeBackend.BeastPartyReady(tail[0],true),"partial group bypassed near Rasa gate");tail[size-1].BeastNearRasa=true;}
  Check(NativeCode.Quest(0x100000,0x180000000).Length<8192,"quest callback exceeds allocation");
  Console.WriteLine("PASS: six-member server party/near-Rasa gate, selected leader, profile acknowledgment, existing task gathering, leader-only menu, follower route and strict target, group completion; no real game action.");
  }finally{foreach(var j in peers){NativeJob removed;jobs.TryRemove(j.Id,out removed);}}

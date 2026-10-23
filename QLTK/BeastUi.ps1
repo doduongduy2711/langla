@@ -1,6 +1,6 @@
 ﻿$script:beastBatches=@();$script:beastQueuePaused=$false;$script:beastLaunchingAccountId=''
 $beastPage=New-Object Windows.Forms.TabPage;$beastPage.Text='Auto Linh thú';$beastPage.BackColor=$form.BackColor;$beastPage.AutoScroll=$true;$tabs.TabPages.Add($beastPage)
-$null=Ui-Label 'Nhóm cố định 6 người, theo thứ tự các acc tích Chọn. Acc đầu mỗi nhóm làm trưởng nhóm.' $beastPage 16 15 635 40
+$null=Ui-Label 'Chia nhóm 6 theo thứ tự đã chọn; nhóm cuối dùng số acc còn lại. Acc đầu mỗi nhóm làm trưởng nhóm.' $beastPage 16 15 635 40
 $null=Ui-Label 'Cả nhóm về đứng gần Rasa → lập nhóm → chỉ trưởng nhóm nhận/trả nhiệm vụ → thành viên đi theo và hỗ trợ đúng quái.' $beastPage 16 58 635 50
 $null=Ui-Label 'Số tài khoản tối đa:' $beastPage 16 116 230 24
 $beastMax=New-Object Windows.Forms.NumericUpDown;$beastMax.Minimum=6;$beastMax.Maximum=9996;$beastMax.Increment=6;$beastMax.Value=12;$beastMax.SetBounds(260,114,85,25);if($script:settings.beastMaxOnline){$beastMax.Value=[Math]::Max(6,[Math]::Min(9996,[int]$script:settings.beastMaxOnline))};$beastPage.Controls.Add($beastMax)
@@ -19,7 +19,7 @@ function Start-BeastMember($m){
  if(!$script:accountJobs.ContainsKey($m.id)){throw 'Linh thú cần phiên đăng nhập trực tiếp.'};$m.job=$script:accountJobs[$m.id];[TGLL.NativeBackend]::SetAutoBeast($m.job,$true)
 }
 function Begin-BeastTeamClose($b){return [TGLL.NativeBackend]::BeginAutoCloseBatch([string[]]@($b.members | ForEach-Object {$_.job}))}
-function Sync-BeastTeams {foreach($b in $script:beastBatches){if($b.state -in @('launching','running','blocked') -and !$b.closeOperation){$ids=@(foreach($m in $b.members){$j=Get-BeastMemberJob $m;if($j -and !$j.CloseRequested -and !$j.CancelRequested){$j.Id}});if($ids.Count -eq 6){[TGLL.NativeBackend]::ConfigureBeastTeam([string[]]$ids)}}}}
+function Sync-BeastTeams {foreach($b in $script:beastBatches){if($b.state -in @('launching','running','blocked') -and !$b.closeOperation){$ids=@(foreach($m in $b.members){$j=Get-BeastMemberJob $m;if($j -and !$j.CloseRequested -and !$j.CancelRequested){$j.Id}});if($ids.Count -eq $b.members.Count){[TGLL.NativeBackend]::ConfigureBeastTeam([string[]]$ids)}}}}
 function Add-BeastQueue($accounts){
  if(!$autoLoginCheck.Checked){throw 'Bật Đăng nhập trực tiếp trước.'}
  if(($script:distributionRun -and $script:distributionRun.active) -or ($script:mailRun -and $script:mailRun.active) -or ($script:cloakRun -and $script:cloakRun.active)){throw 'Dừng chia đồ/gom đồ/mua áo trước khi chạy linh thú.'}
@@ -27,8 +27,7 @@ function Add-BeastQueue($accounts){
  $known=@{};foreach($b in $script:beastBatches){foreach($m in $b.members){$known[$m.id]=$true}}
  $fresh=@($accounts | Where-Object {!$known.ContainsKey([string]$_.id)})
  if(!$fresh.Count){throw 'Các acc đã có trong hàng chờ linh thú.'}
- if(($fresh.Count % 6) -ne 0){throw 'Chọn đủ nhóm 6 người: 6, 12, 18... tài khoản. Chưa mở game hoặc nhận nhiệm vụ.'}
- for($n=0;$n -lt $fresh.Count;$n+=6){$members=@();for($i=0;$i -lt 6;$i++){$a=$fresh[$n+$i];$members+=@([pscustomobject]@{id=[string]$a.id;job=''})};$script:beastBatches+=@([pscustomobject]@{state='waiting';members=$members;closeOperation=$null;error=''})}
+ for($n=0;$n -lt $fresh.Count;$n+=6){$members=@();for($i=0;$i -lt [Math]::Min(6,$fresh.Count-$n);$i++){$a=$fresh[$n+$i];$members+=@([pscustomobject]@{id=[string]$a.id;job=''})};$script:beastBatches+=@([pscustomobject]@{state='waiting';members=$members;closeOperation=$null;error=''})}
  Save-BeastSettings;$script:beastQueuePaused=$false;Pump-BeastQueue;Update-BeastUi
 }
 function Reset-BeastQueue {
@@ -53,13 +52,13 @@ function Pump-BeastQueue {
   }
  }
  $occupied=0;foreach($b in $script:beastBatches){if($b.state -notin @('waiting','done')){$occupied+=$b.members.Count}}
- foreach($b in $script:beastBatches){if($b.state -ne 'waiting'){continue};if($occupied+6 -gt [int]$beastMax.Value){break};$b.state='launching';$occupied+=6}
+ foreach($b in $script:beastBatches){if($b.state -ne 'waiting'){continue};if($occupied+$b.members.Count -gt [int]$beastMax.Value){break};$b.state='launching';$occupied+=$b.members.Count}
  $budget=[int]$launchConcurrency.Value
  foreach($b in $script:beastBatches){if($b.state -ne 'launching'){continue};foreach($m in $b.members){if($m.job){continue};if($budget -le 0){break};$budget--;try{Start-BeastMember $m}catch{$b.state='blocked';$b.error=$_.Exception.Message;break}};if($b.state -eq 'launching' -and @($b.members | Where-Object {!$_.job}).Count -eq 0){$b.state='running'}}
  Sync-BeastTeams
 }
 function Update-BeastUi {
- $live=0;$waiting=0;$done=0;foreach($b in $script:beastBatches){if($b.state -eq 'waiting'){$waiting+=6}elseif($b.state -eq 'done'){$done+=6}else{$live+=6}}
+ $live=0;$waiting=0;$done=0;foreach($b in $script:beastBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$live+=$b.members.Count}}
  $text="Đang giữ lượt: $live / $([int]$beastMax.Value) • Hàng chờ: $waiting • Đã xong: $done"
  if($grid.SelectedRows.Count){$key=[string]$grid.SelectedRows[0].Tag.id;if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key];if($j -and $j.BeastQuestEnabled){$text+="`r`n"+$j.QuestStatus+"`r`n"+$j.TeamStatus}}}
  $errors=@($script:beastBatches | Where-Object {$_.error});if($errors.Count){$text+="`r`n"+$errors[0].error};$beastHint.Text=$text
