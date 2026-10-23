@@ -1100,22 +1100,22 @@ namespace TGLL {
             int remaining=BitConverter.ToInt32(b,4),result=BitConverter.ToInt32(b,28);bool present=BitConverter.ToInt32(b,8)!=0,done=BitConverter.ToInt32(b,12)!=0,route=BitConverter.ToInt32(b,24)!=0;
             if(remaining<0||remaining>(j.BeastQuestEnabled?3:10)){j.QuestStatus="Chưa đọc được số lượt nhiệm vụ";return;}if(j.QuestRemaining!=remaining)Log(j,"quest_progress",",\"display\":"+Quote(remaining+"/"+(j.BeastQuestEnabled?3:10))+",\"remaining\":"+remaining);j.QuestRemaining=remaining;j.QuestMobId=BitConverter.ToInt32(b,100);j.QuestKind=BitConverter.ToInt32(b,104);
             if(j.QuestBaseRemaining<0){j.QuestBaseRemaining=remaining;j.QuestAt=DateTime.UtcNow;}j.QuestCompleted=Math.Max(j.QuestCompleted,j.QuestBaseRemaining-remaining);
-            if(remaining==0&&!present){j.QuestFinished=true;StopQuest(j,j.BeastQuestEnabled?"Đã hết nhiệm vụ linh thú; server xác nhận acc đã trả xong":"Đã hết nhiệm vụ tuần hoàn; server đã xác nhận trả xong");return;}
+            if(remaining==0&&!present){if(j.BeastQuestEnabled)ResetBeastCombatZone(j);j.QuestFinished=true;StopQuest(j,j.BeastQuestEnabled?"Đã hết nhiệm vụ linh thú; server xác nhận acc đã trả xong":"Đã hết nhiệm vụ tuần hoàn; server đã xác nhận trả xong");return;}
             if(j.BeastQuestEnabled&&ShouldCloseBeastRasaMenu(j)&&j.BeastRasaMenu!=0&&DateTime.UtcNow>=j.QuestRetryAt){r.Write(data+128,BitConverter.GetBytes(j.BeastRasaMenu));r.Write(data+56,BitConverter.GetBytes(j.BeastRasaTag));QuestSend(r,data,j,9);j.BeastRasaMenu=0;return;}
             DateTime now=DateTime.UtcNow;bool ack=j.QuestInFlight;
             if((now-j.QuestAt).TotalSeconds>240&&j.QuestPhase!=6){StopQuest(j,"Quá thời gian đi/nhận nhiệm vụ; kiểm tra game");return;}
             if(now<j.QuestRetryAt&&j.QuestPhase!=1)return;j.QuestInFlight=false;
-            if(j.QuestPhase==0){j.QuestHadTask=present;j.QuestWasDone=done;j.QuestReturn=!present||done;j.GameAutoManaged=true;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestStatus=j.QuestReturn?(j.BeastQuestEnabled?"Linh thú: về Rasa nhận/trả nhiệm vụ riêng":"Tắt treo; quay về Mei Terumi"):"Đi tới quái của nhiệm vụ";j.QuestAt=now;if(!(j.BeastQuestEnabled&&j.QuestReturn&&j.BeastNearRasa))QuestSend(r,data,j,j.QuestReturn?1:2);j.QuestPhase=1;return;}
-            if(j.QuestPhase==1){if(route)return;if(j.QuestReturn&&!(j.BeastQuestEnabled&&j.BeastNearRasa)&&BitConverter.ToInt32(b,80)>=0&&BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,80)){if(now>=j.QuestRetryAt)QuestSend(r,data,j,1);return;}if(!j.QuestReturn&&present&&BitConverter.ToInt32(b,76)>=0&&BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,76)){if(now>=j.QuestRetryAt)QuestSend(r,data,j,2);return;}if(ack&&result!=1){j.QuestPhase=0;return;}if(j.QuestReturn){QuestSend(r,data,j,3);j.QuestPhase=2;j.QuestStatus=j.BeastQuestEnabled?"Linh thú: mở menu Rasa":"Mở menu Mei Terumi";}else{j.QuestPauseAuto=false;j.GameAutoManaged=true;j.GameAutoWanted=false;j.QuestPhase=6;ArmQuestCombat(j);j.QuestRetryAt=DateTime.MinValue;j.QuestStatus="Treo đánh quái; đợi nhiệm vụ hoàn thành";}return;}
+            if(j.QuestPhase==0){j.QuestHadTask=present;j.QuestWasDone=done;j.QuestReturn=!present||done;if(j.BeastQuestEnabled&&j.QuestReturn)ResetBeastCombatZone(j);j.GameAutoManaged=true;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestStatus=j.QuestReturn?(j.BeastQuestEnabled?"Linh thú: về Rasa nhận/trả nhiệm vụ riêng":"Tắt treo; quay về Mei Terumi"):"Đi tới quái của nhiệm vụ";j.QuestAt=now;if(!(j.BeastQuestEnabled&&j.QuestReturn&&j.BeastNearRasa))QuestSend(r,data,j,j.QuestReturn?1:2);j.QuestPhase=1;return;}
+            if(j.QuestPhase==1){if(route)return;if(j.QuestReturn&&!(j.BeastQuestEnabled&&j.BeastNearRasa)&&BitConverter.ToInt32(b,80)>=0&&BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,80)){if(now>=j.QuestRetryAt)QuestSend(r,data,j,1);return;}if(!j.QuestReturn&&present&&BitConverter.ToInt32(b,76)>=0&&BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,76)){if(now>=j.QuestRetryAt)QuestSend(r,data,j,2);return;}if(ack&&result!=1){j.QuestPhase=0;return;}if(j.QuestReturn){QuestSend(r,data,j,3);j.QuestPhase=2;j.QuestStatus=j.BeastQuestEnabled?"Linh thú: mở menu Rasa":"Mở menu Mei Terumi";}else{if(j.BeastQuestEnabled&&!PrepareBeastCombatZone(j,BitConverter.ToInt32(b,76))){j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestAt=now;j.QuestStatus=j.ZoneStatus;return;}j.QuestPauseAuto=false;j.GameAutoManaged=true;j.GameAutoWanted=false;j.QuestPhase=6;ArmQuestCombat(j);j.QuestRetryAt=DateTime.MinValue;j.QuestStatus="Treo đánh quái; đợi nhiệm vụ hoàn thành";}return;}
             if(j.QuestPhase==2){if(ack&&result==1){QuestSend(r,data,j,4);j.QuestPhase=3;}else{QuestSend(r,data,j,1);j.QuestPhase=1;j.QuestStatus=j.BeastQuestEnabled?"Chưa mở được menu Rasa; thử lại":"Chưa gặp Mei; thử lại đường về trả nhiệm vụ";}return;}
             if(j.QuestPhase==3){if(j.BeastQuestEnabled&&present&&!done){j.QuestPhase=0;j.QuestAt=now;j.QuestStatus="Đã có nhiệm vụ linh thú; tiếp tục nhiệm vụ riêng";return;}bool turnIn=present&&done;QuestSend(r,data,j,turnIn?7:5);j.QuestPhase=4;j.QuestStatus=j.BeastQuestEnabled?(turnIn?"Rasa → Nhiệm vụ thu phục mãnh thú → Hoàn Thành":"Rasa → Nhiệm vụ thu phục mãnh thú → Nhận"):(turnIn?"Chọn Hoàn Thành để trả nhiệm vụ":"Chọn Nhận nhiệm vụ tuần hoàn");return;}
             if(j.QuestPhase==4){if(ack&&result==1){j.QuestPhase=j.QuestCommand==7?7:5;j.QuestAt=now;j.QuestStatus=j.QuestCommand==7?"Đợi server xác nhận trả nhiệm vụ":"Đợi server cập nhật nhiệm vụ";}else{QuestSend(r,data,j,4);j.QuestPhase=3;}return;}
             if(j.QuestPhase==5){if((present&&!done&&(!j.QuestHadTask||j.QuestWasDone))){j.QuestPhase=0;j.QuestAt=now;return;}if(!present&&remaining<j.QuestBaseRemaining){j.QuestPhase=0;j.QuestAt=now;return;}if((now-j.QuestAt).TotalSeconds>30)StopQuest(j,"Đã chọn Nhận nhưng server chưa đổi nhiệm vụ; kiểm tra menu NPC");return;}
             if(j.QuestPhase==7){if(!present||(present&&!done)){if(present){j.QuestPhase=0;}else{QuestSend(r,data,j,3);j.QuestPhase=2;j.QuestStatus="Đã trả nhiệm vụ; mở menu nhận lượt tiếp theo";}j.QuestAt=now;return;}if((now-j.QuestAt).TotalSeconds>30)StopQuest(j,"Đã chọn Hoàn Thành nhưng server chưa xác nhận trả nhiệm vụ; kiểm tra menu NPC");return;}
             if(j.QuestPhase==6){
-                if(!present||done){j.QuestPhase=0;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestAt=now;}
+                if(!present||done){if(j.BeastQuestEnabled)ResetBeastCombatZone(j);j.QuestPhase=0;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestAt=now;}
                 else if(route||BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,76)){j.QuestPhase=0;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestAt=now;j.QuestStatus="Sai map nhiệm vụ; đang đi lại bãi yêu cầu";}
-                else {ArmQuestCombat(j);j.QuestStatus=j.QuestKind!=1||j.QuestMobId<0?"Chưa xác định được quái nhiệm vụ; tạm dừng đánh":!j.TrainEnabled?"Đợi kỹ năng tấn công để đánh đúng quái nhiệm vụ":"Quái nhiệm vụ ID "+j.QuestMobId+": "+BitConverter.ToInt32(b,16)+"/"+BitConverter.ToInt32(b,20)+" • Đã trả: "+j.QuestCompleted+" • Còn: "+remaining;}
+                else {if(j.BeastQuestEnabled&&!PrepareBeastCombatZone(j,BitConverter.ToInt32(b,76))){j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestAt=now;j.QuestStatus=j.ZoneStatus;return;}j.QuestPauseAuto=false;ArmQuestCombat(j);j.QuestStatus=j.QuestKind!=1||j.QuestMobId<0?"Chưa xác định được quái nhiệm vụ; tạm dừng đánh":!j.TrainEnabled?"Đợi kỹ năng tấn công để đánh đúng quái nhiệm vụ":"Quái nhiệm vụ ID "+j.QuestMobId+": "+BitConverter.ToInt32(b,16)+"/"+BitConverter.ToInt32(b,20)+" • Đã trả: "+j.QuestCompleted+" • Còn: "+remaining+(j.BeastQuestEnabled?" • Khu "+j.ZoneId:"");}
             }
         }
         // Dùng bộ đánh có lọc mục tiêu, tắt treo mặc định để tránh tự chọn nhầm quái.
@@ -2101,7 +2101,7 @@ namespace TGLL {
             QueueZone(r,data,j,2,target);return true;
         }
         static void PumpZones(Remote r,long game,long data,NativeJob j){
-            if(j.BeastQuestEnabled){j.ZoneSyncActive=false;j.ZoneStatus="";return;}
+            if(j.BeastQuestEnabled){PumpBeastCombatZones(r,game,data,j);return;}
             if(j.SonCapEnabled&&j.SonCapStage>=0){j.ZoneSyncActive=false;return;}
             if(j.FarmEnabled&&j.FarmQuietZone&&j.FarmZoneWaiting){PumpFarmZones(r,game,data,j);return;}
             if(j.QuestEnabled){j.ZoneSyncActive=false;return;}
@@ -3867,9 +3867,12 @@ namespace TGLL {
  public sealed partial class NativeJob {
   public volatile bool BeastQuestEnabled,BeastNearRasa,BeastSoloReady;
   internal long BeastRasaMenu;internal int BeastRasaTag;
+  internal int BeastCombatMap=-1,BeastCombatZone=-1;internal bool BeastZoneWaiting,BeastZoneReady,BeastZoneMustConfirm,BeastZoneChangeSent;
+  internal int[] BeastZoneIds=new int[0],BeastZoneCounts=new int[0];internal DateTime BeastZoneListAt,BeastZoneRetryAt;
+
  }
  public static partial class NativeBackend {
-  static void ClearBeastTeam(NativeJob j){j.TeamManaged=false;j.TeamJobIds=new string[0];j.TeamConfirmed=false;j.ZoneSyncActive=false;j.ZonePrepared=false;j.ZoneStatus="";if(j.FollowActive)j.FollowStopPending=true;j.FollowActive=false;j.FollowDistance=-1;j.TeamStatus="Linh thú: chạy riêng từng tài khoản";}
+  static void ClearBeastTeam(NativeJob j){j.TeamManaged=false;j.TeamJobIds=new string[0];j.TeamConfirmed=false;if(!j.BeastZoneWaiting){j.ZoneSyncActive=false;j.ZoneStatus="";}j.ZonePrepared=false;if(j.FollowActive)j.FollowStopPending=true;j.FollowActive=false;j.FollowDistance=-1;j.TeamStatus="Linh thú: chạy riêng từng tài khoản";}
   public static void ConfigureBeastSolo(string id){NativeJob j=Get(id);if(j==null)throw new Exception("Chờ phiên game linh thú.");if(!j.BeastQuestEnabled)SetAutoBeast(id,true);ClearBeastTeam(j);}
   public static void SetAutoBeast(string id,bool enabled){
    NativeJob j=Get(id);if(j==null||!j.Auto||j.CloseRequested||j.CancelRequested||j.State=="failed"||j.State=="closed"||j.State=="cancelled")throw new Exception("Phiên game chưa sẵn sàng cho linh thú.");
@@ -3878,9 +3881,60 @@ namespace TGLL {
     if(j.ReceiveFlowActive||j.MailBusy||j.InboxBusy||j.MailEnabled||j.MailQueueOnly||j.CloakQueueOnly||j.SonCapEnabled)throw new Exception("Dừng hoạt động cũ trước khi chạy linh thú.");
     if(j.DailyManaged)CancelDailyPriority(j);StopFarm(j);
     SetAutoQuest(id,false);SetReceiveKey(id,false);SetDungeonHigh(id,false);SetIzanami(id,false);j.CloseAfterKey=false;j.DungeonQueueOnly=false;j.IzanamiQueueOnly=false;j.QuestQueueOnly=true;
-    SetAutoQuest(id,true);ClearBeastTeam(j);j.BeastSoloReady=false;j.QuestRemaining=-1;j.QuestStatus="Linh thú: tự nhận, đánh đúng quái và trả nhiệm vụ tại Rasa";
-   }else{j.QuestQueueOnly=false;j.QuestEnabled=false;j.QuestFinished=false;j.QuestPauseAuto=false;j.TrainEnabled=false;j.GameAutoWanted=false;j.QuestStatus="Đã dừng linh thú";}
+    SetAutoQuest(id,true);ResetBeastCombatZone(j);ClearBeastTeam(j);j.BeastSoloReady=false;j.QuestRemaining=-1;j.QuestStatus="Linh thú: tự nhận, đánh đúng quái và trả nhiệm vụ tại Rasa";
+   }else{ResetBeastCombatZone(j);j.QuestQueueOnly=false;j.QuestEnabled=false;j.QuestFinished=false;j.QuestPauseAuto=false;j.TrainEnabled=false;j.GameAutoWanted=false;j.QuestStatus="Đã dừng linh thú";}
    j.BeastQuestEnabled=enabled;j.BeastNearRasa=false;j.BeastRasaMenu=0;Log(j,"beast_configured",",\"enabled\":"+(enabled?"true":"false")+",\"mode\":\"solo\"");
+  }
+  static readonly object beastZoneGate=new object();
+  internal static void ResetBeastCombatZone(NativeJob j){lock(beastZoneGate){j.BeastCombatMap=-1;j.BeastCombatZone=-1;}j.BeastZoneWaiting=false;j.BeastZoneReady=false;j.BeastZoneMustConfirm=false;j.BeastZoneChangeSent=false;j.BeastZoneIds=new int[0];j.BeastZoneCounts=new int[0];j.ZonePlanMap=-1;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;j.ZonePollAt=DateTime.MinValue;j.BeastZoneRetryAt=DateTime.MinValue;j.ZoneSyncActive=false;j.ZoneStatus="";}
+  internal static int ReserveBeastCombatZone(NativeJob j,int map,int current,int[] ids,int[] counts){
+   if(map<0||current<0||current>255)return -1;
+   lock(beastZoneGate){
+    DateTime now=DateTime.UtcNow;HashSet<int> used=new HashSet<int>();
+    foreach(NativeJob p in jobs.Values)if(p!=j&&p.BeastQuestEnabled&&p.QuestEnabled&&!p.QuestFinished&&!p.CloseRequested&&!p.CancelRequested&&!p.ReconnectRequested&&p.State!="closed"&&p.State!="failed"&&p.State!="cancelled"&&p.GameSettingsReady&&p.MapId==map&&p.BeastCombatMap==map&&p.BeastCombatZone>=0)used.Add(p.BeastCombatZone);
+    int target=j.BeastCombatMap==map&&!used.Contains(j.BeastCombatZone)?j.BeastCombatZone:-1;
+    if(target<0&&!used.Contains(current))target=current;
+    if(target<0&&ids!=null&&counts!=null&&ids.Length==counts.Length){var eligible=Enumerable.Range(0,ids.Length).Where(n=>!used.Contains(ids[n])).ToArray();target=ChooseQuietZone(eligible.Select(n=>ids[n]).ToArray(),eligible.Select(n=>counts[n]).ToArray(),current);}
+    if(target>=0){j.BeastCombatMap=map;j.BeastCombatZone=target;}return target;
+   }
+  }
+  internal static bool PrepareBeastCombatZone(NativeJob j,int map){
+   if(j.BeastZoneReady&&j.BeastCombatMap==map&&j.MapId==map&&j.ZoneId==j.BeastCombatZone&&(DateTime.UtcNow-j.ZoneReadAt).TotalSeconds<4){j.ZoneSyncActive=false;return true;}
+   if(j.BeastCombatMap!=map){ResetBeastCombatZone(j);j.BeastCombatMap=map;}
+   j.BeastZoneReady=false;if(!j.BeastZoneWaiting)j.ZoneStatus="Linh thú: kiểm tra khu ở bãi, tránh khu acc khác đang đánh";j.BeastZoneWaiting=true;j.ZoneSyncActive=true;return false;
+  }
+  internal static void PumpBeastCombatZones(Remote r,long game,long data,NativeJob j){
+   DateTime now=DateTime.UtcNow;
+   if(!j.QuestEnabled||j.QuestFinished||j.CloseRequested||j.CancelRequested||j.ReconnectRequested){ResetBeastCombatZone(j);return;}
+   if(j.BeastCombatMap>=0&&j.MapId>=0&&j.MapId!=j.BeastCombatMap&&(now-j.ZoneReadAt).TotalSeconds<4){ResetBeastCombatZone(j);return;}
+   if(!j.BeastZoneWaiting){if(j.BeastZoneReady&&j.ZoneId!=j.BeastCombatZone){j.BeastZoneReady=false;j.BeastZoneWaiting=true;}else{j.ZoneSyncActive=false;return;}}
+   j.ZoneSyncActive=true;if((now-j.ZonePollAt).TotalMilliseconds<750)return;j.ZonePollAt=now;
+   try{
+    if(j.MapId<0||j.MapId!=j.BeastCombatMap||j.ZoneId<0||(now-j.ZoneReadAt).TotalSeconds>=4){j.ZoneStatus="Linh thú: chờ dữ liệu map/khu tại bãi";return;}
+    int state=BitConverter.ToInt32(r.Read(data,4),0);if(state>=1&&state<=3)return;
+    if(now<j.BeastZoneRetryAt)return;
+    if((now-j.BeastZoneListAt).TotalSeconds>30){j.BeastZoneIds=new int[0];j.BeastZoneCounts=new int[0];}
+    int target=ReserveBeastCombatZone(j,j.MapId,j.ZoneId,j.BeastZoneIds,j.BeastZoneCounts);
+    if(target<0){
+     j.ZoneStatus="Linh thú: đọc danh sách khu để né các acc cùng bãi";
+     if(j.ZoneListWaiting){long popup=ZonePopup(r,game);if(popup!=0&&popup==r.Ptr(data+32)&&r.Ptr(popup+0xe8)!=r.Ptr(data+24)){
+      long array=r.Ptr(popup+0xe8);int length=array==0?0:BitConverter.ToInt32(r.Read(array+24,4),0);if(length<1||length>256)throw new Exception("zone_list_invalid");int[] ids=new int[length],counts=new int[length];
+      for(int n=0;n<length;n++){long item=r.Ptr(array+32+n*8);if(item==0)throw new Exception("zone_list_changed");ids[n]=n;counts[n]=BitConverter.ToInt32(r.Read(item+16,4),0);}
+      if(r.Ptr(popup+0xe8)!=array||ZonePopup(r,game)!=popup)throw new Exception("zone_list_changed");j.BeastZoneIds=ids;j.BeastZoneCounts=counts;j.BeastZoneListAt=now;j.ZoneListWaiting=false;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;target=ReserveBeastCombatZone(j,j.MapId,j.ZoneId,ids,counts);
+     }else if((now-j.ZoneActionAt).TotalSeconds<10)return;else j.ZoneListWaiting=false;}
+     if(target<0){
+      if(j.BeastZoneIds.Length>0){j.ZoneStatus="Linh thú: các khu đang được acc khác giữ; đợi khu trống";j.BeastZoneRetryAt=now.AddSeconds(5);return;}
+      if(j.ZoneAttempts>=3){j.ZoneStatus="Linh thú: chưa đọc được khu; đợi 30 giây thử lại";if((now-j.ZoneActionAt).TotalSeconds<30)return;j.ZoneAttempts=0;}
+      QueueZone(r,data,j,1,-1);j.ZoneListWaiting=true;j.BeastZoneMustConfirm=true;return;
+     }
+    }
+    if(j.PlannedZone!=target){j.PlannedZone=target;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;j.BeastZoneChangeSent=false;Log(j,"beast_zone_reserved",",\"map\":"+j.MapId+",\"zone\":"+target);}
+    if(j.ZoneId==target&&(!j.BeastZoneMustConfirm||j.BeastZoneChangeSent&&state==4)){j.BeastZoneReady=true;j.BeastZoneWaiting=false;j.ZoneSyncActive=false;j.ZoneStatus="Linh thú: khu riêng "+target;Log(j,"beast_zone_confirmed",",\"map\":"+j.MapId+",\"zone\":"+target);return;}
+    j.BeastZoneMustConfirm=true;j.ZoneStatus="Linh thú: chuyển khu "+j.ZoneId+" → "+target+", tránh acc khác; đợi xác nhận";
+    if((now-j.ZoneActionAt).TotalSeconds<8)return;
+    if(j.ZoneAttempts>=3){if((now-j.ZoneActionAt).TotalSeconds<30)return;ResetBeastCombatZone(j);j.BeastCombatMap=j.MapId;j.BeastZoneWaiting=true;return;}
+    QueueZone(r,data,j,2,target);j.BeastZoneChangeSent=true;
+   }catch(Exception e){j.ZoneStatus="Linh thú: chưa xác nhận khu riêng • "+e.Message;}
   }
   internal static bool ShouldCloseBeastRasaMenu(NativeJob j){return j.QuestPhase==0||j.QuestPhase==1||j.QuestPhase==6;}
   internal static void PumpBeastSoloParty(Remote r,long data,NativeJob j,long party,DateTime now){

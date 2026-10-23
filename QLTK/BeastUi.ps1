@@ -1,7 +1,7 @@
 ﻿$script:beastBatches=@();$script:beastQueuePaused=$false;$script:beastLaunchingAccountId=''
 $beastPage=New-Object Windows.Forms.TabPage;$beastPage.Text='Auto Linh thú';$beastPage.BackColor=$form.BackColor;$beastPage.AutoScroll=$true;$tabs.TabPages.Add($beastPage)
 $null=Ui-Label 'Chạy riêng từng tài khoản theo thứ tự đã chọn; không mời nhóm và không chờ tài khoản khác.' $beastPage 16 15 635 40
-$null=Ui-Label 'Mỗi acc tự tới Rasa → nhận nhiệm vụ → đánh đúng quái → trả nhiệm vụ → làm đến hết lượt của mình.' $beastPage 16 58 635 50
+$null=Ui-Label 'Mỗi acc tự nhận/trả tại Rasa; tới bãi chọn khu khác các acc đang đánh linh thú cùng map, rồi đánh đúng quái.' $beastPage 16 58 635 50
 $null=Ui-Label 'Số tài khoản tối đa:' $beastPage 16 116 230 24
 $beastMax=New-Object Windows.Forms.NumericUpDown;$beastMax.Minimum=1;$beastMax.Maximum=9999;$beastMax.Increment=1;$beastMax.Value=12;$beastMax.SetBounds(260,114,85,25);if($script:settings.beastMaxOnline){$beastMax.Value=[Math]::Max(1,[Math]::Min(9999,[int]$script:settings.beastMaxOnline))};$beastPage.Controls.Add($beastMax)
 $beastCloseAfter=New-Object Windows.Forms.CheckBox;$beastCloseAfter.Text='Tắt từng game khi acc đã trả xong hết nhiệm vụ linh thú';$beastCloseAfter.Checked=[bool]$script:settings.beastCloseAfter;$beastCloseAfter.SetBounds(16,150,630,27);$beastPage.Controls.Add($beastCloseAfter)
