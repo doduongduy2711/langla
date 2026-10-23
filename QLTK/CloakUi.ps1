@@ -101,10 +101,14 @@ function Start-CloakQueueMember($m){
  [TGLL.NativeBackend]::StopMail($j.Id);[TGLL.NativeBackend]::StopStoneChest($j.Id);[TGLL.NativeBackend]::ConfigureGiftCodes($j.Id,$false,[string[]]@());[TGLL.NativeBackend]::SetGameAuto($j.Id,$false);[TGLL.NativeBackend]::StopTraining($j.Id)
 }
 function Sync-CloakQueueMember($run,$m) {
- if($m.state -eq 'closing'){
+ if($m.state -in @('closing','blocked') -and $m.closeOperation){
   if(!$m.closeOperation.Completed){return}
-  if($m.closeOperation.Failed -or $m.closeOperation.Error){$m.state='blocked';$m.status='Chưa tắt được game; giữ lượt để kiểm tra';return}
-  if(Test-CloakMemberRunning $m){$m.status='Đợi game tắt hẳn';return}
+  # A reopened session must not be mistaken for the old session that was closed.
+  if($script:accountJobs.ContainsKey($m.id) -and $script:accountJobs[$m.id] -ne $m.job){$m.state='blocked';$m.status='Phiên game thay đổi; giữ lượt để kiểm tra';return}
+  if(Test-CloakMemberRunning $m){
+   if($m.closeOperation.Failed -or $m.closeOperation.Error){$m.state='blocked';$m.status='Chưa tắt được game; giữ lượt để kiểm tra'}else{$m.status='Đợi game tắt hẳn'}
+   return
+  }
   $m.state='done';$m.status='Đã mua, mặc áo và tắt game';return
  }
  if($m.state -notin @('launching','running')){return}

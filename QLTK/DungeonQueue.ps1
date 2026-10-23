@@ -62,16 +62,22 @@ function Pump-DungeonQueue {
         if($batch.state -eq 'finished' -and $dungeonCloseAfter.Checked -and [TGLL.NativeBackend]::CanAutoCloseBatch([string[]]@($batch.members | ForEach-Object {$_.job}))){
             try{$batch.closeOperation=Begin-DungeonTeamClose $batch;$batch.state='closing'}catch{$batch.state='blocked';$batch.error='Không bắt đầu được việc đóng tài khoản.'}
         }
-        if($batch.state -eq 'closing' -and $batch.closeOperation.Completed){
-            if($batch.closeOperation.Failed -or $batch.closeOperation.Error){$batch.state='blocked';$batch.error='Chưa tắt đủ game của tài khoản. Hàng chờ giữ lượt của tài khoản.'}
-            else{$anyRunning=$false;foreach($m in $batch.members){if(Test-DungeonMemberRunning $m){$anyRunning=$true}}
-                if(!$anyRunning){$batch.state='done'}
+        if($batch.state -in @('closing','blocked') -and $batch.closeOperation -and $batch.closeOperation.Completed){
+            # A close timeout is historical; processes can exit after the close worker finishes.
+            # Recheck blocked closes too, and never release a reopened/retrying session.
+            $allClosed=$true
+            foreach($m in $batch.members){
+                $j=Get-DungeonMemberJob $m;$a=$script:dungeonAccountIndex[$m.id]
+                if(!$j -or (Test-DungeonMemberRunning $m) -or ($a -and (Test-AccountOpenBlocked $a)) -or
+                    (!$j.CloseRequested -and !$j.CancelRequested -and $j.State -notin @('closed','cancelled'))){$allClosed=$false}
             }
+            if($allClosed){$batch.state='done';$batch.error=''}
+            elseif($batch.closeOperation.Failed -or $batch.closeOperation.Error){$batch.state='blocked';$batch.error='Chưa tắt đủ game. Hàng chờ giữ lượt để kiểm tra.'}
         }
     }
     $active=0;foreach($b in $script:dungeonBatches){if($b.state -notin @('waiting','done')){$active+=$b.members.Count}}
     # Live Dungeon accounts outside this queue also consume slots.
-    $included=@{};foreach($b in $script:dungeonBatches){if($b.state -ne 'waiting'){foreach($m in $b.members){$included[$m.id]=$true}}}
+    $included=@{};foreach($b in $script:dungeonBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$included[$m.id]=$true}}}
     $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and $a.dungeonHigh -and (Test-AccountOpenBlocked $a)){$outside++}}
     $limit=[int]$dungeonMax.Value
     foreach($batch in $script:dungeonBatches){

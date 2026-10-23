@@ -91,7 +91,7 @@ function Pump-SonCapQueue {
     }
     $active=0;foreach($b in $script:soncapBatches){if($b.state -notin @('waiting','done')){$active+=$b.members.Count}}
     # Live SonCap accounts outside this queue also consume slots.
-    $included=@{};foreach($b in $script:soncapBatches){if($b.state -ne 'waiting'){foreach($m in $b.members){$included[$m.id]=$true}}}
+    $included=@{};foreach($b in $script:soncapBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$included[$m.id]=$true}}}
     $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and $a.soncap -and (Test-AccountOpenBlocked $a)){$outside++}}
     $limit=[int]$soncapMax.Value
     foreach($batch in $script:soncapBatches){

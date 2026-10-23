@@ -19,7 +19,7 @@ try {
     if($script:queueClosedSizes.Count){throw 'One unfinished member must prevent team close'}
     $script:queueFakeJobs[$first.members[5].job].IzanamiRoundComplete=$true;Pump-IzanamiQueue
     if($first.state -ne 'closing' -or $script:queueStarted.Count -ne 12){throw 'Close in progress released slots prematurely'}
-    $first.closeOperation.Completed=$true;Pump-IzanamiQueue
+    $first.closeOperation.Completed=$true;$first.closeOperation.Failed=1;Pump-IzanamiQueue
     if($script:queueStarted.Count -ne 12){throw 'Process still running released slots prematurely'}
     foreach($m in $first.members){$script:queueFakeJobs[$m.job].State='closed'};Pump-IzanamiQueue
     if($script:queueStarted.Count -ne 18 -or $script:queueStarted[12] -ne 'queue-13'){throw 'Confirmed team close did not start the next team'}

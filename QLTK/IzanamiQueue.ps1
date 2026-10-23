@@ -58,7 +58,7 @@ function Pump-IzanamiQueue {
     if($script:izanamiQueuePaused -or !$script:izanamiBatches.Count){return}
     $script:izanamiAccountIndex=@{};foreach($a in $script:accounts){$script:izanamiAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:izanamiBatches){
-        if($batch.state -in @('launching','running','finished','blocked')){
+        if(!$batch.closeOperation -and $batch.state -in @('launching','running','finished','blocked')){
             $limited=$false;foreach($m in $batch.members){$j=Get-IzanamiMemberJob $m;if($j -and $j.IzanamiNoAttempts){$limited=$true}}
             if($limited){$batch | Add-Member NoteProperty limitClose $true -Force;$batch.state='finished';$batch.error='Hết lượt cấm thuật: tắt tổ đội, bỏ qua số lượt còn lại.'}
         }
@@ -74,16 +74,22 @@ function Pump-IzanamiQueue {
         if($batch.state -eq 'finished' -and ($batch.limitClose -or ($izanamiCloseAfter.Checked -and [TGLL.NativeBackend]::CanAutoCloseBatch([string[]]@($batch.members | ForEach-Object {$_.job}))))){
             try{$batch.closeOperation=Begin-IzanamiTeamClose $batch;$batch.state='closing';$batch.error=''}catch{$batch.state='blocked';$batch.error='Không bắt đầu được việc đóng tổ đội.'}
         }
-        if($batch.state -eq 'closing' -and $batch.closeOperation.Completed){
-            if($batch.closeOperation.Failed -or $batch.closeOperation.Error){$batch.state='blocked';$batch.error='Chưa tắt đủ game của tổ. Hàng chờ giữ lượt của tổ.'}
-            else{$anyRunning=$false;foreach($m in $batch.members){if(Test-IzanamiMemberRunning $m){$anyRunning=$true}}
-                if(!$anyRunning){$batch.state='done'}
+        if($batch.state -in @('closing','blocked') -and $batch.closeOperation -and $batch.closeOperation.Completed){
+            # A close timeout is historical; processes can exit after the close worker finishes.
+            # Recheck blocked closes too, and never release a reopened/retrying session.
+            $allClosed=$true
+            foreach($m in $batch.members){
+                $j=Get-IzanamiMemberJob $m;$a=$script:izanamiAccountIndex[$m.id]
+                if(!$j -or (Test-IzanamiMemberRunning $m) -or ($a -and (Test-AccountOpenBlocked $a)) -or
+                    (!$j.CloseRequested -and !$j.CancelRequested -and $j.State -notin @('closed','cancelled'))){$allClosed=$false}
             }
+            if($allClosed){$batch.state='done';$batch.error=''}
+            elseif($batch.closeOperation.Failed -or $batch.closeOperation.Error){$batch.state='blocked';$batch.error='Chưa tắt đủ game. Hàng chờ giữ lượt để kiểm tra.'}
         }
     }
     $active=0;foreach($b in $script:izanamiBatches){if($b.state -notin @('waiting','done')){$active+=$b.members.Count}}
     # Live Izanami accounts outside this queue also consume slots.
-    $included=@{};foreach($b in $script:izanamiBatches){if($b.state -ne 'waiting'){foreach($m in $b.members){$included[$m.id]=$true}}}
+    $included=@{};foreach($b in $script:izanamiBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$included[$m.id]=$true}}}
     $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and $a.izanami -and (Test-AccountOpenBlocked $a)){$outside++}}
     $limit=[int]$izanamiMax.Value
     foreach($batch in $script:izanamiBatches){

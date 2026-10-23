@@ -16,7 +16,7 @@ try{
  Sync-CloakQueue;Sync-CloakQueue;if($script:cpStarts.Count -ne 12){throw 'Max 12 must admit 12 accounts concurrently'}
  $first=$script:cloakRun.members[0];$j=$script:cpJobs[$first.id];$j.CloakEnabled=$false;$j.CloakDone=$true;Sync-CloakQueue;Sync-CloakQueue
  if($script:cpCloses[$first.id] -ne 1 -or $script:cpStarts.Count -ne 12){throw 'Pending close must retain slot and never duplicate close'}
- $first.closeOperation.Completed=$true;Sync-CloakQueue;if($script:cpStarts.Count -ne 12){throw 'Close callback alone must not release a live process slot'}
+ $first.closeOperation.Completed=$true;$first.closeOperation.Failed=1;Sync-CloakQueue;if($script:cpStarts.Count -ne 12){throw 'Close callback alone must not release a live process slot'}
  $script:cpLive[$first.id]=$false;Sync-CloakQueue;if($script:cpStarts.Count -ne 13 -or $script:cpStarts[-1] -ne 'parallel-13'){throw 'Actual exit should replace only the completed slot, FIFO'}
  $cloakMax.Value=5;Sync-CloakQueue;if($script:cpStarts.Count -ne 13){throw 'Reducing limit must drain, not open additional accounts'}
  $cloakMax.Value=12

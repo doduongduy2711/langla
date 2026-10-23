@@ -16,7 +16,7 @@ try {
     if($first.state -ne 'running'){throw 'Unconfirmed task prematurely finished'}
     $script:dungeonFakeJobs[$first.members[0].job].DungeonFinished=$true;Pump-DungeonQueue
     if($first.state -ne 'closing' -or $script:dungeonStarts.Count -ne 12){throw 'Close in progress released account slot'}
-    $first.closeOperation.Completed=$true;Pump-DungeonQueue
+    $first.closeOperation.Completed=$true;$first.closeOperation.Failed=1;Pump-DungeonQueue
     if($script:dungeonStarts.Count -ne 12){throw 'Live process released account slot'}
     $script:dungeonFakeJobs[$first.members[0].job].State='closed';Pump-DungeonQueue
     if($script:dungeonStarts.Count -ne 13 -or $script:dungeonStarts[-1] -ne 'dungeon-13'){throw 'Single completed account did not release one slot in FIFO order'}
@@ -29,6 +29,15 @@ try {
     if($script:dungeonStarts.Count -ne 137 -or $tick -ge 1000){throw 'Final account did not run'}
     if(($script:dungeonStarts -join ',') -ne ((1..137 | ForEach-Object {"dungeon-$_"}) -join ',')){throw 'Dungeon account order changed'}
     Add-DungeonQueue $script:accounts;if($script:dungeonStarts.Count -ne 137){throw 'Duplicate submission reran accounts'}
+    # Reopened completed accounts count outside the active queue; drain before admitting more.
+    Reset-DungeonQueue;$script:dungeonFakeJobs=@{};$script:dungeonStarts=@();$dungeonMax.Value=2
+    Add-DungeonQueue @($script:accounts[0..4]);for($n=0;$n -lt 8;$n++){Pump-DungeonQueue}
+    $retired=$script:dungeonBatches[0];$script:dungeonFakeJobs[$retired.members[0].job].DungeonFinished=$true;Pump-DungeonQueue
+    $retired.closeOperation.Completed=$true;$script:dungeonFakeJobs[$retired.members[0].job].State='closed';for($n=0;$n -lt 4;$n++){Pump-DungeonQueue}
+    $script:dungeonFakeJobs[$retired.members[0].job].State='opened'
+    $second=$script:dungeonBatches[1];$script:dungeonFakeJobs[$second.members[0].job].DungeonFinished=$true;Pump-DungeonQueue
+    $second.closeOperation.Completed=$true;$script:dungeonFakeJobs[$second.members[0].job].State='closed';for($n=0;$n -lt 4;$n++){Pump-DungeonQueue}
+    if($script:dungeonStarts.Count -ne 3){throw 'Reopened completed account was omitted from capacity'}
     Reset-DungeonQueue;$script:dungeonFakeJobs=@{};$script:dungeonStarts=@();$dungeonMax.Value=1;$dungeonCloseAfter.Checked=$false
     Add-DungeonQueue @($script:accounts[0..2]);for($i=0;$i -lt 5;$i++){Pump-DungeonQueue};$script:dungeonFakeJobs['dungeon-1'].DungeonFinished=$true;Pump-DungeonQueue
     if($script:dungeonStarts.Count -ne 1 -or $script:dungeonBatches[0].state -ne 'finished'){throw 'Auto close off must hold the open game slot'}

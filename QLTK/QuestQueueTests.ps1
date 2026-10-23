@@ -16,7 +16,7 @@ try {
     if($first.state -ne 'running'){throw 'Unconfirmed task prematurely finished'}
     $script:questFakeJobs[$first.members[0].job].QuestFinished=$true;Pump-QuestQueue
     if($first.state -ne 'closing' -or $script:questStarts.Count -ne 12){throw 'Close in progress released account slot'}
-    $first.closeOperation.Completed=$true;Pump-QuestQueue
+    $first.closeOperation.Completed=$true;$first.closeOperation.Failed=1;Pump-QuestQueue
     if($script:questStarts.Count -ne 12){throw 'Live process released account slot'}
     $script:questFakeJobs[$first.members[0].job].State='closed';Pump-QuestQueue
     if($script:questStarts.Count -ne 13 -or $script:questStarts[-1] -ne 'weekly-13'){throw 'Single completed account did not release one slot in FIFO order'}
@@ -29,6 +29,15 @@ try {
     if($script:questStarts.Count -ne 137 -or $tick -ge 1000){throw 'Final account did not run'}
     if(($script:questStarts -join ',') -ne ((1..137 | ForEach-Object {"weekly-$_"}) -join ',')){throw 'Quest account order changed'}
     Add-QuestQueue $script:accounts;if($script:questStarts.Count -ne 137){throw 'Duplicate submission reran accounts'}
+    # Reopened completed accounts count outside the active queue; drain before admitting more.
+    Reset-QuestQueue;$script:questFakeJobs=@{};$script:questStarts=@();$questMax.Value=2
+    Add-QuestQueue @($script:accounts[0..4]);for($n=0;$n -lt 8;$n++){Pump-QuestQueue}
+    $retired=$script:questBatches[0];$script:questFakeJobs[$retired.members[0].job].QuestFinished=$true;Pump-QuestQueue
+    $retired.closeOperation.Completed=$true;$script:questFakeJobs[$retired.members[0].job].State='closed';for($n=0;$n -lt 4;$n++){Pump-QuestQueue}
+    $script:questFakeJobs[$retired.members[0].job].State='opened'
+    $second=$script:questBatches[1];$script:questFakeJobs[$second.members[0].job].QuestFinished=$true;Pump-QuestQueue
+    $second.closeOperation.Completed=$true;$script:questFakeJobs[$second.members[0].job].State='closed';for($n=0;$n -lt 4;$n++){Pump-QuestQueue}
+    if($script:questStarts.Count -ne 3){throw 'Reopened completed account was omitted from capacity'}
     Reset-QuestQueue;$script:questFakeJobs=@{};$script:questStarts=@();$questMax.Value=1;$questCloseAfter.Checked=$false
     Add-QuestQueue @($script:accounts[0..2]);for($i=0;$i -lt 5;$i++){Pump-QuestQueue};$script:questFakeJobs['weekly-1'].QuestFinished=$true;Pump-QuestQueue
     if($script:questStarts.Count -ne 1 -or $script:questBatches[0].state -ne 'finished'){throw 'Auto close off must hold the open game slot'}
