@@ -29,6 +29,7 @@ function Test-IzanamiMemberRunning($member) {
     return ($null -ne $j -and $j.ProcessId -gt 0 -and [TGLL.ManagedGames]::IsRunning($j.ProcessId))
 }
 function Add-IzanamiQueue($accounts) {
+    if(Get-Command Assert-BeastAccountsAvailable -ErrorAction SilentlyContinue){Assert-BeastAccountsAvailable $accounts}
     if($script:distributionRun -and $script:distributionRun.active){throw 'Dừng auto chia đồ trước.'}
     foreach($a in $accounts){foreach($b in $script:soncapBatches){if($b.state -ne 'done' -and @($b.members | Where-Object {$_.id -eq [string]$a.id}).Count){throw 'Tài khoản đang trong hàng chờ Sơn Cáp.'}}}
     if($script:mailRun -and $script:mailRun.active){throw 'Dừng hàng chờ gom đồ trước khi chạy hàng chờ khác.'}

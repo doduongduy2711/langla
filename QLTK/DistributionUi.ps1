@@ -49,6 +49,7 @@ function Begin-DistributionClose($m){return [TGLL.NativeBackend]::BeginCloseBatc
 function Test-DistributionRunning($m){$j=Get-AccountJob $m.job;return ($j -and $j.ProcessId -gt 0 -and [TGLL.ManagedGames]::IsRunning($j.ProcessId))}
 function Get-DistributionQueuedMember($id){if(!$script:distributionRun -or !$script:distributionRun.active -or $script:distributionLaunchingId -eq $id){return $null};return @($script:distributionRun.members | Where-Object {$_.id -eq $id -and $_.state -eq 'waiting'}) | Select-Object -First 1}
 function Start-Distribution {
+ if(@($script:beastBatches | Where-Object {$_.state -ne 'done'}).Count){throw 'Dừng hàng chờ linh thú trước.'}
     if($script:distributionRun -and $script:distributionRun.active){throw 'Đang chia đồ.'}
     if($grid.Rows.Count -lt 2){throw 'Cần acc dòng 1 và ít nhất một acc nhận ở dòng 2.'}
     if(!$autoLoginCheck.Checked){throw 'Bật đăng nhập trực tiếp trước.'}

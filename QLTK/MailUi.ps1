@@ -42,7 +42,8 @@ function Get-MailReceiverName {
     if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key];if($null -ne $j -and ![string]::IsNullOrWhiteSpace($j.CharacterName)){return [string]$j.CharacterName}}
     return [string]$grid.Rows[0].Cells['character'].Value
 }
-function Start-MailCollection {if($script:distributionRun -and $script:distributionRun.active){throw 'Dừng auto chia đồ trước.'}
+function Start-MailCollection {
+ if(@($script:beastBatches | Where-Object {$_.state -ne 'done'}).Count){throw 'Dừng hàng chờ linh thú trước.'}if($script:distributionRun -and $script:distributionRun.active){throw 'Dừng auto chia đồ trước.'}
     if($script:cloakRun -and $script:cloakRun.active){throw 'Dừng hàng mua áo trước khi gom đồ.'}
     if($script:mailRun -and $script:mailRun.active){throw 'Dừng lượt gom đồ hiện tại trước khi bắt đầu lượt mới.'}
     if(!$autoLoginCheck.Checked){throw 'Bật Đăng nhập trực tiếp trước khi chạy hàng chờ gom đồ.'}

@@ -34,6 +34,7 @@ function Test-SonCapMemberRunning($member) {
     return ($null -ne $j -and $j.ProcessId -gt 0 -and [TGLL.ManagedGames]::IsRunning($j.ProcessId))
 }
 function Add-SonCapQueue($accounts) {
+    if(Get-Command Assert-BeastAccountsAvailable -ErrorAction SilentlyContinue){Assert-BeastAccountsAvailable $accounts}
     if($script:distributionRun -and $script:distributionRun.active){throw 'Dừng auto chia đồ trước.'}
     if($script:mailRun -and $script:mailRun.active){throw 'Dừng hàng chờ gom đồ trước khi chạy hàng chờ khác.'}
     if(!$autoLoginCheck.Checked){throw 'Bật Đăng nhập trực tiếp trước khi chạy hàng chờ Sơn Cáp.'}

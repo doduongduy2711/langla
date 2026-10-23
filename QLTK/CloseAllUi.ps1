@@ -5,6 +5,7 @@ function Start-CloseAllUi {
  if($script:closingAll){return}
  $script:closingAll=$true;$closeAllButton.Enabled=$false;$closeAllButton.Text='Đang tắt...'
  try{
+  if(Get-Command Reset-BeastQueue -ErrorAction SilentlyContinue){Reset-BeastQueue}
   Reset-SonCapQueue;Reset-IzanamiQueue;Reset-QuestQueue;Reset-DungeonQueue
   if($script:cloakRun){$script:cloakRun.active=$false}
   [TGLL.AutoLogin]::CancelAll();Stop-MailCollection;if(Get-Command Stop-Distribution -ErrorAction SilentlyContinue){Stop-Distribution}

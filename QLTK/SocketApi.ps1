@@ -88,6 +88,7 @@ function Invoke-ProxyBridge($account,$proxy,[bool]$autoLogin=$false) {
 }
 $script:accountWindowPids=@{}
 function Get-AccountLaunchMode($account) {
+    if($script:accountJobs -and $script:accountJobs.ContainsKey([string]$account.id)){$bj=Get-AccountJob $script:accountJobs[[string]$account.id];if($bj -is [TGLL.NativeJob] -and $bj.BeastQuestEnabled){return 'beast'}}
     if($script:farmUpRequests -and $script:farmUpRequests.ContainsKey([string]$account.id)){return 'farm'}
     if([bool]$account.soncap){return 'soncap'}
     if((Get-Command Sync-DailyPriorityPreferences -ErrorAction SilentlyContinue) -and $script:farmUpRequests.ContainsKey([string]$account.id)){return 'farm'}
@@ -135,9 +136,10 @@ function Start-ManagedAccount($account,$proxy,[bool]$autoLogin=$false) {
         $nativeProxy=$null
         if ($null -ne $proxy) {$nativeProxy=New-Object TGLL.SocksConfig([string]$proxy.host,[int]$proxy.port,[string]$proxy.username,[string]$proxy.password)}
         $dungeonQueueLaunch=([string]$script:dungeonLaunchingAccountId -eq [string]$account.id)
-        $dailyUp=[bool]$account.soncap;if((Get-Command Sync-DailyPriorityPreferences -ErrorAction SilentlyContinue) -and $script:farmUpRequests.ContainsKey([string]$account.id)){$dailyUp=$true}
+        $dailyUp=([bool]$account.soncap -or [string]$script:beastLaunchingAccountId -eq [string]$account.id);if((Get-Command Sync-DailyPriorityPreferences -ErrorAction SilentlyContinue) -and $script:farmUpRequests.ContainsKey([string]$account.id)){$dailyUp=$true}
         try {$credentials=Get-NativeLaunchCredentials $account ([string]$script:settings.jar);$job=[TGLL.NativeBackend]::Enqueue([string]$script:settings.jar,[string]$credentials.Username,[string]$credentials.Password,$nativeProxy,$autoLogin,([bool]$account.receiveKey -and !$dailyUp),([bool]$account.dungeonHigh -and !$dailyUp),([bool]$account.izanami -and !$dungeonQueueLaunch -and !$dailyUp),([string]$script:izanamiLaunchingAccountId -eq [string]$account.id),([string]$script:questLaunchingAccountId -eq [string]$account.id),([string]$script:mailLaunchingAccountId -eq [string]$account.id),([string]$script:cloakLaunchingAccountId -eq [string]$account.id))} catch {$queueCode=Get-LaunchQueueErrorCode $_;Write-LaunchQueueFailure $account $queueCode $_;throw ($queueCode+': '+(Get-LoginErrorText $queueCode))} finally {if($credentials){$credentials.Password=$null}}
         $job.UpRequested=!$job.CloakQueueOnly -and $script:farmUpRequests.ContainsKey([string]$account.id)
+        if([string]$script:beastLaunchingAccountId -eq [string]$account.id){[TGLL.NativeBackend]::SetAutoBeast($job.Id,$true)}
         $job.DungeonQueueOnly=$dungeonQueueLaunch
         [TGLL.NativeBackend]::SetCloseAfterKey($job.Id,([bool]$account.closeAfterKey -and !$dungeonQueueLaunch -and ![bool]$account.soncap))
         if($script:accountJobs -and $script:accountJobs.ContainsKey([string]$account.id)){[TGLL.NativeBackend]::RebindIzanamiJob([string]$script:accountJobs[[string]$account.id],$job.Id)}

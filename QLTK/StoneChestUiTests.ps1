@@ -12,6 +12,6 @@ try{
  Start-StoneChestSelected $true;if(!$scJ.ChestUseOnly){throw 'Use existing chests failed'}
  Stop-StoneChestSelected;$scJ.TrainReady=$false;Start-StoneChestSelected $false
  if($scJ.ChestEnabled){throw 'Not-ready account must not start'}
- if(!$chestPage.AutoScroll -or $tabs.TabPages.Count -ne 22){throw 'Chest page layout invalid'}
+ if(!$chestPage.AutoScroll -or $tabs.TabPages.Count -ne 23){throw 'Chest page layout invalid'}
  Write-Output 'PASS: chest UI quantity, saved preferences without auto-start, selected purchase/open/stop and readiness gate.'
 }finally{$scRemoved=$null;$null=$scJobs.TryRemove($scJ.Id,[ref]$scRemoved);if($scHad){$script:accountJobs[$scKey]=$scOld}else{$script:accountJobs.Remove($scKey)}}

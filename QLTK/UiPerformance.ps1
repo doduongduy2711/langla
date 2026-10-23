@@ -17,6 +17,7 @@ function Update-ActiveTabUi {
     elseif($selected -eq $inventoryPage){Update-InventoryUi}
     elseif($selected -eq $izanamiPage){Update-IzanamiUi}
     elseif($selected -eq $itemPage){Update-AutoItemUi}
+    elseif($selected -eq $beastPage){Update-BeastUi}
     elseif($selected -eq $questPage){Update-QuestUi}
     elseif($selected -eq $giftPage){Update-GiftUi}
     elseif($selected -eq $mailPage){Update-MailUi}

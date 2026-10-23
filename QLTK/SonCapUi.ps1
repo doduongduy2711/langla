@@ -27,6 +27,7 @@ function Sync-SonCapPreferences {
     $ids=@()
     foreach($row in $grid.Rows){$a=$row.Tag;if(!$a){continue};$key=[string]$a.id;$wanted=[bool]$a.soncap;$j=$null;if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
         if($j -is [TGLL.NativeJob] -and $j.DailyManaged){continue}
+        if($j -is [TGLL.NativeJob] -and $j.BeastQuestEnabled){continue}
         if($wanted){$ids+=@($(if($j){$j.Id}else{''}))}
         if(!($j -is [TGLL.NativeJob]) -or !$j.TrainReady -or !$j.GameSettingsReady -or $j.CloseRequested -or $j.State -in @('failed','closed','cancelled')){continue}
         if($j.MailQueueOnly){continue}

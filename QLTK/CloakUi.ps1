@@ -80,6 +80,7 @@ function Get-CloakMemberJob($m){if($m.job){return Get-AccountJob $m.job};return 
 function Test-CloakMemberRunning($m){$j=Get-CloakMemberJob $m;return ($null -ne $j -and $j.ProcessId -gt 0 -and [TGLL.ManagedGames]::IsRunning([int]$j.ProcessId))}
 function Begin-CloakMemberClose($m){return [TGLL.NativeBackend]::BeginCloseBatch([string[]]@($m.job))}
 function Start-CloakQueue {
+ if(@($script:beastBatches | Where-Object {$_.state -ne 'done'}).Count){throw 'Dừng hàng chờ linh thú trước.'}
  if($script:cloakRun -and $script:cloakRun.active){throw 'Dừng lượt mua áo hiện tại trước.'}
  foreach($b in @($script:questBatches)+@($script:izanamiBatches)+@($script:dungeonBatches)){if($b.state -ne 'done'){throw 'Dừng các hàng chờ hoạt động trước khi mua áo.'}}
  if($script:distributionRun -and $script:distributionRun.active){throw 'Dừng chia đồ trước khi mua áo.'};if($script:mailRun -and $script:mailRun.active){throw 'Dừng gom đồ trước khi mua áo.'}

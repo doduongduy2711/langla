@@ -124,6 +124,7 @@ function Start-FarmAllOpen {
     }finally{$script:deferAccountSave=$upPreviousSave;if(!$UiTest -and !$upPreviousSave -and $script:accountSavePending){$script:accountSavePending=$false;Save-Accounts}}
 }
 function Sync-FarmUpRow($row) {
+    if($row.Tag -and $script:accountJobs.ContainsKey([string]$row.Tag.id)){$bj=Get-AccountJob $script:accountJobs[[string]$row.Tag.id];if($bj -is [TGLL.NativeJob] -and $bj.BeastQuestEnabled){return}}
     if($null -eq $row.Tag){return};$key=[string]$row.Tag.id;$j=$null
     if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
     if($j -is [TGLL.NativeJob] -and $j.MailQueueOnly){return}

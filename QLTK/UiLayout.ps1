@@ -325,6 +325,7 @@ Resize-UiLayout;Update-UiSummary
 
 . (Join-Path $PSScriptRoot 'FarmUi.ps1')
 . (Join-Path $PSScriptRoot 'SonCapUi.ps1')
+. (Join-Path $PSScriptRoot 'BeastUi.ps1')
 
 . (Join-Path $PSScriptRoot 'StoneChestUi.ps1')
 

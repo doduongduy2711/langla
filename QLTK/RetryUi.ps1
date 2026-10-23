@@ -2,7 +2,7 @@
 function Retry-FailedAccounts {
     # Submit at most one reopen per second, while native startup keeps its own retries.
     $members=@{}
-    foreach($pair in @(@('soncap',$script:soncapBatches),@('izanami',$script:izanamiBatches),@('quest',$script:questBatches),@('dungeon',$script:dungeonBatches))){foreach($b in $pair[1]){if($b.state -in @('waiting','done','closing','finished')){continue};foreach($m in $b.members){$members[$m.id]=[pscustomobject]@{kind=$pair[0];member=$m;batch=$b}}}}
+    foreach($pair in @(@('beast',$script:beastBatches),@('soncap',$script:soncapBatches),@('izanami',$script:izanamiBatches),@('quest',$script:questBatches),@('dungeon',$script:dungeonBatches))){foreach($b in $pair[1]){if($b.state -in @('waiting','done','closing','finished')){continue};foreach($m in $b.members){$members[$m.id]=[pscustomobject]@{kind=$pair[0];member=$m;batch=$b}}}}
     foreach($a in $script:accounts){
         $key=[string]$a.id;if(!$script:accountJobs.ContainsKey($key)){continue}
         $j=Get-AccountJob $script:accountJobs[$key]
@@ -19,7 +19,7 @@ function Retry-FailedAccounts {
         try{
             Open-Account $a ($j.Error -in @('game_disconnected','character_screen_not_ready','startup_popup_not_ready','game_exited'))
             if($script:accountJobs[$key] -ne $j.Id){
-                if($entry){$entry.member.job=$script:accountJobs[$key];$entry.batch.state=if(@($entry.batch.members | Where-Object {!$_.job}).Count){'launching'}else{'running'};$entry.batch.error='';if($entry.kind -eq 'izanami'){Sync-IzanamiTeams};if($entry.kind -eq 'soncap'){Sync-SonCapTeams}}
+                if($entry){$entry.member.job=$script:accountJobs[$key];$entry.batch.state=if(@($entry.batch.members | Where-Object {!$_.job}).Count){'launching'}else{'running'};$entry.batch.error='';if($entry.kind -eq 'izanami'){Sync-IzanamiTeams};if($entry.kind -eq 'soncap'){Sync-SonCapTeams};if($entry.kind -eq 'beast'){Sync-BeastTeams}}
                 $script:failedRetryCounts[$key]=[int]$script:failedRetryCounts[$key]+1
                 $status.Text='Đang đăng nhập lại: '+$a.username
             }
