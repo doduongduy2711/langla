@@ -1,7 +1,7 @@
 ﻿$script:beastBatches=@();$script:beastQueuePaused=$false;$script:beastLaunchingAccountId=''
 $beastPage=New-Object Windows.Forms.TabPage;$beastPage.Text='Auto Linh thú';$beastPage.BackColor=$form.BackColor;$beastPage.AutoScroll=$true;$tabs.TabPages.Add($beastPage)
 $null=Ui-Label 'Chia nhóm 6 theo thứ tự đã chọn; nhóm cuối dùng số acc còn lại. Acc đầu mỗi nhóm làm trưởng nhóm.' $beastPage 16 15 635 40
-$null=Ui-Label 'Về Rasa → trưởng nhóm chọn khu ít người → cả nhóm cùng khu, đứng gần Rasa → mời nhóm → trưởng nhóm nhận, từng thành viên tự trả nhiệm vụ.' $beastPage 16 58 635 50
+$null=Ui-Label 'Về Rasa → trưởng nhóm chọn khu ít người → cả nhóm cùng khu, đứng gần Rasa → mời nhóm → trưởng nhóm nhận, từng acc tự trả. Trưởng nhóm hết lượt: acc còn lượt tự làm tiếp.' $beastPage 16 58 635 50
 $null=Ui-Label 'Số tài khoản tối đa:' $beastPage 16 116 230 24
 $beastMax=New-Object Windows.Forms.NumericUpDown;$beastMax.Minimum=6;$beastMax.Maximum=9996;$beastMax.Increment=6;$beastMax.Value=12;$beastMax.SetBounds(260,114,85,25);if($script:settings.beastMaxOnline){$beastMax.Value=[Math]::Max(6,[Math]::Min(9996,[int]$script:settings.beastMaxOnline))};$beastPage.Controls.Add($beastMax)
 $beastCloseAfter=New-Object Windows.Forms.CheckBox;$beastCloseAfter.Text='Tắt cả nhóm khi mọi thành viên đã trả xong nhiệm vụ linh thú';$beastCloseAfter.Checked=[bool]$script:settings.beastCloseAfter;$beastCloseAfter.SetBounds(16,150,630,27);$beastPage.Controls.Add($beastCloseAfter)
