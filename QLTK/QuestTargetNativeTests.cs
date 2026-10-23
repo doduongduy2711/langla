@@ -1,4 +1,4 @@
-﻿using System;using System.Diagnostics;using System.Runtime.InteropServices;using System.Text;using TGLL;
+using System;using System.Diagnostics;using System.Runtime.InteropServices;using System.Text;using TGLL;
 class TrainTests{
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)]delegate void Tick();
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)]delegate int Count(IntPtr self,IntPtr info);
@@ -51,6 +51,13 @@ class TrainTests{
   r.Write(fc+0x134,BitConverter.GetBytes((short)74));r.Write(task+24,BitConverter.GetBytes(40));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"completion stops native combat immediately");
   r.Write(task+24,BitConverter.GetBytes(0));r.Write(task+36,BitConverter.GetBytes(179));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"new quest ID invalidates previous target immediately");
   Put(r,fc+0x318,0);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==8,"absent task blocks attack");
+  // Beast combat must validate +0x320, even with a missing or conflicting weekly task.
+  int beforeBeast=calls;long beast=r.Allocate(128);Put(r,fc+0x320,beast);r.Write(beast+20,BitConverter.GetBytes(1));r.Write(beast+36,BitConverter.GetBytes(180));r.Write(beast+40,BitConverter.GetBytes(74));r.Write(beast+52,BitConverter.GetBytes(1));r.Write(data+80,BitConverter.GetBytes(2));expected=far;Put(r,player+0x168,0);
+  r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==beforeBeast+1&&r.Ptr(fc+0x2b0)==far,"beast blocked by absent weekly quest");
+  Put(r,player+0x168,0);Put(r,fc+0x318,task);r.Write(task+36,BitConverter.GetBytes(261));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==beforeBeast+2&&r.Ptr(fc+0x2b0)==far,"weekly target overrode beast target");
+  Put(r,player+0x168,0);r.Write(beast+24,BitConverter.GetBytes(1));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==beforeBeast+2,"completed beast still attacked");
+  r.Write(beast+24,new byte[4]);r.Write(beast+40,BitConverter.GetBytes(88));r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==beforeBeast+2,"beast attacked wrong map");
+  Put(r,fc+0x320,0);r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==beforeBeast+2,"missing beast fell back to weekly quest");Put(r,fc+0x318,0);calls=beforeBeast;
   r.Write(data+80,BitConverter.GetBytes(0));Put(r,fc+0x160,mobs);expected=near;r.Write(data,BitConverter.GetBytes(1));tick();Assert(calls==9,"ordinary training still chooses nearest living mob");
   // Focus mode waits for confirmed builtin stop, then strictly filters ID261.
   Assert(code.Length<4096,"train callback allocation size");

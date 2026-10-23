@@ -407,7 +407,7 @@ namespace TGLL {
             a.Label("routeSnapshot");a.Emit(0xc7,0x43,108,0xff,0xff,0xff,0xff,0xc7,0x43,112,0xff,0xff,0xff,0xff,0x48,0x85,0xff);a.J(0x84,"questTargetSnapshot");a.Emit(0x8b,0x47,36,0x89,0x43,108,0x8b,0x47,20,0x89,0x43,112);a.Label("questTargetSnapshot");a.Emit(0x0f,0xbf,0x86,0x34,1,0,0,0x89,0x43,80,0xc7,0x43,84,0xff,0xff,0xff,0xff,0x48,0x85,0xff);a.J(0x84,"mapSnapshot");// jc.gpg (+0x1c) is the map, copied from kj.gwq (+0x28).
             a.Emit(0x8b,0x47,40,0x89,0x43,84);a.Label("mapSnapshot");a.Emit(0x48,0x83,0xbe,0x10,3,0,0,0,0x0f,0x95,0xc0,0x0f,0xb6,0xc0,0x89,0x43,32,0xc7,0x43,8,1,0,0,0);
             a.Label("publish");a.Emit(0x8b,0x43,116,0x89,0x43,120);a.Emit(0xff,0x43,64,0x83,0x7b,8,1);a.J(0x85,"return");a.Emit(0x83,0x3b,0);a.J(0x84,"return");a.Emit(0x8b,0x03,0x89,0x43,40,0xc7,0x03,99,0,0,0,0xc7,0x43,36,0,0,0,0);
-            a.Emit(0x83,0xf8,1);a.J(0x84,"meiNativeRoute");a.Emit(0x83,0xf8,2);a.J(0x84,"route");a.Emit(0x83,0xf8,3);a.J(0x84,"npc");a.Emit(0x83,0xf8,8);a.J(0x84,"farmRoute");a.Jump("menu");
+            a.Emit(0x83,0xf8,1);a.J(0x84,"meiNativeRoute");a.Emit(0x83,0xf8,2);a.J(0x84,"route");a.Emit(0x83,0xf8,3);a.J(0x84,"npc");a.Emit(0x83,0xf8,9);a.J(0x84,"closeRasaMenu");a.Emit(0x83,0xf8,8);a.J(0x84,"farmRoute");a.Jump("menu");
             // The game NPC navigator checks the current map first, then resolves distant NPCs.
             // Calling only its catalogue resolver on a map containing Mei could throw and leave request=99.
             a.Label("meiNativeRoute");a.Emit(0xb9,102,0,0,0,0x83,0x7b,116,1);a.J(0x85,"npcRouteId");a.Emit(0xb9,98,0,0,0);a.Label("npcRouteId");a.Emit(0x33,0xd2);a.Call(game+0x4d04a0);a.Emit(0x4c,0x8b,0xae,0x10,3,0,0,0x4d,0x85,0xed);a.J(0x84,"done");a.Emit(0x41,0x8b,0x45,28,0x89,0x43,88,0x85,0xc0);a.J(0x88,"done");a.Emit(0x4c,0x89,0x6b,72);a.Jump("ok");
@@ -430,6 +430,12 @@ namespace TGLL {
             a.Label("complete");string[] completions={"Hoàn Thành",":-chatHoàn Thành","Hoàn thành",":-chatHoàn thành"};for(int i=0;i<completions.Length;i++){MatchString(a,completions[i],"completeMiss"+i);a.Jump("select");a.Label("completeMiss"+i);}a.Jump("optionNext");
             a.Label("receive");MatchString(a,"Nhận","receive2");a.Jump("select");a.Label("receive2");MatchString(a,":-chatNhận","optionNext");
             a.Label("select");a.Emit(0x49,0x8b,0x85,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x89,0x50,96,0x41,0xc7,0x85,0xc0,0,0,0,1,0,0,0,0x4c,0x89,0xe9,0x33,0xd2);a.Call(game+0x2d8f00);a.Jump("ok");a.Label("optionNext");a.Emit(0xff,0xc2);a.Jump("options");
+            // Close only the exact active Rasa menu sampled by the worker. hy.rh uses
+            // the same virtual close slot (0x578); receive/turn-in phases retain it.
+            a.Label("closeRasaMenu");a.Emit(0x83,0x7b,116,1);a.J(0x85,"done");a.Emit(0x4c,0x8b,0xae,0x90,0,0,0,0x4d,0x85,0xed);a.J(0x84,"done");a.Emit(0x4c,0x3b,0xab,0x80,0,0,0);a.J(0x85,"done");
+            Slot(a,game+0x16efe08,"done",game+0x1dd900);a.Emit(0x49,0x39,0x45,0);a.J(0x85,"done");a.Emit(0x41,0x8b,0x85,0xdc,0,0,0,0x3b,0x43,56);a.J(0x85,"done");
+            a.Emit(0x48,0x8b,0x8e,0x88,0,0,0,0x48,0x85,0xc9);a.J(0x84,"done");a.Emit(0x48,0x8b,0x01,0x4c,0x89,0xea,0x4c,0x8b,0x80,0x10,2,0,0,0xff,0x90,8,2,0,0,0x84,0xc0);a.J(0x84,"done");
+            a.Emit(0x49,0x8b,0x45,0,0x4c,0x89,0xe9,0x48,0x8b,0x90,0x80,5,0,0,0xff,0x90,0x78,5,0,0);a.Jump("ok");
             a.Label("cancelRoute");a.Emit(0x48,0x8b,0x43,72,0x48,0x85,0xc0);a.J(0x84,"clearOwned");a.Emit(0x48,0x39,0x86,0x10,3,0,0);a.J(0x85,"clearOwned");a.Emit(0x48,0xc7,0x86,0x10,3,0,0,0,0,0,0,0x48,0x8d,0x8e,0x10,3,0,0,0x33,0xd2);a.Call(game+0x12d9e0);a.Label("clearOwned");a.Emit(0x48,0xc7,0x43,72,0,0,0,0);a.Jump("done");
             a.Label("ok");a.Emit(0xc7,0x43,36,1,0,0,0);a.Label("done");a.Emit(0xc7,0x03,0,0,0,0);a.Label("return");a.Emit(0x48,0x83,0xc4,0x20,0x41,0x5d,0x41,0x5c,0x5f,0x5e,0x5b,0xc3);return a.Finish();
         }
@@ -622,15 +628,16 @@ namespace TGLL {
             a.Label("published");a.Emit(0xff,0x43,4,0x83,0x7b,0x0c,1);a.J(0x85,"done");
             // Khi làm nhiệm vụ, đọc lại nhiệm vụ ngay trên luồng game trước mỗi lần đánh.
             // Không dùng ID cũ nếu đổi nhiệm vụ, sai map hoặc đã đủ số quái.
-            a.Emit(0xc7,0x43,84,0xff,0xff,0xff,0xff,0x83,0x7b,80,1);a.J(0x85,"questGuardDone");
-            a.Emit(0x48,0x8b,0x87,0x18,3,0,0,0x48,0x85,0xc0);a.J(0x84,"done");
+            a.Emit(0xc7,0x43,84,0xff,0xff,0xff,0xff,0x83,0x7b,80,0);a.J(0x84,"questGuardDone");
+            a.Emit(0x83,0x7b,80,2);a.J(0x84,"beastCombatTask");a.Emit(0x48,0x8b,0x87,0x18,3,0,0);a.Jump("combatTaskReady");
+            a.Label("beastCombatTask");a.Emit(0x48,0x8b,0x87,0x20,3,0,0);a.Label("combatTaskReady");a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");
             a.Emit(0x83,0x78,20,1);a.J(0x85,"done");a.Emit(0x8b,0x50,24,0x3b,0x50,52);a.J(0x8d,"done");
             a.Emit(0x0f,0xbf,0x97,0x34,1,0,0,0x3b,0x50,40);a.J(0x85,"done");
             a.Emit(0x8b,0x50,36,0x85,0xd2);a.J(0x88,"done");a.Emit(0x89,0x53,84);
             a.Label("questGuardDone");a.Emit(0x83,0x7b,124,2);a.J(0x84,"done");
             // Same filtering as quest combat: never fall back to another mob
             // while Thi Quy focus is active, including between worker snapshots.
-            a.Emit(0x83,0x7b,80,1);a.J(0x84,"focusFilterDone");a.Emit(0x83,0x7b,124,1);a.J(0x85,"focusFilterDone");
+            a.Emit(0x83,0x7b,80,0);a.J(0x85,"focusFilterDone");a.Emit(0x83,0x7b,124,1);a.J(0x85,"focusFilterDone");
             a.Emit(0x0f,0xbf,0x87,0x34,1,0,0,0x3b,0x43,120);a.J(0x85,"done");a.Emit(0xc7,0x43,84,0x05,0x01,0,0);a.Label("focusFilterDone");
             // Native casts are independent of visible overlays.
             a.Emit(0xc7,0x43,0x44,0xff,0xff,0xff,0xff,0xc7,0x43,0x48,0,0,0,0);
@@ -639,7 +646,7 @@ namespace TGLL {
             a.Emit(0xc7,0x43,0x18,3,0,0,0,0x48,0xc7,0x43,0x38,0,0,0,0,0xc7,0x43,0x40,0xff,0xff,0xff,0x7f);a.Emit(0x83,0x7b,0x4c,1);a.J(0x84,"castGuard");
             // Danh sách +0x160 thuộc treo mặc định và rỗng khi treo tắt.
             // Nhiệm vụ dùng +0x150: toàn bộ quái trên map, lọc ID và HP bên dưới.
-            a.Emit(0x83,0x7b,80,1);a.J(0x85,"ordinaryMobList");a.Emit(0x4c,0x8b,0xbf,0x50,1,0,0);a.Jump("mobListReady");
+            a.Emit(0x83,0x7b,80,0);a.J(0x84,"ordinaryMobList");a.Emit(0x4c,0x8b,0xbf,0x50,1,0,0);a.Jump("mobListReady");
             a.Label("ordinaryMobList");a.Emit(0x83,0x7b,124,1);a.J(0x85,"priorityMobListDone");a.Emit(0x48,0x83,0x7b,112,0);a.J(0x84,"priorityMobListDone");a.Emit(0x4c,0x8b,0xbf,0x50,1,0,0);a.Jump("mobListReady");a.Label("priorityMobListDone");a.Emit(0x83,0x7b,88,1);a.J(0x85,"builtinMobList");a.Emit(0x4c,0x8b,0xbf,0x50,1,0,0);a.Jump("mobListReady");a.Label("builtinMobList");a.Emit(0x4c,0x8b,0xbf,0x60,1,0,0);a.Label("mobListReady");a.Emit(0x4d,0x85,0xff);a.J(0x84,"done");a.Emit(0x45,0x33,0xf6);
             a.Label("mobs");a.Emit(0x41,0x81,0xfe,0,2,0,0);a.J(0x8d,"target");a.Emit(0x49,0x8b,0x07,0x49,0x8b,0xcf,0x48,0x8b,0x90,0xf0,1,0,0,0xff,0x90,0xe8,1,0,0,0x44,0x3b,0xf0);a.J(0x8d,"target");
             a.Emit(0x49,0x8b,0x07,0x49,0x8b,0xcf,0x41,0x8b,0xd6,0x4c,0x8b,0x80,0x60,2,0,0,0xff,0x90,0x58,2,0,0,0x4c,0x8b,0xe0,0x48,0x85,0xc0);a.J(0x84,"nextMob");
@@ -647,7 +654,7 @@ namespace TGLL {
             a.Emit(0x66,0x41,0x81,0x7c,0x24,0x50,0x05,0x01);a.J(0x85,"legacyMobHp");a.Emit(0x41,0x83,0x7c,0x24,0x70,0);a.J(0x8e,"nextMob");a.Jump("mobHpReady");a.Label("legacyMobHp");a.Emit(0x41,0x83,0x7c,0x24,0x78,0);a.J(0x8e,"nextMob");a.Label("mobHpReady");
             // Chỉ chọn quái sống có đúng template nhiệm vụ; không tìm thấy thì chờ hồi sinh.
             a.Emit(0x83,0x7b,84,0);a.J(0x88,"mobFilterDone");a.Emit(0x41,0x0f,0xbf,0x44,0x24,0x50,0x3b,0x43,84);a.J(0x85,"nextMob");a.Label("mobFilterDone");
-            a.Emit(0x83,0x7b,124,1);a.J(0x85,"priorityDistanceDone");a.Emit(0x83,0x7b,80,1);a.J(0x84,"priorityDistanceDone");a.Emit(0x4c,0x3b,0x63,112);a.J(0x85,"priorityDistanceDone");a.Emit(0x0f,0xbf,0x87,0x34,1,0,0,0x3b,0x43,120);a.J(0x85,"priorityDistanceDone");a.Emit(0x66,0x41,0x81,0x7c,0x24,0x50,0x05,0x01);a.J(0x85,"priorityDistanceDone");a.Emit(0x49,0x8b,0xcd,0x49,0x8b,0xd4,0x45,0x33,0xc0);a.Call(distance);a.Emit(0x89,0x43,0x40,0x4c,0x89,0x63,0x38);a.Jump("target");a.Label("priorityDistanceDone");
+            a.Emit(0x83,0x7b,124,1);a.J(0x85,"priorityDistanceDone");a.Emit(0x83,0x7b,80,0);a.J(0x85,"priorityDistanceDone");a.Emit(0x4c,0x3b,0x63,112);a.J(0x85,"priorityDistanceDone");a.Emit(0x0f,0xbf,0x87,0x34,1,0,0,0x3b,0x43,120);a.J(0x85,"priorityDistanceDone");a.Emit(0x66,0x41,0x81,0x7c,0x24,0x50,0x05,0x01);a.J(0x85,"priorityDistanceDone");a.Emit(0x49,0x8b,0xcd,0x49,0x8b,0xd4,0x45,0x33,0xc0);a.Call(distance);a.Emit(0x89,0x43,0x40,0x4c,0x89,0x63,0x38);a.Jump("target");a.Label("priorityDistanceDone");
             a.Emit(0x49,0x8b,0xcd,0x49,0x8b,0xd4,0x45,0x33,0xc0);a.Call(distance);a.Emit(0x3b,0x43,0x40);a.J(0x8d,"nextMob");a.Emit(0x89,0x43,0x40,0x4c,0x89,0x63,0x38);
             a.Label("nextMob");a.Emit(0x41,0xff,0xc6);a.Jump("mobs");
             a.Label("target");a.Emit(0x48,0x8b,0x43,0x38,0x48,0x85,0xc0);a.J(0x84,"done");
@@ -1090,6 +1097,7 @@ namespace TGLL {
             if(request==99){if(j.QuestBusyAt==DateTime.MinValue)j.QuestBusyAt=DateTime.UtcNow;if((DateTime.UtcNow-j.QuestBusyAt).TotalSeconds>10){r.Write(data,new byte[4]);j.QuestBusyAt=DateTime.MinValue;j.QuestInFlight=false;j.QuestPhase=0;j.QuestRetryAt=DateTime.MinValue;j.QuestBusyRetries++;Log(j,"quest_busy_recovered",",\"retry\":"+j.QuestBusyRetries);if(j.QuestBusyRetries>=3)StopQuest(j,"Lệnh nhiệm vụ lỗi 3 lần; kiểm tra game");else j.QuestStatus="Lệnh bị kẹt; đang thử lại nhiệm vụ";}return;}
             j.QuestBusyAt=DateTime.MinValue;if(request!=0)return;
             int generation=BitConverter.ToInt32(r.Read(data+64,4),0);if((generation&1)!=0||BitConverter.ToInt32(r.Read(data+120,4),0)!=(j.BeastQuestEnabled?1:0))return;byte[] b=r.Read(data+8,108);if(generation!=BitConverter.ToInt32(r.Read(data+64,4),0)||BitConverter.ToInt32(b,0)!=1)return;
+            if(j.BeastQuestEnabled&&ShouldCloseBeastRasaMenu(j)&&j.BeastRasaMenu!=0&&DateTime.UtcNow>=j.QuestRetryAt){r.Write(data+128,BitConverter.GetBytes(j.BeastRasaMenu));r.Write(data+56,BitConverter.GetBytes(j.BeastRasaTag));QuestSend(r,data,j,9);j.BeastRasaMenu=0;return;}
             if(j.BeastQuestEnabled&&!IsBeastLeader(j)){PumpBeastFollower(r,data,j,b);return;}
             int remaining=BitConverter.ToInt32(b,4),result=BitConverter.ToInt32(b,28);bool present=BitConverter.ToInt32(b,8)!=0,done=BitConverter.ToInt32(b,12)!=0,route=BitConverter.ToInt32(b,24)!=0;
             if(remaining<0||remaining>(j.BeastQuestEnabled?3:10)){j.QuestStatus="Chưa đọc được số lượt nhiệm vụ";return;}if(j.QuestRemaining!=remaining)Log(j,"quest_progress",",\"display\":"+Quote(remaining+"/"+(j.BeastQuestEnabled?3:10))+",\"remaining\":"+remaining);j.QuestRemaining=remaining;j.QuestMobId=BitConverter.ToInt32(b,100);j.QuestKind=BitConverter.ToInt32(b,104);
@@ -1098,8 +1106,8 @@ namespace TGLL {
             DateTime now=DateTime.UtcNow;bool ack=j.QuestInFlight;
             if((now-j.QuestAt).TotalSeconds>240&&j.QuestPhase!=6){StopQuest(j,"Quá thời gian đi/nhận nhiệm vụ; kiểm tra game");return;}
             if(now<j.QuestRetryAt&&j.QuestPhase!=1)return;j.QuestInFlight=false;
-            if(j.QuestPhase==0){j.QuestHadTask=present;j.QuestWasDone=done;j.QuestReturn=!present||done||(j.BeastQuestEnabled&&!j.BeastTeamStarted);j.GameAutoManaged=true;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestStatus=j.QuestReturn?(j.BeastQuestEnabled?"Linh thú: cả nhóm về Rasa":"Tắt treo; quay về Mei Terumi"):"Đi tới quái của nhiệm vụ";j.QuestAt=now;QuestSend(r,data,j,j.QuestReturn?1:2);j.QuestPhase=1;return;}
-            if(j.QuestPhase==1){if(route)return;if(j.QuestReturn&&BitConverter.ToInt32(b,80)>=0&&BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,80)){if(now>=j.QuestRetryAt)QuestSend(r,data,j,1);return;}if(!j.QuestReturn&&present&&BitConverter.ToInt32(b,76)>=0&&BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,76)){if(now>=j.QuestRetryAt)QuestSend(r,data,j,2);return;}if(ack&&result!=1){j.QuestPhase=0;return;}if(j.QuestReturn){if(j.BeastQuestEnabled){if(!BeastPartyReady(j,true)){j.QuestAt=now;j.QuestStatus="Linh thú: đợi đủ thành viên đứng gần Rasa • "+j.TeamStatus;return;}j.BeastTeamStarted=true;if(present&&!done){j.QuestReturn=false;QuestSend(r,data,j,2);return;}}QuestSend(r,data,j,3);j.QuestPhase=2;j.QuestStatus=j.BeastQuestEnabled?"Trưởng nhóm mở menu Rasa":"Mở menu Mei Terumi";}else{j.QuestPauseAuto=false;j.GameAutoManaged=true;j.GameAutoWanted=false;j.QuestPhase=6;ArmQuestCombat(j);j.QuestRetryAt=DateTime.MinValue;j.QuestStatus="Treo đánh quái; đợi nhiệm vụ hoàn thành";}return;}
+            if(j.QuestPhase==0){j.QuestHadTask=present;j.QuestWasDone=done;j.QuestReturn=!present||done||(j.BeastQuestEnabled&&!j.BeastTeamStarted);j.GameAutoManaged=true;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestStatus=j.QuestReturn?(j.BeastQuestEnabled?"Linh thú: cả nhóm về Rasa":"Tắt treo; quay về Mei Terumi"):"Đi tới quái của nhiệm vụ";j.QuestAt=now;if(!(j.BeastQuestEnabled&&j.QuestReturn&&j.BeastNearRasa))QuestSend(r,data,j,j.QuestReturn?1:2);j.QuestPhase=1;return;}
+            if(j.QuestPhase==1){if(route)return;if(j.QuestReturn&&!(j.BeastQuestEnabled&&j.BeastNearRasa)&&BitConverter.ToInt32(b,80)>=0&&BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,80)){if(now>=j.QuestRetryAt)QuestSend(r,data,j,1);return;}if(!j.QuestReturn&&present&&BitConverter.ToInt32(b,76)>=0&&BitConverter.ToInt32(b,72)!=BitConverter.ToInt32(b,76)){if(now>=j.QuestRetryAt)QuestSend(r,data,j,2);return;}if(ack&&result!=1){j.QuestPhase=0;return;}if(j.QuestReturn){if(j.BeastQuestEnabled){if(!BeastPartyReady(j,true)){j.QuestAt=now;j.QuestStatus="Linh thú: đợi đủ thành viên đứng gần Rasa • "+j.TeamStatus;return;}j.BeastTeamStarted=true;if(present&&!done){j.QuestReturn=false;QuestSend(r,data,j,2);return;}}QuestSend(r,data,j,3);j.QuestPhase=2;j.QuestStatus=j.BeastQuestEnabled?"Trưởng nhóm mở menu Rasa":"Mở menu Mei Terumi";}else{j.QuestPauseAuto=false;j.GameAutoManaged=true;j.GameAutoWanted=false;j.QuestPhase=6;ArmQuestCombat(j);j.QuestRetryAt=DateTime.MinValue;j.QuestStatus="Treo đánh quái; đợi nhiệm vụ hoàn thành";}return;}
             if(j.QuestPhase==2){if(ack&&result==1){QuestSend(r,data,j,4);j.QuestPhase=3;}else{QuestSend(r,data,j,1);j.QuestPhase=1;j.QuestStatus=j.BeastQuestEnabled?"Chưa mở được menu Rasa; thử lại":"Chưa gặp Mei; thử lại đường về trả nhiệm vụ";}return;}
             if(j.QuestPhase==3){if(j.BeastQuestEnabled&&present&&!done){j.QuestPhase=0;j.QuestAt=now;j.QuestStatus="Đã có nhiệm vụ linh thú; giữ nguyên nhiệm vụ và đi cùng nhóm";return;}bool turnIn=present&&done;if(j.BeastQuestEnabled&&!BeastPartyReady(j,true)){j.QuestPhase=0;j.QuestAt=now;j.QuestStatus="Linh thú: nhóm chưa đủ thành viên gần Rasa";return;}QuestSend(r,data,j,turnIn?7:5);j.QuestPhase=4;j.QuestStatus=j.BeastQuestEnabled?(turnIn?"Rasa → Nhiệm vụ thu phục mãnh thú → Hoàn Thành":"Rasa → Nhiệm vụ thu phục mãnh thú → Nhận"):(turnIn?"Chọn Hoàn Thành để trả nhiệm vụ":"Chọn Nhận nhiệm vụ tuần hoàn");return;}
             if(j.QuestPhase==4){if(ack&&result==1){j.QuestPhase=j.QuestCommand==7?7:5;j.QuestAt=now;j.QuestStatus=j.QuestCommand==7?"Đợi server xác nhận trả nhiệm vụ":"Đợi server cập nhật nhiệm vụ";}else{QuestSend(r,data,j,4);j.QuestPhase=3;}return;}
@@ -1801,7 +1809,7 @@ namespace TGLL {
                 if(levelOne)j.LevelOneNextAt=DateTime.UtcNow.AddMilliseconds(overlay?10:500);
                 if(overlay){j.HangingAwaiting=true;j.HangingRequests++;if((DateTime.UtcNow-j.HangingRequestLogAt).TotalSeconds>=1){j.HangingRequestLogAt=DateTime.UtcNow;Log(j,"hanging_skill_requested",",\"skill_id\":"+j.TrainSkillId+",\"interval_ms\":10,\"requests\":"+j.HangingRequests);}}
                 r.Write(data+88,BitConverter.GetBytes(overlay?1:0));
-                r.Write(data+80,BitConverter.GetBytes(j.QuestEnabled?1:0));r.Write(data+16,BitConverter.GetBytes(j.TrainSkillId));r.Write(data+12,BitConverter.GetBytes((focus?!j.GameAutoEnabled&&j.ThiQuyPriorityArmed&&(!j.FarmEnabled||j.FarmArrived||j.ThiQuyFarmPaused):(overlay||j.TrainEnabled&&(!j.QuestEnabled||j.QuestPhase==6&&!j.GameAutoEnabled)))&&!j.ReceiveFlowActive&&!j.ReconnectRequested&&!j.CloseRequested&&!j.CancelRequested&&!j.CloakEnabled&&(!UsesInstanceGameCombat(j)||overlay||focus)&&!DungeonEntryBlocked(j)&&!j.QuestPauseAuto&&!(j.ZoneSyncActive||j.FollowActive&&(j.FollowDistance<0||j.FollowDistance>48))?1:0));r.Write(data,BitConverter.GetBytes(1));j.SkillScanRequested=j.Skills.Length==0;
+                r.Write(data+80,BitConverter.GetBytes(j.QuestEnabled?(j.BeastQuestEnabled?2:1):0));r.Write(data+16,BitConverter.GetBytes(j.TrainSkillId));r.Write(data+12,BitConverter.GetBytes((focus?!j.GameAutoEnabled&&j.ThiQuyPriorityArmed&&(!j.FarmEnabled||j.FarmArrived||j.ThiQuyFarmPaused):(overlay||j.TrainEnabled&&(!j.QuestEnabled||j.QuestPhase==6&&!j.GameAutoEnabled)))&&!j.ReceiveFlowActive&&!j.ReconnectRequested&&!j.CloseRequested&&!j.CancelRequested&&!j.CloakEnabled&&(!UsesInstanceGameCombat(j)||overlay||focus)&&!DungeonEntryBlocked(j)&&!j.QuestPauseAuto&&!(j.ZoneSyncActive||j.FollowActive&&(j.FollowDistance<0||j.FollowDistance>48))?1:0));r.Write(data,BitConverter.GetBytes(1));j.SkillScanRequested=j.Skills.Length==0;
             }
             else {r.Write(data+12,new byte[4]);j.TrainIdleApplied=true;}
         }
@@ -2094,7 +2102,7 @@ namespace TGLL {
             QueueZone(r,data,j,2,target);return true;
         }
         static void PumpZones(Remote r,long game,long data,NativeJob j){
-            if(j.BeastQuestEnabled){PumpBeastZones(r,data,j);return;}
+            if(j.BeastQuestEnabled){PumpBeastZones(r,game,data,j);return;}
             if(j.SonCapEnabled&&j.SonCapStage>=0){j.ZoneSyncActive=false;return;}
             if(j.FarmEnabled&&j.FarmQuietZone&&j.FarmZoneWaiting){PumpFarmZones(r,game,data,j);return;}
             if(j.QuestEnabled){j.ZoneSyncActive=false;return;}
@@ -3858,10 +3866,12 @@ namespace TGLL {
 
 namespace TGLL {
  public sealed partial class NativeJob {
-  public volatile bool BeastQuestEnabled,BeastNearRasa,BeastTeamStarted;
+  public volatile bool BeastQuestEnabled,BeastNearRasa,BeastTeamStarted,BeastQuietReady;
   public volatile int BeastX,BeastY;
   internal int BeastFollowerMode=-1;
   internal DateTime BeastRouteAt;
+  internal string BeastWaitReason="";
+  internal long BeastRasaMenu;internal int BeastRasaTag,BeastRasaX,BeastRasaY;
  }
  public static partial class NativeBackend {
   internal static bool IsBeastLeader(NativeJob j){return j.TeamJobIds.Length>=1&&j.TeamJobIds.Length<=6&&j.TeamJobIds[0]==j.Id;}
@@ -3872,15 +3882,16 @@ namespace TGLL {
     if(j.ReceiveFlowActive||j.MailBusy||j.InboxBusy||j.MailEnabled||j.MailQueueOnly||j.CloakQueueOnly||j.SonCapEnabled)throw new Exception("Dừng hoạt động cũ trước khi chạy linh thú.");
     if(j.DailyManaged)CancelDailyPriority(j);StopFarm(j);
     SetAutoQuest(id,false);SetReceiveKey(id,false);SetDungeonHigh(id,false);SetIzanami(id,false);j.CloseAfterKey=false;j.DungeonQueueOnly=false;j.IzanamiQueueOnly=false;j.QuestQueueOnly=true;
-    SetAutoQuest(id,true);j.BeastTeamStarted=false;j.BeastFollowerMode=-1;j.QuestRemaining=-1;j.QuestStatus="Linh thú: về Rasa, lập nhóm theo danh sách đã chọn";
+    SetAutoQuest(id,true);ResetBeastZones(j);j.BeastTeamStarted=false;j.BeastFollowerMode=-1;j.QuestRemaining=-1;j.QuestStatus="Linh thú: về Rasa, lập nhóm theo danh sách đã chọn";
    }else{j.QuestQueueOnly=false;j.QuestEnabled=false;j.QuestFinished=false;j.QuestPauseAuto=false;j.TrainEnabled=false;j.GameAutoWanted=false;j.QuestStatus="Đã dừng linh thú";}
    j.BeastQuestEnabled=enabled;j.TeamConfirmed=false;j.BeastNearRasa=false;Log(j,"beast_configured",",\"enabled\":"+(enabled?"true":"false"));
   }
   public static void ConfigureBeastTeam(string[] ids){
    if(ids==null||ids.Length<1||ids.Length>6||ids.Distinct().Count()!=ids.Length||ids.Any(x=>String.IsNullOrEmpty(x)))throw new Exception("Nhóm linh thú cần từ 1 đến 6 tài khoản khác nhau.");
    foreach(string id in ids){NativeJob j=Get(id);if(j==null)throw new Exception("Chờ đủ phiên game trong nhóm.");}
-   foreach(string id in ids){NativeJob j=Get(id);if(!j.BeastQuestEnabled)SetAutoBeast(id,true);if(!j.TeamManaged||!j.TeamJobIds.SequenceEqual(ids)){j.TeamJobIds=(string[])ids.Clone();j.TeamManaged=true;j.TeamConfirmed=false;j.TeamAttempts=0;j.TeamTarget="";j.TeamAttemptCommand=0;j.TeamFriendRequested=false;j.TeamAcceptedPopup=0;j.BeastTeamStarted=false;}}
+   foreach(string id in ids){NativeJob j=Get(id);if(!j.BeastQuestEnabled)SetAutoBeast(id,true);if(!j.TeamManaged||!j.TeamJobIds.SequenceEqual(ids)){j.TeamJobIds=(string[])ids.Clone();j.TeamManaged=true;j.TeamConfirmed=false;j.TeamAttempts=0;j.TeamTarget="";j.TeamAttemptCommand=0;j.TeamFriendRequested=false;j.TeamAcceptedPopup=0;j.BeastTeamStarted=false;ResetBeastZones(j);}}
   }
+  internal static bool ShouldCloseBeastRasaMenu(NativeJob j){return !IsBeastLeader(j)||j.QuestPhase==0||j.QuestPhase==1||j.QuestPhase==6;}
   internal static bool BeastPartyReady(NativeJob j,bool nearRasa){
    if(j==null||!j.BeastQuestEnabled||(j.TeamJobIds.Length<1||j.TeamJobIds.Length>6))return false;
    NativeJob[] peers=j.TeamJobIds.Select(id=>Get(id??"")).ToArray();
@@ -3888,17 +3899,20 @@ namespace TGLL {
    string[] names=peers.Select(p=>p.CharacterName).ToArray();
    if(names.Distinct().Count()!=peers.Length)return false;
    if(peers.Length==1){if(peers[0].TeamMembers.Length>0&&!SameParty(peers[0].TeamMembers,names))return false;}else if(peers.Any(p=>!SameParty(p.TeamMembers,names)))return false;
-   return !nearRasa||peers.All(p=>p.BeastNearRasa&&p.MapId==peers[0].MapId&&p.ZoneId==peers[0].ZoneId&&!p.ZoneSyncActive);
+   return !nearRasa||peers[0].BeastQuietReady&&peers.All(p=>p.BeastNearRasa&&p.MapId==peers[0].MapId&&p.ZoneId==peers[0].ZoneId&&!p.ZoneSyncActive);
   }
   static void PumpBeastParty(Remote r,long game,long data,NativeJob j,long fc,long player,long stat,long party,DateTime now){
-   j.BeastX=BitConverter.ToInt16(r.Read(player+16,2),0);j.BeastY=BitConverter.ToInt16(r.Read(player+18,2),0);j.BeastNearRasa=false;
+   j.BeastX=BitConverter.ToInt16(r.Read(player+16,2),0);j.BeastY=BitConverter.ToInt16(r.Read(player+18,2),0);j.BeastNearRasa=false;j.BeastRasaMenu=0;
    long npcClass=ResolvedClass(r,game+0x16ee910);
-   foreach(long npc in ReadVector(r,r.Ptr(fc+0x158))){if(npc!=0&&r.Ptr(npc)==npcClass&&BitConverter.ToInt16(r.Read(npc+80,2),0)==98){int x=BitConverter.ToInt16(r.Read(npc+16,2),0),y=BitConverter.ToInt16(r.Read(npc+18,2),0);j.BeastNearRasa=Math.Abs(x-j.BeastX)<=120&&Math.Abs(y-j.BeastY)<=100;break;}}
+   foreach(long npc in ReadVector(r,r.Ptr(fc+0x158))){if(npc!=0&&r.Ptr(npc)==npcClass&&BitConverter.ToInt16(r.Read(npc+80,2),0)==98){int x=BitConverter.ToInt16(r.Read(npc+16,2),0),y=BitConverter.ToInt16(r.Read(npc+18,2),0);j.BeastRasaX=x;j.BeastRasaY=y;j.BeastNearRasa=Math.Abs(x-j.BeastX)<=120&&Math.Abs(y-j.BeastY)<=100;
+    long popup=r.Ptr(fc+0x90);int tag=BitConverter.ToInt32(r.Read(npc+56,4),0);if(popup!=0&&r.Ptr(popup)==ResolvedClass(r,game+0x16efe08)&&BitConverter.ToInt32(r.Read(popup+0xdc,4),0)==tag&&Array.IndexOf(ReadVector(r,r.Ptr(fc+0x88)),popup)>=0){j.BeastRasaMenu=popup;j.BeastRasaTag=tag;}break;}}
    j.TeamConfirmed=BeastPartyReady(j,false);
-   if(j.TeamConfirmed){j.TeamStatus="Đủ nhóm "+j.TeamJobIds.Length+"/"+j.TeamJobIds.Length+" • "+(j.BeastNearRasa?"đang gần Rasa":"đi theo trưởng nhóm");return;}
+   if(j.TeamConfirmed&&Get(j.TeamJobIds[0]).BeastQuietReady){NativeJob leader=Get(j.TeamJobIds[0]);if((!leader.BeastTeamStarted||leader.QuestReturn)&&!BeastPartyReady(j,true))j.TeamStatus=BeastGatherWait(j.TeamJobIds.Select(id=>Get(id??"")).ToArray());else j.TeamStatus="Đủ nhóm "+j.TeamJobIds.Length+"/"+j.TeamJobIds.Length+" • "+(j.BeastNearRasa?"đang gần Rasa":"đi theo trưởng nhóm");return;}
    if((j.TeamJobIds.Length<1||j.TeamJobIds.Length>6)){j.TeamStatus="Chờ các tài khoản trong nhóm theo thứ tự đã chọn";return;}
    NativeJob[] peers=j.TeamJobIds.Select(id=>Get(id??"")).ToArray();
-   if(peers.Any(p=>!TeamLive(p)||!p.BeastQuestEnabled||!p.BeastNearRasa)||!TeamTogether(peers)){j.TeamStatus="Chờ "+peers.Length+" người đứng gần Rasa, cùng map/khu";return;}
+   if(!TeamLive(peers[0])||!peers[0].BeastQuietReady||peers.Any(p=>!TeamLive(p)||!p.BeastQuestEnabled||!p.BeastNearRasa)||!TeamTogether(peers)){
+    string reason=BeastGatherWait(peers);j.TeamStatus=reason;if(reason!=j.BeastWaitReason){j.BeastWaitReason=reason;Log(j,"beast_gather_wait",",\"reason\":"+Quote(reason));}return;
+   }j.BeastWaitReason="";
    string[] names=peers.Select(p=>p.CharacterName).ToArray();if(names.Distinct().Count()!=peers.Length){j.TeamStatus="Tên nhân vật trùng trong nhóm";return;}
    if(j.TeamMembers.Length>0&&(j.TeamMembers[0]!=names[0]||j.TeamMembers.Any(n=>Array.IndexOf(names,n)<0))){j.TeamStatus="Đang ở nhóm khác; hãy rời nhóm cũ";return;}
    int state=BitConverter.ToInt32(r.Read(data,4),0);if(state>0&&state<6)return;
@@ -3913,16 +3927,47 @@ namespace TGLL {
    int command=PlanTeamPreparation(j,target,Array.IndexOf(j.Friends,target)>=0,now);if(command<=0){j.TeamStatus="Đợi xác nhận đủ thành viên trong nhóm";return;}
    TeamCommand(r,data,j,command,target=="@create"?"":target);RecordTeamPreparation(j,command);j.TeamStatus="Lập nhóm: "+j.TeamMembers.Length+"/"+peers.Length+" • "+target;
   }
-  static void PumpBeastZones(Remote r,long data,NativeJob j){
+  static void ResetBeastZones(NativeJob j){j.BeastQuietReady=false;j.ZonePrepared=false;j.ZonePlanMap=-1;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;j.ZonePollAt=DateTime.MinValue;}
+  internal static string BeastGatherWait(NativeJob[] peers){
+   if(peers.Length==0||!TeamLive(peers[0]))return "Linh thú: chờ trưởng nhóm online";
+   NativeJob leader=peers[0];if(!leader.BeastNearRasa)return "Chờ "+leader.CharacterName+" tới Rasa";
+   if(!leader.BeastQuietReady)return "Linh thú: "+leader.CharacterName+" chọn khu ít người • "+leader.ZoneStatus;
+   foreach(NativeJob p in peers){string name=p==null?"thành viên":p.CharacterName;if(!TeamLive(p)||!p.BeastQuestEnabled)return "Chờ "+name+" online";if(p.MapId!=leader.MapId)return "Chờ "+name+" về map "+leader.MapId;if(p.ZoneId!=leader.ZoneId||p.ZoneSyncActive)return "Chờ "+name+" sang khu "+leader.ZoneId;if(!p.BeastNearRasa)return "Chờ "+name+" đứng gần Rasa";}
+   return "Đợi xác nhận nhóm tại Rasa";
+  }
+  internal static void PumpBeastQuietZone(Remote r,long game,long data,NativeJob j,int state,DateTime now){
+   j.ZoneSyncActive=true;j.ZonePrepared=false;
+   if(!j.BeastNearRasa){j.ZoneStatus="Tới Rasa trước khi chọn khu";return;}
+   if(j.ZonePlanMap!=j.MapId){j.ZonePlanMap=j.MapId;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;}
+   if(j.PlannedZone<0){
+    j.ZoneStatus="Linh thú: đọc số người từng khu";
+    if(j.ZoneListWaiting){long popup=ZonePopup(r,game);if(popup!=0&&popup==r.Ptr(data+32)&&r.Ptr(popup+0xe8)!=r.Ptr(data+24)){
+     long array=r.Ptr(popup+0xe8);int length=array==0?0:BitConverter.ToInt32(r.Read(array+24,4),0);if(length<1||length>256)throw new Exception("zone_list_invalid");
+     int[] ids=new int[length],counts=new int[length];for(int n=0;n<length;n++){long item=r.Ptr(array+32+n*8);if(item==0)throw new Exception("zone_list_changed");ids[n]=n;counts[n]=BitConverter.ToInt32(r.Read(item+16,4),0);}
+     if(r.Ptr(popup+0xe8)!=array||ZonePopup(r,game)!=popup)throw new Exception("zone_list_changed");j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new Exception("zone_list_invalid");j.ZoneListWaiting=false;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;Log(j,"beast_quiet_zone_chosen",",\"map\":"+j.MapId+",\"zone\":"+j.PlannedZone);
+    }else if((now-j.ZoneActionAt).TotalSeconds<10)return;else j.ZoneListWaiting=false;}
+    if(j.PlannedZone<0){if(j.ZoneAttempts>=3){j.ZoneStatus="Chưa đọc được khu; đợi 30 giây thử lại";if((now-j.ZoneActionAt).TotalSeconds<30)return;j.ZoneAttempts=0;}QueueZone(r,data,j,1,-1);j.ZoneListWaiting=true;return;}
+   }
+   if(j.ZoneId==j.PlannedZone&&state==4&&j.ZoneAttempts>0){j.BeastQuietReady=true;j.ZonePrepared=true;j.ZoneSyncActive=false;j.ZoneStatus="Linh thú: đã chọn khu ít người "+j.ZoneId;Log(j,"beast_quiet_zone_ready",",\"map\":"+j.MapId+",\"zone\":"+j.ZoneId);return;}
+   j.ZoneStatus="Linh thú: chuyển sang khu ít người "+j.PlannedZone+"; đợi server xác nhận";
+   if((now-j.ZoneActionAt).TotalSeconds<8)return;
+   if(j.ZoneAttempts>=3){if((now-j.ZoneActionAt).TotalSeconds<30)return;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;return;}
+   QueueZone(r,data,j,2,j.PlannedZone);
+  }
+  internal static void PumpBeastZones(Remote r,long game,long data,NativeJob j){
    DateTime now=DateTime.UtcNow;if((now-j.ZonePollAt).TotalMilliseconds<750)return;j.ZonePollAt=now;
    NativeJob leader=(j.TeamJobIds.Length>=1&&j.TeamJobIds.Length<=6)?Get(j.TeamJobIds[0]):null;
    if(!TeamLive(j)||!TeamLive(leader)||!leader.BeastQuestEnabled){j.ZoneSyncActive=false;return;}
-   if(j.Id==leader.Id){j.ZonePrepared=true;j.ZoneSyncActive=false;return;}
-   if(j.MapId!=leader.MapId){j.ZoneSyncActive=false;return;}
-   if(j.ZoneId==leader.ZoneId){j.ZonePrepared=true;j.ZoneSyncActive=false;return;}
-   j.ZoneSyncActive=true;j.ZoneStatus="Linh thú: theo khu "+leader.ZoneId+" của "+leader.CharacterName;
-   int state=BitConverter.ToInt32(r.Read(data,4),0);if(state>=1&&state<=3)return;
-   if((now-j.ZoneActionAt).TotalSeconds>=8)QueueZone(r,data,j,2,leader.ZoneId);
+   try{
+    int state=BitConverter.ToInt32(r.Read(data,4),0);if(state>=1&&state<=3){j.ZoneSyncActive=true;return;}
+    if(j.Id==leader.Id){if(j.BeastQuietReady){j.ZonePrepared=true;j.ZoneSyncActive=false;return;}PumpBeastQuietZone(r,game,data,j,state,now);return;}
+    if(j.MapId!=leader.MapId){j.ZoneSyncActive=false;j.ZonePrepared=false;return;}
+    if(!leader.BeastQuietReady){j.ZoneSyncActive=true;j.ZonePrepared=false;j.ZoneStatus="Linh thú: đợi trưởng nhóm chọn khu ít người";return;}
+    if(j.ZoneId==leader.ZoneId){j.ZonePrepared=true;j.ZoneSyncActive=false;return;}
+    j.ZonePrepared=false;j.ZoneSyncActive=true;j.ZoneStatus="Linh thú: theo khu "+leader.ZoneId+" của "+leader.CharacterName;
+    if(j.PlannedZone!=leader.ZoneId||j.ZonePlanMap!=j.MapId){j.PlannedZone=leader.ZoneId;j.ZonePlanMap=j.MapId;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;}
+    if((now-j.ZoneActionAt).TotalSeconds>=(j.ZoneAttempts>=3?30:8))QueueZone(r,data,j,2,leader.ZoneId);
+   }catch(Exception e){j.ZoneSyncActive=true;j.ZoneStatus="Linh thú: chưa đồng bộ khu • "+e.Message;}
   }
   static void PumpBeastFollower(Remote r,long data,NativeJob j,byte[] b){
    NativeJob leader=(j.TeamJobIds.Length>=1&&j.TeamJobIds.Length<=6)?Get(j.TeamJobIds[0]):null;j.GameAutoManaged=true;j.GameAutoWanted=false;j.TrainEnabled=false;j.QuestPauseAuto=true;
@@ -3944,7 +3989,7 @@ namespace TGLL {
      if(!route&&now>=j.QuestRetryAt&&(now-j.BeastRouteAt).TotalSeconds>=3){r.Write(data+96,BitConverter.GetBytes(leader.MapId));r.Write(data+100,BitConverter.GetBytes(leader.BeastX));r.Write(data+104,BitConverter.GetBytes(leader.BeastY));QuestSend(r,data,j,8);j.BeastRouteAt=now;j.BeastFollowerMode=3;}return;
     }
     j.QuestStatus="Linh thú: đứng gần Rasa, đợi trưởng nhóm";
-    if(!j.BeastNearRasa&&!route&&now>=j.QuestRetryAt){QuestSend(r,data,j,1);j.BeastFollowerMode=1;}return;
+    if(!j.BeastNearRasa&&!route&&now>=j.QuestRetryAt){r.Write(data+96,BitConverter.GetBytes(leader.MapId));r.Write(data+100,BitConverter.GetBytes(leader.BeastRasaX));r.Write(data+104,BitConverter.GetBytes(leader.BeastRasaY));QuestSend(r,data,j,8);j.BeastFollowerMode=3;}return;
    }
    j.QuestReturn=false;
    if(j.ZoneSyncActive){j.QuestStatus=j.ZoneStatus;return;}
