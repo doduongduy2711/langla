@@ -124,6 +124,7 @@ function Start-FarmAllOpen {
     }finally{$script:deferAccountSave=$upPreviousSave;if(!$UiTest -and !$upPreviousSave -and $script:accountSavePending){$script:accountSavePending=$false;Save-Accounts}}
 }
 function Sync-FarmUpRow($row) {
+    if($row.Tag -and (Get-Command Get-AutoAllStage -ErrorAction SilentlyContinue) -and (Get-AutoAllStage ([string]$row.Tag.id))){$row.Cells['up'].ToolTipText='Tạm ngưng Up để chạy Auto tất cả';return}
     if($row.Tag -and $script:accountJobs.ContainsKey([string]$row.Tag.id)){$bj=Get-AccountJob $script:accountJobs[[string]$row.Tag.id];if($bj -is [TGLL.NativeJob] -and $bj.BeastQuestEnabled){return}}
     if($null -eq $row.Tag){return};$key=[string]$row.Tag.id;$j=$null
     if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
@@ -172,6 +173,7 @@ $deleteFarm=Ui-NewButton 'Xóa bãi' {if($farmGrid.SelectedRows.Count){$s=$farmG
 $farmQuiet=New-Object Windows.Forms.CheckBox;$farmQuiet.Text='Chọn khu ít người khi tới bãi và mỗi 5 phút';$farmQuiet.Checked=$true;$farmQuiet.SetBounds(16,102,420,25);$farmPage.Controls.Add($farmQuiet)
 $dailyPriority=New-Object Windows.Forms.CheckBox;$dailyPriority.Text='Lặp lại sau 00:00: nhận chìa → địa cung → cấm thuật → nhiệm vụ → Sơn Cáp → Up';$dailyPriority.SetBounds(16,188,625,27);$dailyPriority.Checked=if($script:settings.ContainsKey('dailyPriority')){[bool]$script:settings.dailyPriority}else{$true};$farmPage.Controls.Add($dailyPriority)
 function Sync-DailyPriorityPreferences {
+    if($script:autoAllRun -and $script:autoAllRun.active){return}
     foreach($row in $grid.Rows){$key=[string]$row.Tag.id;if(!$script:farmUpRequests.ContainsKey($key) -or !$script:accountJobs.ContainsKey($key)){continue};$j=Get-AccountJob $script:accountJobs[$key];if(!$j -or !($j -is [TGLL.NativeJob]) -or !$j.DailyManaged){continue};[TGLL.NativeBackend]::ConfigureUpActivities($j.Id,$dailyPriority.Checked,[bool]$row.Tag.receiveKey,[bool]$row.Tag.dungeonHigh,[bool]$row.Tag.izanami,[bool]$row.Tag.autoQuest,[bool]$row.Tag.soncap)}
     [TGLL.NativeBackend]::ConfigureUpActivityTeams((Get-UpActivityGroups 'izanami' ([int]$izanamiGroupSize.Value)),(Get-UpActivityGroups 'soncap' 6))
     [TGLL.NativeBackend]::DailyDungeonLimit=[int]$dungeonMax.Value;[TGLL.NativeBackend]::DailyIzanamiLimit=[int]$izanamiMax.Value;[TGLL.NativeBackend]::DailyQuestLimit=[int]$questMax.Value;[TGLL.NativeBackend]::DailySonCapLimit=[int]$soncapMax.Value

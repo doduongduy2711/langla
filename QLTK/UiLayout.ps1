@@ -70,12 +70,13 @@ $summaryLabel=Ui-Label '' $basic 12 19 190 57
 $clearUpAllButton=Ui-NewButton 'Bỏ chọn Up all' {Clear-FarmAllUp};Ui-Place $clearUpAllButton $basic 12 81 183 24
 $options=Ui-Group 'Tùy chọn' $form
 Ui-Place $autoLoginCheck $options 12 19 170 22
+$autoLoginCheck.Checked=$true;$autoLoginCheck.Enabled=$false
 Ui-Place $show $options 190 19 145 22
 $optionHint=Ui-Label 'Nhận chìa: bật trong tab Auto địa cung' $options 12 42 365 20
 $optionHint.ForeColor=[Drawing.Color]::FromArgb(65,65,65)
 $optionHint.Visible=$false
 $autoReconnect=New-Object Windows.Forms.CheckBox;$autoReconnect.Text='Tự đăng nhập lại khi mất kết nối';$autoReconnect.SetBounds(12,40,365,22)
-$autoReconnect.Checked=if($script:settings.ContainsKey('autoReconnect')){[bool]$script:settings.autoReconnect}else{$true}
+$autoReconnect.Checked=$true;$autoReconnect.Enabled=$false;$script:settings.autoReconnect=$true
 $options.Controls.Add($autoReconnect);[TGLL.NativeBackend]::AutoReconnectEnabled=$autoReconnect.Checked
 $autoReconnect.Add_CheckedChanged({[TGLL.NativeBackend]::AutoReconnectEnabled=$autoReconnect.Checked;$script:settings.autoReconnect=$autoReconnect.Checked;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}})
 
@@ -340,6 +341,7 @@ Resize-UiLayout;Update-UiSummary
 
 
 . (Join-Path $PSScriptRoot 'MarketUi.ps1')
+. (Join-Path $PSScriptRoot 'AutoAllUi.ps1')
 
 foreach($page in $tabs.TabPages){$page.AutoScroll=$true}
 $grid.Columns['password'].Visible=$show.Checked

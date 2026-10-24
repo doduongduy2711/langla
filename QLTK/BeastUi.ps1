@@ -93,8 +93,9 @@ function Pump-BeastQueue {
 }
 function Sync-BeastPreferences {
  foreach($a in $script:accounts){
-  if(!$a.PSObject.Properties['autoBeast']){continue}
-  $key=[string]$a.id;$wanted=[bool]$a.autoBeast;$j=$null
+  $all='';if(Get-Command Get-AutoAllStage -ErrorAction SilentlyContinue){$all=Get-AutoAllStage ([string]$a.id)}
+  if(!$all -and !$a.PSObject.Properties['autoBeast']){continue}
+  $key=[string]$a.id;$wanted=if($all){$all -eq 'beast'}else{[bool]$a.autoBeast};$j=$null
   if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
   $signature=$(if($j){$j.Id}else{''})+':'+$wanted
   if($script:beastApplied[$key] -eq $signature){continue}

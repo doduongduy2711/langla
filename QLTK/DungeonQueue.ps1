@@ -10,7 +10,7 @@ function Start-DungeonMember($member) {
     if(!$a){throw 'Tài khoản trong hàng chờ đã bị xóa.'}
     if(Test-AccountOpenBlocked $a){
         if(!$script:accountJobs.ContainsKey($member.id)){throw 'Game mở thủ công chưa hỗ trợ tài khoản tự động.'}
-        $member.job=$script:accountJobs[$member.id];$j=Get-AccountJob $member.job;$j.DungeonQueueOnly=$true;$j.QuestQueueOnly=$false;$j.IzanamiQueueOnly=$false;[TGLL.NativeBackend]::SetAutoQuest($member.job,$false);[TGLL.NativeBackend]::SetIzanami($member.job,$false);[TGLL.NativeBackend]::SetCloseAfterKey($member.job,$false);[TGLL.NativeBackend]::SetReceiveKey($member.job,[bool]$a.receiveKey);[TGLL.NativeBackend]::SetDungeonHigh($member.job,$true);return
+        $member.job=$script:accountJobs[$member.id];$j=Get-AccountJob $member.job;$j.DungeonQueueOnly=$true;$j.QuestQueueOnly=$false;$j.IzanamiQueueOnly=$false;[TGLL.NativeBackend]::SetAutoQuest($member.job,$false);[TGLL.NativeBackend]::SetIzanami($member.job,$false);[TGLL.NativeBackend]::SetCloseAfterKey($member.job,$false);[TGLL.NativeBackend]::SetReceiveKey($member.job,([bool]$a.receiveKey -or ((Get-Command Get-AutoAllStage -ErrorAction SilentlyContinue) -and (Get-AutoAllStage ([string]$a.id)) -eq 'dungeon')));[TGLL.NativeBackend]::SetDungeonHigh($member.job,$true);return
     }
     $script:dungeonLaunchingAccountId=$member.id
     try{Open-Account $a}finally{$script:dungeonLaunchingAccountId=''}
