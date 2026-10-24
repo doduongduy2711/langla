@@ -1024,7 +1024,7 @@ namespace TGLL {
         internal string[] TeamJobIds=new string[0];internal DateTime TeamReadAt=DateTime.MinValue,TeamActionAt=DateTime.MinValue;internal int TeamAttempts,TeamAttemptCommand;internal bool TeamFriendRequested;internal string TeamTarget="";internal bool TeamManaged,TeamConfirmed;internal long TeamAcceptedPopup;
         public volatile bool CloseAfterKey,KeyReceiptPending;internal int KeyReceiptBefore=-1,KeyReceiptLastCount=-1;internal DateTime KeyReceiptAt,KeyReceiptPollAt,KeyBaselineAt;internal string KeyReceiptReadError="";public volatile bool QuestQueueOnly,QuestFinished;public volatile bool QuestEnabled,QuestPauseAuto;public volatile int QuestCompleted,QuestRemaining=-1;public volatile string QuestStatus="Tắt";internal CloseBatchOperation QuestAutoCloseOperation;
         internal bool QuestFaultStopped;internal DateTime QuestSnapshotAt;internal int QuestObservedCount,QuestObservedTotal;
-        internal DateTime ActivityFaultAt,ActivityVillageAt,ActivityCloseAt;internal string ActivityWatchKind="",ActivityProgress="";
+        internal DateTime ActivityFaultAt,ActivityVillageAt,ActivityCloseAt,ActivityHealthyAt;internal string ActivityWatchKind="",ActivityProgress="";
         internal bool ActivityRetryIssued;internal volatile bool ActivityRetryPending;
         public volatile bool ActivityTimeoutClosed;public volatile string ActivityWatchStatus="";
         internal CloseBatchOperation ActivityTimeoutCloseOperation;internal DateTime SonCapReadErrorAt;internal string SonCapReadError="";internal int QuestMobId=-1,QuestKind=-1;internal int QuestPhase,QuestBaseRemaining=-1,QuestCommand;internal bool QuestReturn,QuestHadTask,QuestWasDone,QuestInFlight;internal DateTime QuestAt,QuestRetryAt,QuestBusyAt;internal int QuestBusyRetries;
@@ -3973,7 +3973,7 @@ namespace TGLL {
             if(j.DailyActive&&j.DailyStage>=1&&j.DailyStage<=5)return "daily_wait";
             return "";
         }
-        static void ClearActivityFault(NativeJob j){j.ActivityFaultAt=DateTime.MinValue;j.ActivityRetryIssued=false;j.ActivityRetryPending=false;j.ActivityWatchStatus="";}
+        static void ClearActivityFault(NativeJob j){j.ActivityHealthyAt=DateTime.MinValue;j.ActivityFaultAt=DateTime.MinValue;j.ActivityRetryIssued=false;j.ActivityRetryPending=false;j.ActivityWatchStatus="";}
         internal static string ActivityFaultReason(NativeJob j,string kind,DateTime now){
             if(!j.GameSettingsReady)return "game_not_ready";
             if(j.MapId<0||j.ZoneReadAt==DateTime.MinValue||(now-j.ZoneReadAt).TotalSeconds>=30)return "map_data_unavailable";
@@ -4000,6 +4000,21 @@ namespace TGLL {
             if(kind=="izanami")return j.MapId+":"+j.IzanamiStage+":"+j.IzanamiRoundsCompleted+":"+j.GameAutoEnabled;
             return j.MapId+":"+(kind=="dungeon"?j.GameAutoEnabled.ToString():"");
         }
+        internal static bool IsActivityVillage(int map){return map==59||map==60||map==68||map==69||map==75||map==85||map==102;}
+        internal static bool FreshActivityVillage(NativeJob j,DateTime now){return IsActivityVillage(j.MapId)&&j.ZoneReadAt!=DateTime.MinValue&&(now-j.ZoneReadAt).TotalSeconds>=0&&(now-j.ZoneReadAt).TotalSeconds<5;}
+        static bool ConfirmedActivityHealthy(NativeJob j,string kind,DateTime now){
+            if(!j.GameSettingsReady||j.SettingsReadAt==DateTime.MinValue||(now-j.SettingsReadAt).TotalSeconds>=5||
+               j.ZoneReadAt==DateTime.MinValue||(now-j.ZoneReadAt).TotalSeconds>=5||IsActivityVillage(j.MapId))return false;
+            if(kind=="dungeon")return j.DungeonCycleWaiting&&j.DungeonLeftOrigin&&!j.DungeonStopped&&j.GameAutoEnabled;
+            if(kind=="izanami")return j.MapId==89&&j.GameAutoEnabled;
+            if(kind=="soncap")return Array.IndexOf(SonCapMaps,j.MapId)>=0&&j.SonCapAlive>=0&&j.GameAutoEnabled;
+            return kind=="quest"&&j.QuestPhase==6&&j.TrainEnabled&&j.QuestMobId>=0&&j.QuestKind==1&&
+                   j.QuestSnapshotAt!=DateTime.MinValue&&(now-j.QuestSnapshotAt).TotalSeconds<5;
+        }
+        internal static bool ConfirmActivityCloseMap(NativeJob j,Func<int> read){
+            if(!j.ActivityTimeoutClosed&&(j.CloseRequested||j.CancelRequested||WatchedActivity(j).Length==0))return false;
+            try{return IsActivityVillage(read());}catch{return false;}
+        }
         public static void PulseActivityWatchdog(){PulseActivityWatchdog(DateTime.UtcNow,null);}
         internal static void PulseActivityWatchdog(DateTime now,Action<NativeJob> close){foreach(NativeJob j in jobs.Values)ObserveActivityWatchdog(j,now,close);}
         internal static void ObserveActivityWatchdog(NativeJob j,DateTime now,Action<NativeJob> close){
@@ -4016,36 +4031,73 @@ namespace TGLL {
             if(kind.Length==0){ClearActivityFault(j);j.ActivityVillageAt=DateTime.MinValue;j.ActivityWatchKind="";return;}
             bool fresh=j.MapId>=0&&j.ZoneReadAt!=DateTime.MinValue&&(now-j.ZoneReadAt).TotalSeconds<5;
             if(fresh){
-                if(j.MapId==59){if(j.ActivityVillageAt==DateTime.MinValue)j.ActivityVillageAt=now;}
+                if(IsActivityVillage(j.MapId)){if(j.ActivityVillageAt==DateTime.MinValue)j.ActivityVillageAt=now;}
                 else j.ActivityVillageAt=DateTime.MinValue;
             }
             string progress=ActivityProgressKey(j,kind),reason=ActivityFaultReason(j,kind,now);
             bool changed=j.ActivityWatchKind!=kind||j.ActivityProgress!=progress;
-            // Changing the selected activity does not extend a continuous stay in Sand village.
+            // Changing the selected activity does not extend a continuous stay in a village.
             if(j.ActivityWatchKind!=kind)ClearActivityFault(j);
             j.ActivityWatchKind=kind;j.ActivityProgress=progress;
-            if(reason.Length>0){if(j.ActivityFaultAt==DateTime.MinValue)j.ActivityFaultAt=now;}
-            else if(j.ActivityFaultAt!=DateTime.MinValue&&changed)ClearActivityFault(j);
+            if(reason.Length>0){j.ActivityHealthyAt=DateTime.MinValue;if(j.ActivityFaultAt==DateTime.MinValue){
+                j.ActivityFaultAt=now;Log(j,"activity_watchdog_fault",",\"activity\":"+Quote(kind)+",\"reason\":"+Quote(reason)+",\"map\":"+j.MapId+",\"settings_error\":"+Quote(j.SettingsError));
+            }}
+            else if(j.ActivityFaultAt!=DateTime.MinValue){
+                if(changed)ClearActivityFault(j);
+                else if(ConfirmedActivityHealthy(j,kind,now)){
+                    if(j.ActivityHealthyAt==DateTime.MinValue)j.ActivityHealthyAt=now;
+                    if((now-j.ActivityHealthyAt).TotalSeconds>=30){Log(j,"activity_watchdog_recovered",",\"activity\":"+Quote(kind));ClearActivityFault(j);}
+                }else j.ActivityHealthyAt=DateTime.MinValue;
+            }
             DateTime since=j.ActivityFaultAt;
             if(j.ActivityVillageAt!=DateTime.MinValue&&(since==DateTime.MinValue||j.ActivityVillageAt<since))since=j.ActivityVillageAt;
             if(since==DateTime.MinValue)return;
             double seconds=(now-since).TotalSeconds;
-            string cause=j.ActivityVillageAt==since?"sand_village_wait":reason.Length>0?reason:"awaiting_recovery";
+            string cause=j.ActivityVillageAt==since?"village_wait":reason.Length>0?reason:"awaiting_recovery";
             if(seconds>=600){
-                j.ActivityTimeoutClosed=true;j.ActivityRetryPending=false;
-                j.ActivityWatchStatus="Auto lỗi/chờ quá 10 phút: tắt game";
-                Log(j,"activity_timeout_close",",\"activity\":"+Quote(kind)+",\"reason\":"+Quote(cause)+",\"elapsed_seconds\":"+(int)seconds);
-                CloseTimedOutActivity(j,now,close);return;
+                if(!FreshActivityVillage(j,now)){
+                    j.ActivityWatchStatus="Auto lỗi/chờ quá 10 phút: giữ game, chưa xác nhận ở map làng";
+                    return;
+                }
+                if(j.ActivityTimeoutCloseOperation!=null&&!j.ActivityTimeoutCloseOperation.Completed)return;
+                if(j.ActivityCloseAt!=DateTime.MinValue&&(now-j.ActivityCloseAt).TotalSeconds<5)return;
+                j.ActivityRetryPending=false;
+                CloseTimedOutActivity(j,now,close,cause,(int)seconds);return;
             }
             if(seconds>=300&&!j.ActivityRetryIssued){
                 j.ActivityRetryIssued=true;j.ActivityRetryPending=true;j.ActivityWatchStatus="Auto lỗi/chờ quá 5 phút: đang chạy lại";
                 Log(j,"activity_timeout_retry",",\"activity\":"+Quote(kind)+",\"reason\":"+Quote(cause)+",\"elapsed_seconds\":"+(int)seconds);
             }
         }
-        static void CloseTimedOutActivity(NativeJob j,DateTime now,Action<NativeJob> close){
-            j.ActivityCloseAt=now;j.CloseRequested=true;j.CancelRequested=true;
-            if(close!=null){j.ActivityTimeoutCloseOperation=new CloseBatchOperation{Completed=true};close(j);}
-            else j.ActivityTimeoutCloseOperation=BeginCloseBatch(new[]{j.Id});
+        static void MarkActivityTimeoutClose(NativeJob j,string cause,int seconds){
+            j.ActivityTimeoutClosed=true;j.ActivityRetryPending=false;
+            j.ActivityWatchStatus="Auto lỗi/chờ quá 10 phút ở map làng: tắt game";
+            Log(j,"activity_timeout_close",",\"activity\":"+Quote(j.ActivityWatchKind)+",\"reason\":"+Quote(cause)+",\"map\":"+j.MapId+",\"elapsed_seconds\":"+seconds);
+        }
+        static void CloseTimedOutActivity(NativeJob j,DateTime now,Action<NativeJob> close,string cause="retry_close",int seconds=600){
+            j.ActivityCloseAt=now;
+            if(close!=null){
+                if(!FreshActivityVillage(j,now))return;
+                MarkActivityTimeoutClose(j,cause,seconds);j.CloseRequested=true;j.CancelRequested=true;
+                j.ActivityTimeoutCloseOperation=new CloseBatchOperation{Completed=true};close(j);return;
+            }
+            var op=new CloseBatchOperation();j.ActivityTimeoutCloseOperation=op;
+            var worker=new Thread(delegate(){try{
+                // Re-read the real game map immediately before closing: the UI snapshot can already be stale.
+                using(Process p=Process.GetProcessById(j.ProcessId))using(var r=new Remote(p)){
+                    long game=0;foreach(ProcessModule m in p.Modules)if(m.ModuleName=="GameAssembly.dll")game=m.BaseAddress.ToInt64();
+                    int map=-1;
+                    if(game==0||!ConfirmActivityCloseMap(j,delegate{map=ReadDungeonMap(r,game);return map;})){
+                        j.ActivityWatchStatus="Chưa xác nhận ở map làng; giữ game";
+                        Log(j,"activity_timeout_close_deferred",",\"map\":"+map);return;
+                    }
+                    j.MapId=map;j.ZoneReadAt=DateTime.UtcNow;MarkActivityTimeoutClose(j,cause,seconds);
+                }
+                op.Failed=CloseGame(j.Id).Failed;
+            }catch(ArgumentException){if(!ManagedGames.IsRunning(j.ProcessId)){j.ActivityTimeoutClosed=true;j.CloseRequested=true;j.CancelRequested=true;}else op.Failed++;}
+             catch{op.Failed++;j.ActivityWatchStatus="Chưa xác nhận/tắt được game; giữ lượt để thử lại";}
+             finally{op.Completed=true;}});
+            worker.IsBackground=true;worker.Start();
         }
         internal static bool PrepareActivityRetry(NativeJob j,DateTime now){
             if(!j.ActivityRetryPending||j.CloseRequested||j.CancelRequested)return false;
