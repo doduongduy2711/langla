@@ -300,7 +300,7 @@ function Open-Account($a,[bool]$reconnect=$false) {
     if((Get-Command Get-QuestQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-QuestQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt nhiệm vụ: '+$a.username;return}
     if((Get-Command Get-BeastQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-BeastQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ linh thú';return}
     if($script:closingAll){$status.Text='Đang tắt tất cả game; đợi đóng xong rồi mở lại.';return}
-    if([bool]$a.soncap -and [string]$script:soncapLaunchingAccountId -ne [string]$a.id -and (Get-Command Add-SonCapQueue -ErrorAction SilentlyContinue)){Add-SonCapQueue @($a);return}
+    if([bool]$a.soncap -and [string]$script:beastLaunchingAccountId -ne [string]$a.id -and [string]$script:soncapLaunchingAccountId -ne [string]$a.id -and (Get-Command Add-SonCapQueue -ErrorAction SilentlyContinue)){Add-SonCapQueue @($a);return}
     if((Get-Command Get-SonCapQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-SonCapQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt Sơn Cáp: '+$a.username;return}
     if((Get-Command Get-IzanamiQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-IzanamiQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt cấm thuật: '+$a.username;return}
     if((Get-Command Get-DungeonQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-DungeonQueuedMember ([string]$a.id))){$status.Text='Tài khoản đang chờ lượt địa cung: '+$a.username;return}

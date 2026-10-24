@@ -47,6 +47,7 @@ function Start-MailCollection {
     if($script:cloakRun -and $script:cloakRun.active){throw 'Dừng hàng mua áo trước khi gom đồ.'}
     if($script:mailRun -and $script:mailRun.active){throw 'Dừng lượt gom đồ hiện tại trước khi bắt đầu lượt mới.'}
     if(!$autoLoginCheck.Checked){throw 'Bật Đăng nhập trực tiếp trước khi chạy hàng chờ gom đồ.'}
+    $null=$grid.EndEdit()
     $items=@(Get-MailItems $mailItems.Text)
     $named=$mailNamedCheck.Checked;$receiverId=''
     if($named){
@@ -59,7 +60,7 @@ function Start-MailCollection {
     }
     foreach($pair in @($script:questBatches,$script:izanamiBatches,$script:dungeonBatches)){foreach($batch in $pair){if($batch.state -ne 'done'){throw 'Hủy hàng chờ địa cung/nhiệm vụ/cấm thuật trước khi chạy gom đồ.'}}}
     # Chốt người nhận và danh sách gửi tại lúc bắt đầu; sắp xếp bảng không đổi đích.
-    $senders=@(foreach($row in $grid.Rows){if((!$named -and $row.Index -gt 0) -or ($named -and [bool]$row.Cells['pick'].Value -and [string]$row.Cells['character'].Value -ne $receiver)){[pscustomobject]@{id=[string]$row.Tag.id;username=[string]$row.Tag.username;job='';status='Chờ lượt gom đồ';state='waiting';closeOperation=$null;started=$false}}})
+    $senders=@(foreach($row in $grid.Rows){if($row.Cells['pick'].Value -eq $true -and ((!$named -and $row.Index -gt 0) -or ($named -and [string]$row.Cells['character'].Value -ne $receiver))){[pscustomobject]@{id=[string]$row.Tag.id;username=[string]$row.Tag.username;job='';status='Chờ lượt gom đồ';state='waiting';closeOperation=$null;started=$false}}})
     if(!$senders.Count){throw 'Tích Chọn ít nhất một tài khoản gửi, khác nhân vật nhận.'}
     $waiting=@{};foreach($m in $senders){$waiting[$m.id]=$m}
     $script:mailRun=[pscustomobject]@{cursor=0;waiting=$waiting;active=$true;recipient=$receiver;receiverId=$receiverId;namedRecipient=$named;items=$items;seconds=[int]$mailDelay.Value;senders=$senders}
@@ -144,7 +145,7 @@ function Sync-MailCollection {
 function Update-MailUi {
     $active=$script:mailRun -and $script:mailRun.active;$mailStart.Enabled=!$active;$mailItems.Enabled=!$active;$mailDelay.Enabled=!$active;$mailNamedCheck.Enabled=!$active;$mailNamedRecipient.Enabled=(!$active -and $mailNamedCheck.Checked);$mailInboxCheck.Enabled=!$mailNamedCheck.Checked
     $mailStart.Text=$(if($mailNamedCheck.Checked){'Bắt đầu gửi thư'}else{'Bắt đầu gom đồ'})
-    $mailHint.Text=$(if($mailNamedCheck.Checked){'Gửi từ các acc tích Chọn; mở từng acc, gửi xong tắt rồi mở acc kế tiếp. Chỉ gửi đồ không khóa.'}else{'Mở từng acc từ dòng 2; gửi xong sẽ tắt và mở acc kế tiếp. Giữ acc dòng 1 online. Chỉ gửi đồ không khóa.'})
+    $mailHint.Text=$(if($mailNamedCheck.Checked){'Gửi từ các acc tích Chọn; mở từng acc, gửi xong tắt rồi mở acc kế tiếp. Chỉ gửi đồ không khóa.'}else{'Chỉ mở acc tích Chọn từ dòng 2 để gom về acc dòng 1; gửi xong tắt rồi mở acc kế tiếp. Giữ acc dòng 1 online.'})
     if($script:mailRun){
         $mailReceiver.Text='Người nhận: '+$script:mailRun.recipient+' • Đã xong: '+$script:mailRun.cursor+'/'+$script:mailRun.senders.Count+' • Mỗi lượt 1 acc'
         $lines=@(foreach($sender in $script:mailRun.senders){$text=$sender.status

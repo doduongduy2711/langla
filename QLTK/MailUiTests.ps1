@@ -16,7 +16,21 @@ try {
     function Test-MailReceiverReady {return $script:mailReceiverOnline}
     $parsed=@(Get-MailItems "434,-1`r`n168,3");if($parsed.Count -ne 2 -or $parsed[0].quantity -ne -1){throw 'Multi-ID parsing failed'}
     foreach($invalid in @('434,0','434,-2','65536,-1',"434,-1`n434,5",'garbage')){$rejected=$false;try{$null=Get-MailItems $invalid}catch{$rejected=$true};if(!$rejected){throw 'Invalid mail input accepted'}}
-    $autoLoginCheck.Checked=$true;$mailItems.Text="434,-1`r`n168,3";$mailDelay.Value=7;Start-MailCollection;Sync-MailCollection
+    $autoLoginCheck.Checked=$true;$mailItems.Text="434,-1`r`n168,3";$mailDelay.Value=7
+    # Like distribution: empty selection and receiver-only selection cannot send anything.
+    foreach($row in $grid.Rows){$row.Cells['pick'].Value=$false}
+    $rejected=$false;try{Start-MailCollection}catch{$rejected=$true};if(!$rejected -or $script:mailTestOpen.Count){throw 'Default collection accepted empty selection'}
+    $grid.Rows[0].Cells['pick'].Value=$true
+    $rejected=$false;try{Start-MailCollection}catch{$rejected=$true};if(!$rejected -or $script:mailTestOpen.Count){throw 'Receiver-only selection became a sender'}
+    # Non-contiguous selection skips row 2 and keeps the first account as recipient even if unchecked.
+    $grid.Rows[0].Cells['pick'].Value=$false;$grid.Rows[2].Cells['pick'].Value=$true;$script:mailReceiverOnline=$false
+    Start-MailCollection
+    if($script:mailRun.senders.Count -ne 1 -or $script:mailRun.senders[0].id -ne 'mail-three' -or $script:mailRun.receiverId -ne 'mail-one' -or $script:mailTestOpen.Count){throw 'Default collection included unchecked sender or changed recipient'}
+    $grid.Rows[1].Cells['pick'].Value=$true;Sync-MailCollection
+    if($script:mailRun.senders.Count -ne 1){throw 'Changing selection modified active default collection'}
+    Stop-MailCollection;$script:mailRun=$null;$script:mailReceiverOnline=$true
+    foreach($row in $grid.Rows){$row.Cells['pick'].Value=$true}
+    Start-MailCollection;Sync-MailCollection
     if($script:mailTestOpen.Count -ne 1 -or !$mailTestSender.MailEnabled -or $mailLater.MailEnabled -or $mailTestReceiver.MailEnabled){throw 'Queue must configure only first sender, never receiver'}
     if($mailStart.Enabled -or $mailItems.Enabled){throw 'Queue input not frozen'}
     if($null -eq (Get-MailQueuedMember 'mail-three') -or $null -ne (Get-MailQueuedMember 'mail-two')){throw 'Waiting membership incorrect'}
@@ -28,7 +42,7 @@ try {
     $script:mailRunning=$false;Sync-MailCollection;Sync-MailCollection;Sync-MailCollection;if($script:mailTestOpen.Count -ne 2 -or !$mailLater.MailEnabled){throw 'Next sender not started after verified exit'}
     $mailLater.MailDone=$true;$mailLater.MailEnabled=$false;Sync-MailCollection;$script:mailCloseOp.Completed=$true;Sync-MailCollection;Sync-MailCollection;Update-MailUi
     if($script:mailRun.active -or $script:mailTestClose.Count -ne 2 -or $mailTestReceiver.CloseRequested){throw 'Final queue completion / receiver preservation failed'}
-    $mailTestSender.MailDone=$false;$mailTestSender.MailEnabled=$false;$mailLater.MailDone=$false;$mailLater.MailEnabled=$false;$script:mailTestOpen=@();$script:mailTestClose=@();$script:mailReceiverOnline=$false;$script:accounts=@($script:accounts[1],$script:accounts[2],$script:accounts[0]);Refresh-Grid;Start-MailCollection;Sync-MailCollection
+    $mailTestSender.MailDone=$false;$mailTestSender.MailEnabled=$false;$mailLater.MailDone=$false;$mailLater.MailEnabled=$false;$script:mailTestOpen=@();$script:mailTestClose=@();$script:mailReceiverOnline=$false;$script:accounts=@($script:accounts[1],$script:accounts[2],$script:accounts[0]);Refresh-Grid;foreach($row in $grid.Rows){$row.Cells['pick'].Value=($row.Index -gt 0)};Start-MailCollection;Sync-MailCollection
     if($script:mailTestOpen.Count){throw 'Opened sender while receiver offline'}
     $script:mailReceiverOnline=$true;Sync-MailCollection;Sync-MailCollection;$mailTestSender.MailEnabled=$false;$mailTestSender.MailStatus='Dừng: server chưa xác nhận';Sync-MailCollection
     if($script:mailRun.senders[0].state -ne 'blocked' -or $script:mailTestClose.Count -or $script:mailTestOpen.Count -ne 1){throw 'Unknown send result must hold queue without close or advance'}
@@ -54,11 +68,11 @@ try {
     Copy-AccountConfig;$namedCopy=$script:copiedAccountConfig | ConvertFrom-Json;if(!$namedCopy.mailNamedEnabled -or $namedCopy.mailNamedRecipient.Trim() -ne 'ExternalReceiver'){throw 'Named mail config copy missing'}
     Stop-MailCollection;$mailNamedCheck.Checked=$false;$mailNamedRecipient.Text='';$script:mailRun=$null;Update-MailUi
     # Không giới hạn danh sách 100 acc; chỉ mở một lượt, không submit cả danh sách.
-    $script:accounts=@([pscustomobject]@{id='mail-one';username='login-one';secret='unused'});for($i=2;$i -le 153;$i++){$script:accounts+=@([pscustomobject]@{id=('bulk-'+$i);username=('sender-'+$i);secret='unused'})};Refresh-Grid;$script:mailReceiverOnline=$false;Start-MailCollection
+    $script:accounts=@([pscustomobject]@{id='mail-one';username='login-one';secret='unused'});for($i=2;$i -le 153;$i++){$script:accounts+=@([pscustomobject]@{id=('bulk-'+$i);username=('sender-'+$i);secret='unused'})};Refresh-Grid;foreach($row in $grid.Rows){$row.Cells['pick'].Value=($row.Index -gt 0)};$script:mailReceiverOnline=$false;Start-MailCollection
     if($script:mailRun.senders.Count -ne 152){throw 'Large queue truncated'};Stop-MailCollection
     $mailTestSender.MailQueueOnly=$true;[TGLL.NativeBackend]::SetReceiveKey($mailTestSender.Id,$true);[TGLL.NativeBackend]::SetDungeonHigh($mailTestSender.Id,$true);[TGLL.NativeBackend]::SetIzanami($mailTestSender.Id,$true);[TGLL.NativeBackend]::SetAutoQuest($mailTestSender.Id,$true);[TGLL.NativeBackend]::SetCloseAfterKey($mailTestSender.Id,$true)
     if($mailTestSender.ReceiveKeyEnabled -or $mailTestSender.DungeonHighEnabled -or $mailTestSender.IzanamiEnabled -or $mailTestSender.QuestEnabled -or $mailTestSender.CloseAfterKey){throw 'Saved automation conflicts with mail-only session'}
-    Write-Output 'PASS: sequential mail queue, 152 senders, all-ID completion, close once, verified process exit before next launch, receiver retained/offline wait, sorting, uncertain transfer hold, Stop, config copy and mail-only automation guards.'
+    Write-Output 'PASS: selected-only default collection, empty/receiver-only rejection, non-contiguous selection and immutable sender snapshot; sequential mail queue, 152 selected senders, all-ID completion, close once, verified process exit before next launch, receiver retained/offline wait, sorting, uncertain transfer hold, Stop, config copy and mail-only automation guards.'
 } finally {
     Stop-MailCollection;$mailNamedCheck.Checked=$false;$script:mailRun=$null;Set-Item Function:\Open-Account $mailSavedOpen;foreach($n in $mailFunctions.Keys){Set-Item ('Function:\'+$n) $mailFunctions[$n]}
     foreach($j in $mailFixtures){$removed=$null;$null=$mailJobs.TryRemove($j.Id,[ref]$removed)}
