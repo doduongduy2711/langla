@@ -34,3 +34,5 @@ try {
 }
 
 . (Join-Path $PSScriptRoot 'ActivityCapacityTests.ps1')
+
+. (Join-Path $PSScriptRoot 'TeamTimeoutRecoveryTests.ps1')
