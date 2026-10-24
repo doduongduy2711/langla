@@ -51,6 +51,8 @@ function Pump-DungeonQueue {
     if($script:dungeonQueuePaused -or !$script:dungeonBatches.Count){return}
     $script:dungeonAccountIndex=@{};foreach($a in $script:accounts){$script:dungeonAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:dungeonBatches){
+        Sync-ActivityCapacity Dungeon $batch $script:dungeonAccountIndex
+        if($batch.state -eq 'done'){continue}
         # Fault shutdown is per account; free a whole batch only after every game really exited.
         if($batch.state -ne 'waiting' -and $batch.state -ne 'done'){
             $faultCount=0;$allFaultClosed=$true
@@ -65,7 +67,7 @@ function Pump-DungeonQueue {
         }
         if($batch.state -eq 'running' -or ($batch.state -eq 'blocked' -and !$batch.closeOperation)){
             $allComplete=$true;$unavailable=$false
-            foreach($m in $batch.members){$j=Get-DungeonMemberJob $m
+            foreach($m in $batch.members){if(Test-ActivityMemberExited $m){continue};$j=Get-DungeonMemberJob $m
                 if(($null -eq $j -or !$j.DungeonFinished) -and !($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed)){$allComplete=$false}
                 if(!($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed) -and ($null -eq $j -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled') -or ($j.State -notin @('failed','reconnecting') -and $j.GameSettingsReady -and !$j.DungeonHighEnabled -and !$j.DungeonFinished))){$unavailable=$true}
             }
@@ -89,31 +91,32 @@ function Pump-DungeonQueue {
             elseif($batch.closeOperation.Failed -or $batch.closeOperation.Error){$batch.state='blocked';$batch.error='Chưa tắt đủ game. Hàng chờ giữ lượt để kiểm tra.'}
         }
     }
-    $active=0;foreach($b in $script:dungeonBatches){if($b.state -notin @('waiting','done')){$active+=$b.members.Count}}
+    $active=0;foreach($b in $script:dungeonBatches){if($b.state -notin @('waiting','done')){$active+=(Get-ActivityReservedCount $b)}}
     # Live Dungeon accounts outside this queue also consume slots.
     $included=@{};foreach($b in $script:dungeonBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$included[$m.id]=$true}}}
-    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and $a.dungeonHigh -and (Test-AccountOpenBlocked $a)){$outside++}}
+    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and ($a.dungeonHigh -or (Get-AccountLaunchMode $a) -eq 'dungeon') -and (Test-AccountOpenBlocked $a)){$outside++}}
     $limit=[int]$dungeonMax.Value
+    $active+=(Restore-ActivityReservations $script:dungeonBatches ($limit-$active-$outside))
     foreach($batch in $script:dungeonBatches){
         if($batch.state -ne 'waiting'){continue}
         $alreadyOpen=0;foreach($m in $batch.members){$a=$script:dungeonAccountIndex[$m.id];if($a -and (Test-AccountOpenBlocked $a)){$alreadyOpen++}}
-        if($active+$outside+$batch.members.Count-$alreadyOpen -gt $limit){break}
-        $batch.state='launching';$active+=$batch.members.Count;$outside-=$alreadyOpen
+        if($active+$outside+$batch.members.Count-$alreadyOpen -gt $limit){continue}
+        $batch.state='launching';$active+=(Get-ActivityReservedCount $batch);$outside-=$alreadyOpen
         foreach($m in $batch.members){$script:dungeonWaiting.Remove($m.id)}
     }
     # Submit at most one account per timer tick; native login still runs six at a time.
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
     foreach($batch in $script:dungeonBatches){if($batch.state -ne 'launching'){continue}
-        $member=@($batch.members | Where-Object {!$_.job}) | Select-Object -First 1
-        if($member){try{Start-DungeonMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message};break}
-        $batch.state='running'
+        $member=@($batch.members | Where-Object {!$_.job -and !(Test-ActivityMemberYielded $_) -and !(Test-ActivityMemberExited $_)}) | Select-Object -First 1
+        if($member){try{Start-DungeonMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Dungeon $batch $member $script:dungeonAccountIndex};break}
+        if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
     }
     Update-DungeonQueueStatus
 }
 function Update-DungeonQueueStatus {
     $script:dungeonWaiting=@{};foreach($b in $script:dungeonBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){$script:dungeonWaiting[$m.id]=$m}}}
-    $active=0;$waiting=0;$done=0;foreach($b in $script:dungeonBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=$b.members.Count}}
+    $active=0;$waiting=0;$done=0;foreach($b in $script:dungeonBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $dungeonQueueHint.Text="Đang giữ lượt: $active / $([int]$dungeonMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:dungeonBatches | Where-Object {$_.error});if($errors.Count){$dungeonQueueHint.Text+="`r`n"+$errors[0].error}
     foreach($row in $grid.Rows){if($null -ne (Get-DungeonQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt địa cung';Update-AccountOpen $row}}

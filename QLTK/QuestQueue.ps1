@@ -50,6 +50,8 @@ function Pump-QuestQueue {
     if($script:questQueuePaused -or !$script:questBatches.Count){return}
     $script:questAccountIndex=@{};foreach($a in $script:accounts){$script:questAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:questBatches){
+        Sync-ActivityCapacity Quest $batch $script:questAccountIndex
+        if($batch.state -eq 'done'){continue}
         # Fault shutdown is per account; free a whole batch only after every game really exited.
         if($batch.state -ne 'waiting' -and $batch.state -ne 'done'){
             $faultCount=0;$allFaultClosed=$true
@@ -64,7 +66,7 @@ function Pump-QuestQueue {
         }
         if($batch.state -eq 'running' -or ($batch.state -eq 'blocked' -and !$batch.closeOperation)){
             $allComplete=$true;$unavailable=$false
-            foreach($m in $batch.members){$j=Get-QuestMemberJob $m
+            foreach($m in $batch.members){if(Test-ActivityMemberExited $m){continue};$j=Get-QuestMemberJob $m
                 if(($null -eq $j -or !$j.QuestFinished) -and !($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed)){$allComplete=$false}
                 if(!($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed) -and ($null -eq $j -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled') -or ($j.State -notin @('failed','reconnecting') -and $j.GameSettingsReady -and !$j.QuestEnabled -and !$j.QuestFinished))){$unavailable=$true}
             }
@@ -88,31 +90,32 @@ function Pump-QuestQueue {
             elseif($batch.closeOperation.Failed -or $batch.closeOperation.Error){$batch.state='blocked';$batch.error='Chưa tắt đủ game. Hàng chờ giữ lượt để kiểm tra.'}
         }
     }
-    $active=0;foreach($b in $script:questBatches){if($b.state -notin @('waiting','done')){$active+=$b.members.Count}}
+    $active=0;foreach($b in $script:questBatches){if($b.state -notin @('waiting','done')){$active+=(Get-ActivityReservedCount $b)}}
     # Live Quest accounts outside this queue also consume slots.
     $included=@{};foreach($b in $script:questBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$included[$m.id]=$true}}}
-    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and $a.autoQuest -and (Test-AccountOpenBlocked $a)){$outside++}}
+    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and ($a.autoQuest -or (Get-AccountLaunchMode $a) -eq 'quest') -and (Test-AccountOpenBlocked $a)){$outside++}}
     $limit=[int]$questMax.Value
+    $active+=(Restore-ActivityReservations $script:questBatches ($limit-$active-$outside))
     foreach($batch in $script:questBatches){
         if($batch.state -ne 'waiting'){continue}
         $alreadyOpen=0;foreach($m in $batch.members){$a=$script:questAccountIndex[$m.id];if($a -and (Test-AccountOpenBlocked $a)){$alreadyOpen++}}
-        if($active+$outside+$batch.members.Count-$alreadyOpen -gt $limit){break}
-        $batch.state='launching';$active+=$batch.members.Count;$outside-=$alreadyOpen
+        if($active+$outside+$batch.members.Count-$alreadyOpen -gt $limit){continue}
+        $batch.state='launching';$active+=(Get-ActivityReservedCount $batch);$outside-=$alreadyOpen
         foreach($m in $batch.members){$script:questWaiting.Remove($m.id)}
     }
     # Submit at most one account per timer tick; native login still runs six at a time.
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
     foreach($batch in $script:questBatches){if($batch.state -ne 'launching'){continue}
-        $member=@($batch.members | Where-Object {!$_.job}) | Select-Object -First 1
-        if($member){try{Start-QuestMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message};break}
-        $batch.state='running'
+        $member=@($batch.members | Where-Object {!$_.job -and !(Test-ActivityMemberYielded $_) -and !(Test-ActivityMemberExited $_)}) | Select-Object -First 1
+        if($member){try{Start-QuestMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Quest $batch $member $script:questAccountIndex};break}
+        if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
     }
     Update-QuestQueueStatus
 }
 function Update-QuestQueueStatus {
     $script:questWaiting=@{};foreach($b in $script:questBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){$script:questWaiting[$m.id]=$m}}}
-    $active=0;$waiting=0;$done=0;foreach($b in $script:questBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=$b.members.Count}}
+    $active=0;$waiting=0;$done=0;foreach($b in $script:questBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $questQueueHint.Text="Đang giữ lượt: $active / $([int]$questMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:questBatches | Where-Object {$_.error});if($errors.Count){$questQueueHint.Text+="`r`n"+$errors[0].error}
     foreach($row in $grid.Rows){if($null -ne (Get-QuestQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt nhiệm vụ';Update-AccountOpen $row}}

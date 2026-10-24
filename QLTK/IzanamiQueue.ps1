@@ -59,6 +59,8 @@ function Pump-IzanamiQueue {
     if($script:izanamiQueuePaused -or !$script:izanamiBatches.Count){return}
     $script:izanamiAccountIndex=@{};foreach($a in $script:accounts){$script:izanamiAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:izanamiBatches){
+        Sync-ActivityCapacity Izanami $batch $script:izanamiAccountIndex
+        if($batch.state -eq 'done'){continue}
         # Fault shutdown is per account; free a whole batch only after every game really exited.
         if($batch.state -ne 'waiting' -and $batch.state -ne 'done'){
             $faultCount=0;$allFaultClosed=$true
@@ -72,12 +74,12 @@ function Pump-IzanamiQueue {
             if($faultCount -gt 0 -and $allFaultClosed){$batch.state='done';$batch.error='Đã tắt do auto lỗi/chờ quá 10 phút';continue}
         }
         if(!$batch.closeOperation -and $batch.state -in @('launching','running','finished','blocked')){
-            $limited=$false;foreach($m in $batch.members){$j=Get-IzanamiMemberJob $m;if($j -and $j.IzanamiNoAttempts){$limited=$true}}
+            $limited=$false;foreach($m in $batch.members){if(Test-ActivityMemberExited $m){continue};$j=Get-IzanamiMemberJob $m;if($j -and $j.IzanamiNoAttempts){$limited=$true}}
             if($limited){$batch | Add-Member NoteProperty limitClose $true -Force;$batch.state='finished';$batch.error='Hết lượt cấm thuật: tắt tổ đội, bỏ qua số lượt còn lại.'}
         }
         if($batch.state -eq 'running' -or ($batch.state -eq 'blocked' -and !$batch.closeOperation)){
             $allComplete=$true;$unavailable=$false
-            foreach($m in $batch.members){$j=Get-IzanamiMemberJob $m
+            foreach($m in $batch.members){if(Test-ActivityMemberExited $m){continue};$j=Get-IzanamiMemberJob $m
                 if(($null -eq $j -or !$j.IzanamiRoundComplete -or ($j.PSObject.Properties['IzanamiRunFinished'] -and !$j.IzanamiRunFinished)) -and !($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed)){$allComplete=$false}
                 if(!($j -is [TGLL.NativeJob] -and $j.ActivityTimeoutClosed) -and ($null -eq $j -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled'))){$unavailable=$true}
             }
@@ -101,31 +103,32 @@ function Pump-IzanamiQueue {
             elseif($batch.closeOperation.Failed -or $batch.closeOperation.Error){$batch.state='blocked';$batch.error='Chưa tắt đủ game. Hàng chờ giữ lượt để kiểm tra.'}
         }
     }
-    $active=0;foreach($b in $script:izanamiBatches){if($b.state -notin @('waiting','done')){$active+=$b.members.Count}}
+    $active=0;foreach($b in $script:izanamiBatches){if($b.state -notin @('waiting','done')){$active+=(Get-ActivityReservedCount $b)}}
     # Live Izanami accounts outside this queue also consume slots.
     $included=@{};foreach($b in $script:izanamiBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$included[$m.id]=$true}}}
-    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and $a.izanami -and (Test-AccountOpenBlocked $a)){$outside++}}
+    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and ($a.izanami -or (Get-AccountLaunchMode $a) -eq 'izanami') -and (Test-AccountOpenBlocked $a)){$outside++}}
     $limit=[int]$izanamiMax.Value
+    $active+=(Restore-ActivityReservations $script:izanamiBatches ($limit-$active-$outside))
     foreach($batch in $script:izanamiBatches){
         if($batch.state -ne 'waiting'){continue}
         $alreadyOpen=0;foreach($m in $batch.members){$a=$script:izanamiAccountIndex[$m.id];if($a -and (Test-AccountOpenBlocked $a)){$alreadyOpen++}}
-        if($active+$outside+$batch.members.Count-$alreadyOpen -gt $limit){break}
-        $batch.state='launching';$active+=$batch.members.Count;$outside-=$alreadyOpen
+        if($active+$outside+$batch.members.Count-$alreadyOpen -gt $limit){continue}
+        $batch.state='launching';$active+=(Get-ActivityReservedCount $batch);$outside-=$alreadyOpen
         foreach($m in $batch.members){$script:izanamiWaiting.Remove($m.id)}
     }
     # Submit at most one account per timer tick; native login still runs six at a time.
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
     foreach($batch in $script:izanamiBatches){if($batch.state -ne 'launching'){continue}
-        $member=@($batch.members | Where-Object {!$_.job}) | Select-Object -First 1
-        if($member){try{Start-IzanamiMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message};Sync-IzanamiTeams;break}
-        $batch.state='running'
+        $member=@($batch.members | Where-Object {!$_.job -and !(Test-ActivityMemberYielded $_) -and !(Test-ActivityMemberExited $_)}) | Select-Object -First 1
+        if($member){try{Start-IzanamiMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Izanami $batch $member $script:izanamiAccountIndex};Sync-IzanamiTeams;break}
+        if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
     }
     Update-IzanamiQueueStatus
 }
 function Update-IzanamiQueueStatus {
     $script:izanamiWaiting=@{};foreach($b in $script:izanamiBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){$script:izanamiWaiting[$m.id]=$m}}}
-    $active=0;$waiting=0;$done=0;foreach($b in $script:izanamiBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=$b.members.Count}}
+    $active=0;$waiting=0;$done=0;foreach($b in $script:izanamiBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $izanamiQueueHint.Text="Đang giữ lượt: $active / $([int]$izanamiMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:izanamiBatches | Where-Object {$_.error});if($errors.Count){$izanamiQueueHint.Text+="`r`n"+$errors[0].error}
     foreach($row in $grid.Rows){if($null -ne (Get-IzanamiQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt cấm thuật';Update-AccountOpen $row}}

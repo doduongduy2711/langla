@@ -32,3 +32,5 @@ try {
     $script:accounts=$timeoutSavedAccounts
     foreach($name in $timeoutFunctions.Keys){Set-Item ("Function:\"+$name) $timeoutFunctions[$name]}
 }
+
+. (Join-Path $PSScriptRoot 'ActivityCapacityTests.ps1')
