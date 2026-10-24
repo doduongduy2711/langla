@@ -88,6 +88,7 @@ function Invoke-ProxyBridge($account,$proxy,[bool]$autoLogin=$false) {
 }
 $script:accountWindowPids=@{}
 function Get-AccountLaunchMode($account) {
+    if([bool]$account.autoBeast){return 'beast'}
     if($script:accountJobs -and $script:accountJobs.ContainsKey([string]$account.id)){$bj=Get-AccountJob $script:accountJobs[[string]$account.id];if($bj -is [TGLL.NativeJob] -and $bj.BeastQuestEnabled){return 'beast'}}
     if($script:farmUpRequests -and $script:farmUpRequests.ContainsKey([string]$account.id)){return 'farm'}
     if([bool]$account.soncap){return 'soncap'}

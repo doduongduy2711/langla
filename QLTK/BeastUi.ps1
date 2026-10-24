@@ -1,4 +1,5 @@
-﻿$script:beastBatches=@();$script:beastQueuePaused=$false;$script:beastLaunchingAccountId=''
+﻿$script:loadingBeast=$false;$script:beastApplied=@{}
+$script:beastBatches=@();$script:beastQueuePaused=$false;$script:beastLaunchingAccountId=''
 $beastPage=New-Object Windows.Forms.TabPage;$beastPage.Text='Auto Linh thú';$beastPage.BackColor=$form.BackColor;$beastPage.AutoScroll=$true;$tabs.TabPages.Add($beastPage)
 $null=Ui-Label 'Chạy riêng từng tài khoản theo thứ tự đã chọn; không mời nhóm và không chờ tài khoản khác.' $beastPage 16 15 635 40
 $null=Ui-Label 'Mỗi acc tự nhận/trả tại Rasa; tới bãi chọn khu khác các acc đang đánh linh thú cùng map, rồi đánh đúng quái.' $beastPage 16 58 635 50
@@ -8,6 +9,10 @@ $beastCloseAfter=New-Object Windows.Forms.CheckBox;$beastCloseAfter.Text='Tắt 
 $beastStart=Ui-NewButton 'Xếp hàng linh thú đã chọn' {try{Add-BeastQueue @((Get-LaunchRows) | ForEach-Object {$_.Tag})}catch{Show-Error $_.Exception.Message}};Ui-Place $beastStart $beastPage 16 191 235 28
 $beastStop=Ui-NewButton 'Dừng hàng chờ linh thú' {Reset-BeastQueue;Update-BeastUi};Ui-Place $beastStop $beastPage 266 191 215 28
 $beastHint=Ui-Label '' $beastPage 16 232 635 175
+# Keep the same per-account toggle convention as Quest/SonCap.
+foreach($control in $beastPage.Controls){$control.Top+=68}
+$beastCheck=New-Object Windows.Forms.CheckBox;$beastCheck.Text='Auto Linh thú (tối đa 3 lượt)';$beastCheck.SetBounds(16,12,580,27);$beastPage.Controls.Add($beastCheck)
+$beastAccount=Ui-Label 'Chọn tài khoản trong bảng.' $beastPage 16 43 630 25
 function Save-BeastSettings {$script:settings.beastMaxOnline=[int]$beastMax.Value;$script:settings.beastCloseAfter=$beastCloseAfter.Checked;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}}
 $beastMax.Add_ValueChanged({Save-BeastSettings});$beastCloseAfter.Add_CheckedChanged({Save-BeastSettings})
 function Get-BeastQueuedMember($id){foreach($b in $script:beastBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){if($m.id -eq $id){return $m}}}};return $null}
@@ -35,8 +40,8 @@ function Add-BeastQueue($accounts){
  $known=@{};foreach($b in $script:beastBatches){foreach($m in $b.members){$known[$m.id]=$true}}
  $fresh=@($accounts | Where-Object {!$known.ContainsKey([string]$_.id)})
  if(!$fresh.Count){throw 'Các acc đã có trong hàng chờ linh thú.'}
- foreach($a in $fresh){$members=@([pscustomobject]@{id=[string]$a.id;job=''});$script:beastBatches+=@([pscustomobject]@{state='waiting';members=$members;closeOperation=$null;error=''})}
- Save-BeastSettings;$script:beastQueuePaused=$false;Pump-BeastQueue;Update-BeastUi
+ foreach($a in $fresh){$a | Add-Member NoteProperty autoBeast $true -Force;$members=@([pscustomobject]@{id=[string]$a.id;job=''});$script:beastBatches+=@([pscustomobject]@{state='waiting';members=$members;closeOperation=$null;error=''})}
+ if(!$UiTest){Save-Accounts};Save-BeastSettings;$script:beastQueuePaused=$false;Pump-BeastQueue;Update-BeastUi
 }
 function Reset-BeastQueue {
  $script:beastQueuePaused=$true
@@ -86,14 +91,44 @@ function Pump-BeastQueue {
    if(!(Test-BeastMemberRunning $m) -and !($a -and (Test-AccountOpenBlocked $a))){if($j -and $j.State -eq 'failed'){$j.CancelRequested=$true};$m | Add-Member NoteProperty retiredJob ([string]$m.job) -Force;$m.job='';$b.state='waiting';$b | Add-Member NoteProperty retryAt ([datetime]::UtcNow.AddSeconds(30)) -Force};break}};if($b.state -eq 'launching' -and @($b.members | Where-Object {!$_.job}).Count -eq 0){$b.state='running'}}
  Sync-BeastTeams
 }
+function Sync-BeastPreferences {
+ foreach($a in $script:accounts){
+  if(!$a.PSObject.Properties['autoBeast']){continue}
+  $key=[string]$a.id;$wanted=[bool]$a.autoBeast;$j=$null
+  if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
+  $signature=$(if($j){$j.Id}else{''})+':'+$wanted
+  if($script:beastApplied[$key] -eq $signature){continue}
+  try{
+   if(!$wanted){
+    if($j -is [TGLL.NativeJob] -and $j.BeastQuestEnabled -and !$j.CloseRequested -and !$j.CancelRequested){[TGLL.NativeBackend]::SetAutoBeast($j.Id,$false)}
+    $script:beastBatches=@($script:beastBatches | Where-Object {!@($_.members | Where-Object {$_.id -eq $key}).Count})
+   }elseif($j -and !$j.CloseRequested -and !$j.CancelRequested -and $j.State -notin @('failed','closed','cancelled','reconnecting')){
+    $known=@($script:beastBatches | Where-Object {@($_.members | Where-Object {$_.id -eq $key}).Count})
+    if(!$known.Count){Add-BeastQueue @($a)}
+   }
+   $script:beastApplied[$key]=$signature
+  }catch{$status.Text=$a.username+': '+$_.Exception.Message}
+ }
+}
+function Set-BeastPreference($row,[bool]$enabled){
+ $key=[string]$row.Tag.id;$row.Tag | Add-Member NoteProperty autoBeast $enabled -Force
+ $script:beastApplied.Remove($key);if(!$UiTest){Save-Accounts};Sync-BeastPreferences;Update-BeastUi
+}
 function Update-BeastUi {
+ $script:loadingBeast=$true
+ try{
+  $beastCheck.Enabled=($grid.SelectedRows.Count -gt 0)
+  if($grid.SelectedRows.Count){$a=$grid.SelectedRows[0].Tag;$beastCheck.Checked=[bool]$a.autoBeast;$beastAccount.Text='Tài khoản: '+$a.username}
+  else{$beastCheck.Checked=$false;$beastAccount.Text='Chọn tài khoản trong bảng.'}
  $live=0;$waiting=0;$done=0;foreach($b in $script:beastBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$live+=$b.members.Count}}
  $opened=0;$launching=0;$faulted=0
  foreach($b in $script:beastBatches){if($b.state -in @('waiting','done')){continue};foreach($m in $b.members){if(Test-BeastMemberRunning $m){$opened++}else{$launching++}};if($b.error){$faulted+=$b.members.Count}}
  $text="Đang giữ lượt: $live / $([int]$beastMax.Value) • Hàng chờ: $waiting • Đã xong: $done`r`nGame đang mở: $opened • Đang mở/đăng nhập: $launching • Lượt có lỗi: $faulted"
  if($grid.SelectedRows.Count){$key=[string]$grid.SelectedRows[0].Tag.id;if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key];if($j -and $j.BeastQuestEnabled){$text+="`r`n"+$j.QuestStatus+"`r`n"+$j.TeamStatus}}}
  $errors=@($script:beastBatches | Where-Object {$_.error});if($errors.Count){$text+="`r`n"+$errors[0].error};$beastHint.Text=$text
+ }finally{$script:loadingBeast=$false}
 }
+$beastCheck.Add_CheckedChanged({if($script:loadingBeast -or !$grid.SelectedRows.Count){return};try{Set-BeastPreference $grid.SelectedRows[0] $beastCheck.Checked}catch{Show-Error $_.Exception.Message}})
 $grid.Add_SelectionChanged({Update-BeastUi});Update-BeastUi
 
 function Assert-BeastAccountsAvailable($accounts){foreach($a in $accounts){foreach($b in $script:beastBatches){if($b.state -ne 'done' -and @($b.members | Where-Object {$_.id -eq [string]$a.id}).Count){throw 'Acc đang trong hàng chờ linh thú; dừng hàng chờ đó trước.'}}}}
