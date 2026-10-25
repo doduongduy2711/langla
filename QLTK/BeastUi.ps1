@@ -57,7 +57,7 @@ function Pump-BeastQueue {
    foreach($m in $b.members){$j=Get-BeastMemberJob $m;$a=$script:beastAccountIndex[$m.id]
     $running=Test-BeastMemberRunning $m;$opening=$a -and (Test-AccountOpenBlocked $a)
     if(!$running -and !$opening -and $j -and ($j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled'))){$b.state='done';$b.error='Game đã thoát; đã trả lượt linh thú';break}
-    if(!$running -and !$opening -and $j -and $j.State -eq 'failed'){
+    if(!$running -and !$opening -and $j -and ($j.State -eq 'failed' -or (!$j.ReconnectRequested -and (Test-ActivityExitedSession $j)))){
      # Retry through this queue, not the global reopen loop, so a dead job cannot hold a slot forever.
      $j.CancelRequested=$true;$m | Add-Member NoteProperty retiredJob ([string]$m.job) -Force;$m.job='';$b.state='waiting';$b.error='Mở game lỗi; tạm nhường lượt và thử lại sau 30 giây'
      $b | Add-Member NoteProperty retryAt ([datetime]::UtcNow.AddSeconds(30)) -Force;break
@@ -72,7 +72,7 @@ function Pump-BeastQueue {
   if($b.state -eq 'finished' -and ![TGLL.NativeBackend]::CanAutoCloseBatch([string[]]@($b.members | ForEach-Object {$_.job}))){foreach($m in $b.members){$j=Get-BeastMemberJob $m;if($j -and !$j.CloseRequested){[TGLL.NativeBackend]::SetAutoBeast($j.Id,$false)}};$b.state='done';$b.error='Đã xong linh thú; quay lại Up'}
   if($b.state -in @('closing','blocked') -and $b.closeOperation -and $b.closeOperation.Completed){
    $allClosed=$true;foreach($m in $b.members){$j=Get-BeastMemberJob $m;$a=$script:beastAccountIndex[$m.id]
-    if(!$j -or (Test-BeastMemberRunning $m) -or ($a -and (Test-AccountOpenBlocked $a)) -or (!$j.CloseRequested -and !$j.CancelRequested -and $j.State -notin @('closed','cancelled'))){$allClosed=$false}}
+    if(!$j -or (Test-BeastMemberRunning $m) -or ($a -and (Test-AccountOpenBlocked $a)) -or (!$j.CloseRequested -and !$j.CancelRequested -and $j.State -notin @('closed','cancelled') -and !(Test-ActivityExitedSession $j))){$allClosed=$false}}
    if($allClosed){$b.state='done';$b.error=''}elseif($b.closeOperation.Failed -or $b.closeOperation.Error){$b.state='blocked';$b.error='Chưa tắt được game; tiếp tục giữ lượt'}
   }
  }

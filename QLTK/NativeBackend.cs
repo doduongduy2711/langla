@@ -1063,7 +1063,7 @@ namespace TGLL {
         internal PortalRightOperation SonCapReleaseOperation;internal bool SonCapReleaseAttempted;internal DateTime SonCapAutoRetryAt;internal int SonCapAutoRetries;internal bool SonCapAutoConfirmed,SonCapMapAutoActive;internal int SonCapAutoMap=-1;internal DateTime SonCapAutoSeenAt,SonCapAutoPollAt;
         internal int SonCapClearedStage=-1;internal bool SonCapApplying,SonCapStopPending,SonCapRebound;internal DateTime SonCapPollAt,SonCapMapAt,SonCapEmptyAt,SonCapRouteAt;
         public volatile bool UpRequested;public volatile bool FarmEnabled,FarmArrived,FarmQuietZone;internal bool FarmZoneWaiting;internal volatile bool FarmStopPending;public volatile int CharacterLevel;public volatile string FarmStatus="";public volatile FarmSpot[] FarmObserved=new FarmSpot[0];public volatile int FarmPositionMap=-1,FarmPositionX,FarmPositionY;public DateTime FarmPositionReadAt=DateTime.MinValue;internal FarmSpot[] FarmChoices=new FarmSpot[0];internal FarmSpot FarmTarget;internal bool FarmCharacterMode;internal int FarmLevel;internal DateTime FarmPollAt,FarmRouteAt,FarmStableAt,FarmZoneCheckAt;internal bool FarmRouteSent;
-        public volatile SkillInfo[] Skills=new SkillInfo[0];public volatile bool TrainEnabled,SkillScanRequested=true,TrainReady;public volatile int TrainSkillId=-1,TrainStatus,TrainAttempts,TrainTargetId=-1,TrainTargetHp;public volatile int[] HangingSkillIds=new[]{367,271,285,1};public int HangingSkillCursor;internal bool HangingAwaiting;internal DateTime HangingRequestLogAt,HangingResultLogAt;public int HangingRequests;internal DateTime LevelOneNextAt;internal int SkillGeneration,TrainCursor;internal bool TrainIdleApplied;internal bool ReceiveFlowActive;public volatile int[] TrainSkillIds=new int[0];
+        public volatile SkillInfo[] Skills=new SkillInfo[0];public volatile bool TrainEnabled,SkillScanRequested=true,TrainReady;public volatile int TrainSkillId=-1,TrainStatus,TrainAttempts,TrainTargetId=-1,TrainTargetHp;public volatile int[] HangingSkillIds=new[]{367,271,285,1};public int HangingSkillCursor;internal bool HangingAwaiting;internal DateTime HangingRequestLogAt,HangingResultLogAt;internal int HangingLogStatus=Int32.MinValue,HangingLogSkill=-1;public int HangingRequests;internal DateTime LevelOneNextAt;internal int SkillGeneration,TrainCursor;internal bool TrainIdleApplied;internal bool ReceiveFlowActive;public volatile int[] TrainSkillIds=new int[0];
 
         public volatile bool GameSettingsReady,GameAutoEnabled,GameAutoWanted;public volatile string GameAutoStatus="Chờ game sẵn sàng";public volatile int EntryAutoActivations;internal int EntryAutoOrigin=-1,EntryAutoKind,EntryCombatMap=-1;internal bool EntryAutoWaiting;internal DateTime EntryAutoAt;public volatile string SettingsError="";
         public volatile GameOption[] GameOptions=new GameOption[0];
@@ -1792,6 +1792,10 @@ namespace TGLL {
                 j.ThiQuyCombatActive=true;j.GameAutoManaged=true;ArmThiQuyFocus(r,data,j);
             }catch(Exception e){LogThiQuyScan(j,"read_error:"+e.GetType().Name+":"+e.Message);if(j.ThiQuyCombatActive)SuspendThiQuyFocus(r,data,j);else j.ThiQuyPriorityStatus="Chờ dữ liệu quái mới";}
         }
+        internal static bool ShouldLogHangingResult(NativeJob j,DateTime now){
+            if(j.HangingLogStatus==j.TrainStatus&&j.HangingLogSkill==j.TrainSkillId&&(now-j.HangingResultLogAt).TotalSeconds<10)return false;
+            j.HangingLogStatus=j.TrainStatus;j.HangingLogSkill=j.TrainSkillId;j.HangingResultLogAt=now;return true;
+        }
         static void PumpTraining(Remote r,long data,NativeJob j){
             if(data==0)return;
             if(j.HangingAwaiting&&!j.GameAutoEnabled)r.Write(data+12,new byte[4]);
@@ -1801,7 +1805,7 @@ namespace TGLL {
             if(BitConverter.ToInt32(r.Read(data,4),0)!=0)return;
             j.TrainReady=true;ReadTraining(r,data,j);
             if(j.HangingAwaiting){
-                if(j.TrainStatus==4||(DateTime.UtcNow-j.HangingResultLogAt).TotalSeconds>=1){j.HangingResultLogAt=DateTime.UtcNow;Log(j,"hanging_skill_result",",\"skill_id\":"+j.TrainSkillId+",\"status\":"+j.TrainStatus+",\"started\":"+j.TrainAttempts);}
+                if(ShouldLogHangingResult(j,DateTime.UtcNow)){Log(j,"hanging_skill_result",",\"skill_id\":"+j.TrainSkillId+",\"status\":"+j.TrainStatus+",\"started\":"+j.TrainAttempts);}
                 if(j.TrainStatus!=6)j.HangingSkillCursor++;
                 j.HangingAwaiting=false;hanging=HangingLevelOne(j);overlay=hanging!=null;
             }
@@ -1812,7 +1816,7 @@ namespace TGLL {
                 bool levelOne=overlay||j.TrainEnabled&&Array.Exists(j.Skills,x=>x.Id==j.TrainSkillId&&x.Level==1);
                 if(levelOne&&!focus&&DateTime.UtcNow<j.LevelOneNextAt)return;
                 if(levelOne)j.LevelOneNextAt=DateTime.UtcNow.AddMilliseconds(overlay?10:500);
-                if(overlay){j.HangingAwaiting=true;j.HangingRequests++;if((DateTime.UtcNow-j.HangingRequestLogAt).TotalSeconds>=1){j.HangingRequestLogAt=DateTime.UtcNow;Log(j,"hanging_skill_requested",",\"skill_id\":"+j.TrainSkillId+",\"interval_ms\":10,\"requests\":"+j.HangingRequests);}}
+                if(overlay){j.HangingAwaiting=true;j.HangingRequests++;if((DateTime.UtcNow-j.HangingRequestLogAt).TotalSeconds>=10){j.HangingRequestLogAt=DateTime.UtcNow;Log(j,"hanging_skill_requested",",\"skill_id\":"+j.TrainSkillId+",\"interval_ms\":10,\"requests\":"+j.HangingRequests);}}
                 r.Write(data+88,BitConverter.GetBytes(overlay?1:0));
                 r.Write(data+80,BitConverter.GetBytes(j.QuestEnabled?(j.BeastQuestEnabled?2:1):0));r.Write(data+16,BitConverter.GetBytes(j.TrainSkillId));r.Write(data+12,BitConverter.GetBytes((focus?!j.GameAutoEnabled&&j.ThiQuyPriorityArmed&&(!j.FarmEnabled||j.FarmArrived||j.ThiQuyFarmPaused):(overlay||j.TrainEnabled&&(!j.QuestEnabled||j.QuestPhase==6&&!j.GameAutoEnabled)))&&!j.ReceiveFlowActive&&!j.ReconnectRequested&&!j.CloseRequested&&!j.CancelRequested&&!j.CloakEnabled&&(!UsesInstanceGameCombat(j)||overlay||focus)&&!DungeonEntryBlocked(j)&&!j.QuestPauseAuto&&!(j.ZoneSyncActive||j.FollowActive&&(j.FollowDistance<0||j.FollowDistance>48))?1:0));r.Write(data,BitConverter.GetBytes(1));j.SkillScanRequested=j.Skills.Length==0;
             }
@@ -2593,10 +2597,14 @@ namespace TGLL {
             catch(Exception e){j.Error=FailureCode(e);j.State="failed";System.ComponentModel.Win32Exception win=e as System.ComponentModel.Win32Exception;Log(j,"failure",",\"attempts\":"+j.StartAttempts+",\"stage\":"+Quote(j.Stage)+",\"error\":"+Quote(j.Error)+",\"exception_type\":"+Quote(e.GetType().Name)+",\"stack\":"+Quote(e.StackTrace)+",\"win32_code\":"+(win==null?0:win.NativeErrorCode));}
             finally{j.Password=null;if(j.CloseRequested){j.Error="";j.State="closed";}}
         }
+        internal static T ReadStartupModules<T>(Func<T> read) where T:class {
+            try{return read();}
+            catch(NullReferenceException){return null;}
+            catch(System.ComponentModel.Win32Exception e){if(e.NativeErrorCode!=299&&e.NativeErrorCode!=6&&e.NativeErrorCode!=183)throw;return null;}
+        }
         static ProcessModule Module(Process p,string name){
-            try{p.Refresh();foreach(ProcessModule m in p.Modules)if(m!=null&&String.Equals(m.ModuleName,name,StringComparison.OrdinalIgnoreCase))return m;}
-            catch(NullReferenceException){} // Loader snapshot incomplete; next poll retries.
-            catch(System.ComponentModel.Win32Exception e){if(e.NativeErrorCode!=299&&e.NativeErrorCode!=6)throw;}
+            var modules=ReadStartupModules(delegate{p.Refresh();return p.Modules;});
+            if(modules!=null)foreach(ProcessModule m in modules)if(m!=null&&String.Equals(m.ModuleName,name,StringComparison.OrdinalIgnoreCase))return m;
             return null;
         }
         internal static bool SelectNpcId(Remote r,long data,NativeJob job){
@@ -3082,6 +3090,7 @@ namespace TGLL {
             if(stage>=0&&j.SonCapAlive!=alive)Log(j,"soncap_monsters",",\"map\":"+map+",\"alive\":"+alive+",\"loaded\":"+(loaded?"true":"false"));
             if(stage<0){if(ObserveSonCapReturn(j,map,now))return 0;if(j.SonCapEntrySubmitted&&j.SonCapStage<0&&(now-j.EntryAutoAt).TotalSeconds>60){j.GameAutoWanted=false;j.SonCapFailure="Chưa xác nhận vào hang Sơn Cáp";j.SonCapStatus="Sơn Cáp: "+j.SonCapFailure;}if(j.SonCapStage>=0){j.GameAutoWanted=false;j.SonCapFailure="Rời hang trước khi xác nhận hoàn thành";j.SonCapStatus="Sơn Cáp: "+j.SonCapFailure;}return 0;}
             if(!ObserveSonCapMapEntry(j,map,now))return 0;
+            if(alive>=0&&j.SonCapReadError.Length>0){j.SonCapReadError="";Log(j,"soncap_read_recovered",",\"map\":"+map);}
             j.SonCapAlive=alive;
             if(alive<0){j.SonCapEmptyAt=DateTime.MinValue;j.SonCapStatus="Sơn Cáp: chờ xác nhận số quái, giữ kiểm tra treo theo map";return 0;}
             if(j.SonCapMoving&&alive>0){j.SonCapMoving=false;j.SonCapStopPending=true;j.SonCapClearedStage=-1;j.SonCapEmptyAt=DateTime.MinValue;j.GameAutoWanted=false;j.SonCapStatus="Sơn Cáp: còn quái, hủy chạy cổng để đánh tiếp";Log(j,"soncap_portal_cancelled",",\"alive\":"+alive);return 0;}

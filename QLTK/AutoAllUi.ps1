@@ -5,6 +5,17 @@ $script:autoAllNames=@('Sơn Cáp','Cấm thuật','Địa cung','Nhiệm vụ t
 $autoAllCheck=New-Object Windows.Forms.CheckBox;$autoAllCheck.Appearance='Button';$autoAllCheck.Text='Auto tất cả';$autoAllCheck.TextAlign='MiddleCenter';$autoAllCheck.SetBounds(235,84,115,22);$options.Controls.Add($autoAllCheck)
 $autoAllTip=New-Object Windows.Forms.ToolTip
 $autoAllTip.SetToolTip($autoAllCheck,'Chọn tất cả acc: Sơn Cáp → Cấm thuật → Địa cung → Nhiệm vụ tuần hoàn → Linh thú. Tắt game sau mỗi hoạt động; chờ đóng hết mới chuyển đợt.')
+function Write-AutoAllProgress([string]$eventName,[string]$kind){
+ if($UiTest -or !$script:autoAllRun){return}
+ try{
+  $run=$script:autoAllRun;$signature=$eventName+':'+$run.stage
+  if($run.PSObject.Properties['progressKey'] -and $run.progressKey -eq $signature){return}
+  $run | Add-Member NoteProperty progressKey $signature -Force
+  $record=@{time=[datetime]::UtcNow.ToString('o');event=$eventName;activity=$kind;stage=([Math]::Min(5,[int]$run.stage+1));accounts=$run.ids.Count}
+  $folder=Join-Path $PSScriptRoot 'logs';$null=[IO.Directory]::CreateDirectory($folder)
+  [IO.File]::AppendAllText((Join-Path $folder 'auto-all-progress.jsonl'),((ConvertTo-Json $record -Compress)+[Environment]::NewLine),(New-Object Text.UTF8Encoding($false)))
+ }catch{}
+}
 function Get-AutoAllStage([string]$id){
  if($script:autoAllRun -and $script:autoAllRun.active -and $script:autoAllRun.ids.ContainsKey($id) -and $script:autoAllRun.stage -lt 5){return $script:autoAllKinds[$script:autoAllRun.stage]};return ''
 }
@@ -57,12 +68,14 @@ function Start-AutoAll {
  $ids=@{};foreach($a in $script:accounts){$ids[[string]$a.id]=$true}
  $draining=@();foreach($kind in $script:autoAllKinds){foreach($b in @(Get-AutoAllBatches $kind)){if($b.closeOperation){foreach($m in $b.members){$draining+=@([pscustomobject]@{id=$m.id;operation=$b.closeOperation})}}}}
  $script:autoAllRun=[pscustomobject]@{active=$true;stage=0;submitted=$false;prepared=$false;ids=$ids;draining=$draining;retryAt=[datetime]::MinValue;message='Chuẩn bị Auto tất cả'}
+ Write-AutoAllProgress 'auto_all_started' $script:autoAllKinds[0]
  Reset-AutoAllQueues;$autoLoginCheck.Checked=$true;Set-AutoAllSelection;Set-AutoAllCloseOptions
  $script:loadingAutoAll=$true;try{$autoAllCheck.Checked=$true}finally{$script:loadingAutoAll=$false}
  Pump-AutoAll
 }
 function Stop-AutoAll([bool]$completed=$false){
  if(!$script:autoAllRun -or !$script:autoAllRun.active){return}
+ Write-AutoAllProgress $(if($completed){'auto_all_completed'}else{'auto_all_stopped'}) ''
  $script:autoAllRun.active=$false
  if(!$completed){
   Reset-AutoAllQueues
@@ -86,8 +99,8 @@ function Pump-AutoAll {
    if([datetime]::UtcNow -lt $run.retryAt){return}
    $accounts=@(Get-AutoAllAccounts)
    if($accounts.Count -ne $run.ids.Count){throw 'Danh sách acc đã thay đổi; dừng rồi bật lại Auto tất cả.'}
-   try{Submit-AutoAllStage $kind $accounts;$run.submitted=$true}
-   catch{$run.retryAt=[datetime]::UtcNow.AddSeconds(5);$run.message='Auto tất cả: chưa xếp được '+$name+' • '+$_.Exception.Message;$status.Text=$run.message;return}
+   try{Submit-AutoAllStage $kind $accounts;$run.submitted=$true;Write-AutoAllProgress 'auto_all_stage_submitted' $kind}
+   catch{Write-AutoAllProgress 'auto_all_stage_submit_failed' $kind;$run.retryAt=[datetime]::UtcNow.AddSeconds(5);$run.message='Auto tất cả: chưa xếp được '+$name+' • '+$_.Exception.Message;$status.Text=$run.message;return}
   }
   $batches=@(Get-AutoAllBatches $kind)
   if(!$batches.Count){$run.message='Auto tất cả: hàng chờ '+$name+' đã bị hủy; bỏ tích rồi bật lại để chạy lại';$status.Text=$run.message;return}
@@ -97,6 +110,7 @@ function Pump-AutoAll {
   Trace-AutoAllPending $kind $batches $remaining
   if($remaining){return}
   foreach($id in $run.ids.Keys){if(Test-AutoAllAccountOpen $id){$run.message='Auto tất cả: '+$name+' đã xong; đợi xác nhận tắt hết game';$status.Text=$run.message;return}}
+  Write-AutoAllProgress 'auto_all_stage_completed' $kind
   Reset-AutoAllQueues;$run.stage++;$run.submitted=$false
   if($run.stage -ge 5){Stop-AutoAll $true}
  }catch{if($script:autoAllRun){$script:autoAllRun.message='Auto tất cả: '+$_.Exception.Message;$status.Text=$script:autoAllRun.message}}

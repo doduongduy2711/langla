@@ -1,4 +1,4 @@
-using System;using System.Diagnostics;using System.Runtime.InteropServices;using System.Text;using TGLL;
+﻿using System;using System.Diagnostics;using System.Runtime.InteropServices;using System.Text;using TGLL;
 class TrainTests{
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)]delegate void Tick();
  [UnmanagedFunctionPointer(CallingConvention.Cdecl)]delegate int Count(IntPtr self,IntPtr info);
@@ -16,7 +16,21 @@ class TrainTests{
  static void Put(Remote r,long p,long v){r.Write(p,BitConverter.GetBytes(v));}
  static void Hp(Remote r,long mob,int value){r.Write(mob+0x70,BitConverter.GetBytes(value));r.Write(mob+0x78,BitConverter.GetBytes(value));}
  static long Fn(Delegate d){return Marshal.GetFunctionPointerForDelegate(d).ToInt64();}
- static int Main(){try{using(Remote r=new Remote(Process.GetCurrentProcess())){
+ static void LogSampling(){
+  foreach(int code in new[]{6,299,183})Assert(NativeBackend.ReadStartupModules<string>(delegate{throw new System.ComponentModel.Win32Exception(code);})==null,"transient module read aborted startup");
+  Assert(NativeBackend.ReadStartupModules(delegate{return "ready";})=="ready","module read did not recover on next poll");
+  bool denied=false;try{NativeBackend.ReadStartupModules<string>(delegate{throw new System.ComponentModel.Win32Exception(5);});}catch(System.ComponentModel.Win32Exception){denied=true;}Assert(denied,"permanent module error hidden");
+  var j=new NativeJob("fixture.exe","fixture","unused",null,true);var t=new DateTime(2026,10,25,0,0,0,DateTimeKind.Utc);j.TrainStatus=4;j.TrainSkillId=1;
+  Assert(NativeBackend.ShouldLogHangingResult(j,t),"first combat result missing");
+  for(int n=1;n<1000;n++)Assert(!NativeBackend.ShouldLogHangingResult(j,t.AddMilliseconds(n*10)),"duplicate combat result flooded log");
+  Assert(NativeBackend.ShouldLogHangingResult(j,t.AddSeconds(10)),"periodic combat counters missing");
+  j.TrainStatus=6;Assert(NativeBackend.ShouldLogHangingResult(j,t.AddMilliseconds(10001)),"error transition hidden");
+  Assert(!NativeBackend.ShouldLogHangingResult(j,t.AddSeconds(11)),"identical error flooded log");
+  j.TrainStatus=4;Assert(NativeBackend.ShouldLogHangingResult(j,t.AddSeconds(11)),"combat recovery hidden");
+  j.TrainSkillId=2;Assert(NativeBackend.ShouldLogHangingResult(j,t.AddSeconds(11)),"skill change hidden");
+  Console.WriteLine("PASS: repeated skill result logs sampled every 10 seconds; first result, status/error/recovery and skill changes remain immediate; no skill commands changed.");
+ }
+ static int Main(){try{LogSampling();using(Remote r=new Remote(Process.GetCurrentProcess())){
   long data=r.Allocate(4096),canvasSlot=r.Allocate(8),canvasClass=r.Allocate(256),statics=r.Allocate(16),canvas=r.Allocate(512),fcClass=r.Allocate(512),fcSlot=r.Allocate(8),fc=r.Allocate(1024),charClass=r.Allocate(256),charSlot=r.Allocate(8),charStatics=r.Allocate(16),player=r.Allocate(512),mobSlot=r.Allocate(8),mobClass=r.Allocate(512),npcClass=r.Allocate(512);
   Put(r,canvasSlot,canvasClass);Put(r,canvasClass+0xb8,statics);Put(r,statics,canvas);Put(r,canvas+0x1b8,fc);Put(r,fcSlot,fcClass);Put(r,fc,fcClass);Put(r,charSlot,charClass);Put(r,charClass+0xb8,charStatics);Put(r,charStatics+8,player);r.Write(player+0xac,BitConverter.GetBytes(100));Put(r,mobSlot,mobClass);
   long skill=r.Allocate(80),buff=r.Allocate(80),template=r.Allocate(64),buffTemplate=r.Allocate(64),name=r.Allocate(64);r.Write(skill+0x10,BitConverter.GetBytes((short)901));r.Write(skill+0x12,BitConverter.GetBytes((short)7));r.Write(skill+0x14,new byte[]{1});r.Write(skill+0x1c,BitConverter.GetBytes(450));r.Write(buff+0x10,BitConverter.GetBytes((short)902));r.Write(buffTemplate+0x2c,new byte[]{6});r.Write(template+0x2c,new byte[]{1});Put(r,template+0x18,name);r.Write(name+16,BitConverter.GetBytes(6));r.Write(name+20,Encoding.Unicode.GetBytes("Attack"));

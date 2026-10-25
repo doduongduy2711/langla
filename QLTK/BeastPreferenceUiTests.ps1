@@ -52,6 +52,19 @@ try{
   if((Get-AccountLaunchMode $route) -ne 'beast'){throw 'Saved Beast checkbox lost on new session'}
  }finally{Set-Item Function:\Test-AccountOpenBlocked $routeBlock}
  Write-Output 'PASS: closed, cancelled, failed and exited Beast sessions cannot redirect Dungeon, Quest, Izanami, SonCap or normal launch; living Beast and saved checkbox retain routing.'
+ # An explicit queue submission takes priority over other saved activity checkboxes.
+ $launchMarkers=@{};$route=$script:accounts[0]
+ foreach($flag in @('autoBeast','soncap','dungeonHigh','izanami','autoQuest')){$route | Add-Member NoteProperty $flag $true -Force}
+ try{
+  foreach($kind in @('beast','soncap','izanami','dungeon','quest')){$marker=$kind+'LaunchingAccountId';$launchMarkers[$marker]=Get-Variable -Scope Script -Name $marker -ValueOnly -ErrorAction SilentlyContinue;Set-Variable -Scope Script -Name $marker -Value ''}
+  foreach($kind in @('beast','soncap','izanami','dungeon','quest')){
+   $marker=$kind+'LaunchingAccountId';Set-Variable -Scope Script -Name $marker -Value $route.id
+   if((Get-AccountLaunchMode $route) -ne $kind){throw "Saved toggles redirected explicit $kind queue"}
+   if((Get-ActivityLaunchContext 'unrelated-account') -ne ''){throw 'Queue launch context leaked to unrelated account'}
+   Set-Variable -Scope Script -Name $marker -Value ''
+  }
+ }finally{foreach($marker in $launchMarkers.Keys){Set-Variable -Scope Script -Name $marker -Value $launchMarkers[$marker]}}
+ Write-Output 'PASS: all five explicit activity queues override conflicting saved preferences only for the submitted account.'
  Write-Output 'PASS: per-account Beast checkbox, offline persistence, direct/bulk capped-queue routing, selection isolation, stop only selected activity without closing games, and config copy/paste.'
 }finally{
  foreach($j in $bpFixtures){$removed=$null;$null=$bpNative.TryRemove($j.Id,[ref]$removed)}
