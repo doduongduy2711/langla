@@ -135,7 +135,7 @@ function Update-SonCapQueueStatus {
     $script:soncapWaiting=@{};foreach($b in $script:soncapBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){$script:soncapWaiting[$m.id]=$m}}}
     $active=0;$waiting=0;$done=0;foreach($b in $script:soncapBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $soncapQueueHint.Text="Đang giữ lượt: $active / $([int]$soncapMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
-    $held=Get-ActivityPriorityHoldCount $script:soncapBatches
+    $held=0;if($script:soncapBatches.Count){$held=Get-ActivityPriorityHoldCount $script:soncapBatches}
     if($held -gt 0){ $soncapQueueHint.Text+="`r`nƯu tiên mở lại tổ đang chạy: $held acc (đã giữ chỗ)" }
     $errors=@($script:soncapBatches | Where-Object {$_.error});if($errors.Count){$soncapQueueHint.Text+="`r`n"+$errors[0].error}
     if(!$script:soncapWaiting.Count){return}

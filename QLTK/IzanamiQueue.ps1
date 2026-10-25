@@ -132,7 +132,7 @@ function Update-IzanamiQueueStatus {
     $script:izanamiWaiting=@{};foreach($b in $script:izanamiBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){$script:izanamiWaiting[$m.id]=$m}}}
     $active=0;$waiting=0;$done=0;foreach($b in $script:izanamiBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $izanamiQueueHint.Text="Đang giữ lượt: $active / $([int]$izanamiMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
-    $held=Get-ActivityPriorityHoldCount $script:izanamiBatches
+    $held=0;if($script:izanamiBatches.Count){$held=Get-ActivityPriorityHoldCount $script:izanamiBatches}
     if($held -gt 0){ $izanamiQueueHint.Text+="`r`nƯu tiên mở lại tổ đang chạy: $held acc (đã giữ chỗ)" }
     $errors=@($script:izanamiBatches | Where-Object {$_.error});if($errors.Count){$izanamiQueueHint.Text+="`r`n"+$errors[0].error}
     if(!$script:izanamiWaiting.Count){return}
