@@ -258,6 +258,7 @@ function Handle-SocketJson([string]$json) {
                 if ($null -eq $job) {throw 'invalid_request: job_id không tồn tại.'}
                 $result=@{ok=$true;job_id=$job.Id;status=$job.State;pid=$job.ProcessId;error=$job.Error}
                 if ($job.PSObject.Properties['TrainEnabled']) {$result.train_enabled=$job.TrainEnabled;$result.train_skill_ids=@($job.TrainSkillIds);$result.train_skill_id=$job.TrainSkillId;$result.train_attempts=$job.TrainAttempts;$result.train_status=$job.TrainStatus;$result.train_target_id=$job.TrainTargetId;$result.train_target_hp=$job.TrainTargetHp}
+                if ($job.PSObject.Properties['GemEnabled']) {$result.gem_enabled=$job.GemEnabled;$result.gem_status=$job.GemStatus;$result.gem_completed=$job.GemCompleted;$result.gem_skipped=$job.GemSkipped;$result.auto_item_enabled=$job.AutoItemEnabled}
                 if ($job.PSObject.Properties['ReadyPhase']) {$result.ready_phase=$job.ReadyPhase}
                 if ($job.PSObject.Properties['NpcCount']) {$result.npc_count=$job.NpcCount}
                 if ($job.PSObject.Properties['NpcId']) {$result.npc_id=$job.NpcId;$result.npc_template_id=$job.NpcTemplateId;$result.npc_candidates=$job.NpcDetails;$result.stage=$job.Stage}
