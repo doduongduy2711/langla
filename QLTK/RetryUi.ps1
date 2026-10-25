@@ -44,7 +44,8 @@ function Retire-ActivityMember($batch,$m,$j){
  $batch.state='launching';$batch.error='Mở game lỗi; đã nhả lượt, chờ thử lại qua hàng đợi'
 }
 function Sync-ActivityCapacity([string]$kind,$batch,$index){
- if($batch.state -eq 'waiting' -or $batch.closeOperation){return}
+ if($batch.state -eq 'waiting'){return}
+ if($batch.closeOperation){Complete-ActivityDrainedClose $kind $batch $index;return}
  foreach($m in $batch.members){
   if($m.PSObject.Properties['timeoutTeamRecovery'] -and $m.timeoutTeamRecovery -and (Test-ActivityMemberYielded $m) -and (Test-ActivityTeamEnded $kind $batch ([string]$m.id))){$m.job=$m.retiredJob;$m.slotYielded=$false;$m | Add-Member NoteProperty queueExited $true -Force;$m.timeoutTeamRecovery=$false}
   $closedJob=& ('Get-'+$kind+'MemberJob') $m;$a=$index[$m.id]
@@ -64,7 +65,7 @@ function Sync-ActivityCapacity([string]$kind,$batch,$index){
   $j=& ('Get-'+$kind+'MemberJob') $m;$a=$index[$m.id]
   if((& ('Test-'+$kind+'MemberRunning') $m) -or ($a -and (Test-AccountOpenBlocked $a))){continue}
   if($j -and $j.State -eq 'failed' -and !$j.CloseRequested -and !$j.CancelRequested){Retire-ActivityMember $batch $m $j}
-  elseif($j -and ($j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled'))){
+  elseif($j -and ($j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled') -or (Test-ActivityExitedSession $j))){
    $m | Add-Member NoteProperty queueExited $true -Force
   }
  }
@@ -106,9 +107,30 @@ function Test-ActivityTeamEnded([string]$kind,$batch,[string]$excluded){
  $seen=$false
  foreach($peer in $batch.members){
   if([string]$peer.id -eq $excluded){continue};$seen=$true;$j=& ('Get-'+$kind+'MemberJob') $peer
+  if(!$j -and $script:accountJobs.ContainsKey([string]$peer.id)){$current=Get-AccountJob ([string]$script:accountJobs[[string]$peer.id]);if($current){$j=$current}}
+  # A waiting timeout recovery clears job; its retired snapshot still proves this peer exited.
+  if(!$j -and $peer.PSObject.Properties['timeoutTeamRecovery'] -and $peer.timeoutTeamRecovery -and $peer.PSObject.Properties['retiredJob']){$j=Get-AccountJob ([string]$peer.retiredJob)}
   if(!($j -is [TGLL.NativeJob])){return $false}
+  if((Test-ActivityMemberYielded $peer) -and !($peer.PSObject.Properties['timeoutTeamRecovery'] -and $peer.timeoutTeamRecovery)){return $false}
   $finished=if($kind -eq 'SonCap'){$j.SonCapFinished -or $j.SonCapNoAttempts}else{$j.IzanamiRunFinished}
   if(!$finished -and !($j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','cancelled'))){return $false}
  }
  return $seen
+}
+
+function Test-ActivityExitedSession($j){
+ return ($j -is [TGLL.NativeJob] -and $j.ProcessId -gt 0 -and !$j.GameSettingsReady -and !$j.TrainReady -and $j.State -notin @('queued','starting','retrying','reconnecting','typing','submitted','selecting_character','character_submitted','waiting_map'))
+}
+function Complete-ActivityDrainedClose([string]$kind,$batch,$index){
+ if(!$batch.closeOperation -or !$batch.closeOperation.Completed){return}
+ foreach($m in $batch.members){
+  $a=$index[$m.id];if((& ('Test-'+$kind+'MemberRunning') $m) -or ($a -and (Test-AccountOpenBlocked $a))){return}
+  $j=& ('Get-'+$kind+'MemberJob') $m
+  if(!$j){
+   # A no-attempts response can close a team before every reserved member was submitted.
+   if($m.job -or ((Test-ActivityMemberYielded $m) -and !$batch.limitClose)){return}
+  }elseif(!$j.CloseRequested -and !$j.CancelRequested -and $j.State -notin @('closed','cancelled') -and !(Test-ActivityExitedSession $j)){return}
+ }
+ $batch.state='done';$batch.error=''
+ foreach($m in $batch.members){$m | Add-Member NoteProperty queueExited $true -Force}
 }

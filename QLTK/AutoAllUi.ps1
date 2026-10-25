@@ -94,6 +94,7 @@ function Pump-AutoAll {
   $remaining=@($batches | Where-Object {$_.state -ne 'done'}).Count
   $run.message='Auto tất cả '+($run.stage+1)+'/5: '+$name+' • Còn '+$remaining+' lượt; đợi xong và tắt hết game'
   $autoAllCheck.Text='Auto tất cả '+($run.stage+1)+'/5';$autoAllTip.SetToolTip($autoAllCheck,$run.message);$status.Text=$run.message
+  Trace-AutoAllPending $kind $batches $remaining
   if($remaining){return}
   foreach($id in $run.ids.Keys){if(Test-AutoAllAccountOpen $id){$run.message='Auto tất cả: '+$name+' đã xong; đợi xác nhận tắt hết game';$status.Text=$run.message;return}}
   Reset-AutoAllQueues;$run.stage++;$run.submitted=$false
@@ -102,3 +103,20 @@ function Pump-AutoAll {
  finally{$script:autoAllPumping=$false}
 }
 $autoAllCheck.Add_CheckedChanged({if($script:loadingAutoAll){return};if($autoAllCheck.Checked){try{Start-AutoAll}catch{$script:loadingAutoAll=$true;try{$autoAllCheck.Checked=$false}finally{$script:loadingAutoAll=$false};Show-Error $_.Exception.Message}}else{Stop-AutoAll}})
+
+function Trace-AutoAllPending([string]$kind,$batches,[int]$remaining){
+ if($UiTest -or $remaining -lt 1 -or $remaining -gt 2){return}
+ try{
+  $details=@(foreach($b in @($batches | Where-Object {$_.state -ne 'done'})){
+   $members=@(foreach($m in $b.members){$a=$script:accounts | Where-Object {[string]$_.id -eq [string]$m.id} | Select-Object -First 1;$j=$null;if($m.job){$j=Get-AccountJob $m.job}
+    [ordered]@{account_id=[string]$m.id;username=[string]$a.username;job_id=[string]$m.job;state=$(if($j){[string]$j.State}else{'no_current_job'});pid=$(if($j){$j.ProcessId}else{0});yielded=[bool](Test-ActivityMemberYielded $m);exited=[bool](Test-ActivityMemberExited $m)}
+   })
+   [ordered]@{state=[string]$b.state;error=[string]$b.error;close_completed=$(if($b.closeOperation){[bool]$b.closeOperation.Completed}else{$null});members=$members}
+  })
+  $key=ConvertTo-Json -InputObject @($kind,$details) -Depth 8 -Compress
+  $run=$script:autoAllRun;if($run.PSObject.Properties['traceKey'] -and $run.traceKey -ceq $key){return};$run | Add-Member NoteProperty traceKey $key -Force
+  $record=@{time=[datetime]::UtcNow.ToString('o');event='auto_all_pending';activity=$kind;remaining_batches=$remaining;batches=$details}
+  $folder=Join-Path $PSScriptRoot 'logs';$null=[IO.Directory]::CreateDirectory($folder)
+  [IO.File]::AppendAllText((Join-Path $folder 'auto-all-queue.jsonl'),((ConvertTo-Json $record -Depth 10 -Compress)+[Environment]::NewLine),(New-Object Text.UTF8Encoding($false)))
+ }catch{}
+}
