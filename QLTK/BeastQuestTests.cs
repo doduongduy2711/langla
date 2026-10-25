@@ -1,4 +1,4 @@
-using System;using System.Runtime.InteropServices;using System.Diagnostics;using System.Reflection;using System.Collections.Concurrent;using System.Linq;using TGLL;
+﻿using System;using System.Runtime.InteropServices;using System.Diagnostics;using System.Reflection;using System.Collections.Concurrent;using System.Linq;using TGLL;
 class BeastQuestTests {
  static void Check(bool b,string s){if(!b)throw new Exception(s);}static void I(Remote r,long p,int v){r.Write(p,BitConverter.GetBytes(v));}
  static void Snapshot(Remote r,long d,int map,bool present){I(r,d,0);I(r,d+8,1);I(r,d+12,3);I(r,d+16,present?1:0);I(r,d+20,0);I(r,d+32,0);I(r,d+36,1);I(r,d+64,2);I(r,d+80,map);I(r,d+84,74);I(r,d+88,68);I(r,d+108,196);I(r,d+112,1);I(r,d+120,1);}
@@ -16,7 +16,29 @@ class BeastQuestTests {
   P(r,d+128,menu+8);I(r,d,9);tick();Check(closed==1,"replaced popup was closed");P(r,d+128,menu);I(r,menu+0xdc,12);I(r,d,9);tick();Check(closed==1,"another NPC menu closed");I(r,menu+0xdc,11);visible=false;I(r,d,9);tick();Check(closed==1,"dismissed popup closed again");visible=true;I(r,d+116,0);I(r,d,9);tick();Check(closed==1,"weekly quest closed beast menu");
   GC.KeepAlive(getter);GC.KeepAlive(contains);GC.KeepAlive(close);
  }}
- static void Snap(Remote r,long d,NativeJob j,int map,bool present,bool done=false,int remain=3){Snapshot(r,d,map,present);I(r,d+20,done?1:0);I(r,d+12,remain);j.QuestRetryAt=DateTime.MinValue;j.TeamReadAt=DateTime.UtcNow;j.MapId=map;if(j.ZoneId<0)j.ZoneId=10;j.ZoneReadAt=DateTime.UtcNow;}
+ static void Snap(Remote r,long d,NativeJob j,int map,bool present,bool done=false,int remain=3){j.BeastStartupSandReady=true;j.BeastStartupSandPid=j.ProcessId;Snapshot(r,d,map,present);I(r,d+20,done?1:0);I(r,d+12,remain);j.QuestRetryAt=DateTime.MinValue;j.TeamReadAt=DateTime.UtcNow;j.MapId=map;if(j.ZoneId<0)j.ZoneId=10;j.ZoneReadAt=DateTime.UtcNow;}
+ static NativeJob StartupJob(Remote r,int pid){return new NativeJob("synthetic.exe","beast-startup","unused",null,true){ProcessId=pid,State="opened",GameSettingsReady=true,TrainReady=true,BeastQuestEnabled=true,QuestEnabled=true,QuestQueueOnly=true,BeastSoloReady=true,TeamReadAt=DateTime.UtcNow,TravelData=r.Allocate(4096),QuestAt=DateTime.UtcNow};}
+ static void StartupSand(){using(var r=new Remote(Process.GetCurrentProcess())){
+  long data=r.Allocate(4096);var timer=new Stopwatch();var j=StartupJob(r,11);
+  Snapshot(r,data,74,false);NativeBackend.PumpQuest(r,data,j);Check(BitConverter.ToInt32(r.Read(data,4),0)==0&&j.QuestPhase==0,"beast routed before first Sand teleport");
+  NativeBackend.PumpBeastStartupSand(r,data,j,timer,0,()=>false);Check(j.TravelActive&&j.NpcAction==3&&j.ReceiveFlowActive&&BitConverter.ToInt32(r.Read(j.TravelData+4,4),0)==168,"beast did not start item168 Sand teleport");
+  DateTime first=j.TravelAt;NativeBackend.PumpBeastStartupSand(r,data,j,timer,0,()=>false);Check(j.TravelAt==first,"startup reissued item before acknowledgement");
+  I(r,j.TravelData,0);I(r,j.TravelData+8,2);NativeBackend.PumpBeastStartupSand(r,data,j,timer,0,()=>false);Check(j.TravelPhase==2,"item receipt not awaited");
+  I(r,j.TravelData+64,3);NativeBackend.PumpBeastStartupSand(r,data,j,timer,0,()=>false);Check(j.TravelPhase==3,"village submenu not awaited");
+  I(r,j.TravelData+64,4);NativeBackend.PumpBeastStartupSand(r,data,j,timer,0,()=>false);Check(j.TravelPhase==5&&!j.BeastStartupSandReady,"menu selection falsely counted as arrival");
+  I(r,data,16);NativeBackend.PumpBeastStartupSand(r,data,j,timer,0,()=>false);Check(!j.BeastStartupSandReady,"unknown/wrong map started beast quest");
+  NativeBackend.PumpBeastStartupSand(r,data,j,timer,0,()=>true);Check(j.BeastStartupSandReady&&!j.TravelActive&&!j.ReceiveFlowActive&&!j.IzanamiRequested&&j.Stage=="beast_startup_sand_ready"&&BitConverter.ToInt32(r.Read(data,4),0)==12,"Sand arrival started key/dungeon/Onoki instead of beast quest");
+  NativeBackend.PumpBeastStartupSand(r,data,j,timer,0,()=>false);Check(j.BeastStartupSandReady&&!j.TravelActive,"startup teleport repeated during same session");
+  Snapshot(r,data,59,false);j.TeamReadAt=DateTime.UtcNow;NativeBackend.PumpQuest(r,data,j);Check(BitConverter.ToInt32(r.Read(data,4),0)==1,"confirmed Sand arrival did not release Rasa navigation");
+  j.ProcessId=12;NativeBackend.PumpBeastStartupSand(r,data,j,timer,0,()=>false);Check(!j.BeastStartupSandReady&&j.TravelActive&&j.BeastStartupSandPid==12,"replacement game skipped first teleport");
+  j.BeastQuestEnabled=false;NativeBackend.PumpTravel(r,data,j,timer,0);Check(!j.TravelActive&&!j.ReceiveFlowActive,"untick left teleport active");
+  var missing=StartupJob(r,22);long d2=r.Allocate(4096);NativeBackend.PumpBeastStartupSand(r,d2,missing,timer,0,()=>false);I(r,missing.TravelData,0);I(r,missing.TravelData+8,3);NativeBackend.PumpBeastStartupSand(r,d2,missing,timer,0,()=>false);
+  Check(missing.BeastStartupSandStopped&&!missing.BeastStartupSandReady&&!missing.TravelActive&&missing.QuestStatus.Contains("travel_item_missing"),"missing item was not reported or allowed quest through");
+  NativeBackend.PumpBeastStartupSand(r,d2,missing,timer,0,()=>false);Check(!missing.TravelActive,"missing-item startup spams travel");
+  var near=StartupJob(r,33);long d3=r.Allocate(4096);NativeBackend.PumpBeastStartupSand(r,d3,near,timer,0,()=>true);Check(near.BeastStartupSandReady&&!near.TravelActive&&BitConverter.ToInt32(r.Read(near.TravelData,4),0)==0,"already confirmed Sand consumed a travel item");
+  var unready=StartupJob(r,44);unready.GameSettingsReady=false;NativeBackend.PumpBeastStartupSand(r,d3,unready,timer,0,()=>false);Check(!unready.TravelActive,"startup ran before game readiness");
+  Console.WriteLine("PASS: first-session beast Sand teleport item168, menu/real-arrival gates, quest pause then Rasa navigation, once per PID, no key/dungeon/Onoki entry, cancellation, missing-item stop, already-Sand skip and unready gate; no real game action.");
+ }}
  static void Zones(ConcurrentDictionary<string,NativeJob> jobs){
  var peers=Enumerable.Range(0,10).Select(i=>new NativeJob("synthetic.exe","zone-"+i,"unused",null,true){CharacterName="zone-"+i,State="opened",GameSettingsReady=true,BeastQuestEnabled=true,QuestEnabled=true,MapId=74,ZoneId=10,ZoneReadAt=DateTime.UtcNow}).ToArray();foreach(var j in peers)jobs[j.Id]=j;
  try{
@@ -60,7 +82,7 @@ class BeastQuestTests {
  a.QuestPhase=3;Snap(r,d,a,68,true,true,0);NativeBackend.PumpQuest(r,d,a);Check(!a.QuestFinished&&BitConverter.ToInt32(r.Read(d,4),0)==7,"zero turns skipped final pending reward");
  Snap(r,d,a,68,false,false,0);NativeBackend.PumpQuest(r,d,a);Check(a.QuestFinished&&!a.QuestEnabled,"own final server confirmation not required");
  }
- Zones(jobs);MenuClose();Check(NativeCode.Quest(0x100000,0x180000000).Length<8192,"quest callback exceeds allocation");Console.WriteLine("PASS: solo mode clears group/follow/zone gates, idempotent sync, exact-party leave and server-confirmed solo gate, independent Receive/strict combat/Complete/remaining rounds, per-account finish, distinct map/zone reservations, concurrent arrivals, departure/close reuse, actual zone confirmation, server confirmation and exact Rasa menu close; no real game action.");
+ StartupSand();Zones(jobs);MenuClose();Check(NativeCode.Quest(0x100000,0x180000000).Length<8192,"quest callback exceeds allocation");Console.WriteLine("PASS: solo mode clears group/follow/zone gates, idempotent sync, exact-party leave and server-confirmed solo gate, independent Receive/strict combat/Complete/remaining rounds, per-account finish, distinct map/zone reservations, concurrent arrivals, departure/close reuse, actual zone confirmation, server confirmation and exact Rasa menu close; no real game action.");
  }finally{foreach(var j in peers){NativeJob removed;jobs.TryRemove(j.Id,out removed);}}
  }
 }

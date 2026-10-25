@@ -1096,8 +1096,8 @@ namespace TGLL {
         static void StopQuest(NativeJob j,string reason){j.QuestFaultStopped=!j.BeastQuestEnabled&&!j.QuestFinished;j.QuestEnabled=false;j.QuestPauseAuto=false;j.GameAutoManaged=true;j.GameAutoWanted=false;j.TrainEnabled=false;j.QuestStatus=reason;Log(j,"quest_stop",",\"reason\":"+Quote(reason)+",\"completed\":"+j.QuestCompleted);}
         internal static void QuestSend(Remote r,long data,NativeJob j,int command){r.Write(data,BitConverter.GetBytes(command));j.QuestCommand=command;j.QuestInFlight=true;j.QuestRetryAt=DateTime.UtcNow.AddMilliseconds(command==1||command==2?3000:750);Log(j,"quest_command",",\"command\":"+command+",\"phase\":"+j.QuestPhase+",\"remaining\":"+j.QuestRemaining);}
         internal static void PumpQuest(Remote r,long data,NativeJob j){
-            if(data==0)return;r.Write(data+116,BitConverter.GetBytes(j.BeastQuestEnabled?1:0));bool soloReady=!j.BeastQuestEnabled||j.BeastSoloReady&&(DateTime.UtcNow-j.TeamReadAt).TotalSeconds<4;bool canRun=soloReady&&j.QuestEnabled&&!j.CloseRequested&&!j.CancelRequested&&!j.ReceiveFlowActive&&j.GameSettingsReady&&(j.QuestQueueOnly||(!j.ReceiveKeyEnabled&&!j.DungeonHighEnabled&&!j.IzanamiEnabled));
-            r.Write(data+4,BitConverter.GetBytes(canRun?1:0));if(!canRun){if(j.BeastQuestEnabled&&j.QuestEnabled&&!soloReady){j.TrainEnabled=false;j.QuestPauseAuto=true;j.QuestAt=DateTime.UtcNow;j.QuestStatus="Linh thú: đợi xác nhận đã rời nhóm cũ để chạy riêng";}if(!j.QuestEnabled&&BitConverter.ToInt32(r.Read(data,4),0)!=99){r.Write(data,BitConverter.GetBytes(r.Ptr(data+72)!=0?6:0));}return;}
+            if(data==0)return;r.Write(data+116,BitConverter.GetBytes(j.BeastQuestEnabled?1:0));bool soloReady=!j.BeastQuestEnabled||j.BeastSoloReady&&(DateTime.UtcNow-j.TeamReadAt).TotalSeconds<4;bool canRun=soloReady&&(!j.BeastQuestEnabled||j.BeastStartupSandReady&&j.BeastStartupSandPid==j.ProcessId)&&j.QuestEnabled&&!j.CloseRequested&&!j.CancelRequested&&!j.ReceiveFlowActive&&j.GameSettingsReady&&(j.QuestQueueOnly||(!j.ReceiveKeyEnabled&&!j.DungeonHighEnabled&&!j.IzanamiEnabled));
+            r.Write(data+4,BitConverter.GetBytes(canRun?1:0));if(!canRun){if(j.BeastQuestEnabled&&j.QuestEnabled&&!j.BeastStartupSandReady){j.TrainEnabled=false;j.QuestPauseAuto=true;if(!j.BeastStartupSandStopped)j.QuestStatus="Linh thú: phù 168 về Làng Cát lần đầu, đợi xác nhận tới làng";}else if(j.BeastQuestEnabled&&j.QuestEnabled&&!soloReady){j.TrainEnabled=false;j.QuestPauseAuto=true;j.QuestAt=DateTime.UtcNow;j.QuestStatus="Linh thú: đợi xác nhận đã rời nhóm cũ để chạy riêng";}if(!j.QuestEnabled&&BitConverter.ToInt32(r.Read(data,4),0)!=99){r.Write(data,BitConverter.GetBytes(r.Ptr(data+72)!=0?6:0));}return;}
             int request=BitConverter.ToInt32(r.Read(data,4),0);
             if(request==99){if(j.QuestBusyAt==DateTime.MinValue)j.QuestBusyAt=DateTime.UtcNow;if((DateTime.UtcNow-j.QuestBusyAt).TotalSeconds>10){r.Write(data,new byte[4]);j.QuestBusyAt=DateTime.MinValue;j.QuestInFlight=false;j.QuestPhase=0;j.QuestRetryAt=DateTime.MinValue;j.QuestBusyRetries++;Log(j,"quest_busy_recovered",",\"retry\":"+j.QuestBusyRetries);if(j.QuestBusyRetries>=3)StopQuest(j,"Lệnh nhiệm vụ lỗi 3 lần; kiểm tra game");else j.QuestStatus="Lệnh bị kẹt; đang thử lại nhiệm vụ";}return;}
             j.QuestBusyAt=DateTime.MinValue;if(request!=0)return;
@@ -2372,7 +2372,7 @@ namespace TGLL {
         internal static void PumpTravel(Remote r,long data,NativeJob j,Stopwatch timer,long game,Func<bool> arrived=null){
             if(!j.TravelActive)return;
             string error="";int phase=j.TravelPhase;
-            if(j.CancelRequested||j.CloseRequested||((j.NpcAction==2&&!j.IzanamiEnabled)||(j.NpcAction!=2&&!j.ReceiveKeyEnabled&&!j.DungeonHighEnabled))){CancelTravel(r,j);j.ReceiveFlowActive=false;r.Write(data,BitConverter.GetBytes(12));timer.Stop();return;}
+            if(j.CancelRequested||j.CloseRequested||(j.NpcAction==3?!j.BeastQuestEnabled:(j.NpcAction==2?!j.IzanamiEnabled:!j.ReceiveKeyEnabled&&!j.DungeonHighEnabled))){CancelTravel(r,j);j.ReceiveFlowActive=false;r.Write(data,BitConverter.GetBytes(12));timer.Stop();return;}
             if(phase==1&&BitConverter.ToInt32(r.Read(j.TravelData,4),0)==0){
                 int result=BitConverter.ToInt32(r.Read(j.TravelData+8,4),0);
                 if(result==2){j.TravelPhase=2;j.TravelAt=DateTime.UtcNow;r.Write(j.TravelData+64,BitConverter.GetBytes(2));j.State="choosing_village";Log(j,"travel_item_requested",",\"template_id\":168,\"slot\":"+BitConverter.ToInt32(r.Read(j.TravelData+16,4),0));}
@@ -2384,12 +2384,13 @@ namespace TGLL {
             }else if(phase==5){
                 int state=BitConverter.ToInt32(r.Read(data,4),0);
                 if(state==14){if(!j.TravelMapWaiting){j.TravelMapWaiting=true;timer.Restart();}else if(timer.ElapsedMilliseconds>=5000)r.Write(data,BitConverter.GetBytes(15));}
-                else if(state==16){bool ready=false;try{ready=arrived==null?SandNpcReady(r,game):arrived();}catch{}if(ready){j.TravelActive=false;j.TravelReady=true;j.TravelPhase=0;r.Write(j.TravelData+64,new byte[4]);Log(j,"travel_arrival_confirmed","");
+                else if(state==16){bool ready=false;try{ready=arrived==null?(j.NpcAction==3?ReadDungeonMap(r,game)==59&&SandNpcReady(r,game):SandNpcReady(r,game)):arrived();}catch{}if(ready){j.TravelActive=false;j.TravelReady=true;j.TravelPhase=0;r.Write(j.TravelData+64,new byte[4]);Log(j,"travel_arrival_confirmed","");
+                    if(j.NpcAction==3){CompleteBeastStartupSand(r,data,j,timer);return;}
                     if(j.NpcAction==2){j.IzanamiTravelReady=true;j.ReceiveFlowActive=false;j.IzanamiRequested=IsIzanamiLeader(j);j.State="opened";j.Stage="izanami_wait_team";j.TeamStatus="Đã về Làng Cát; đợi tổ đội cùng khu";r.Write(data,BitConverter.GetBytes(12));timer.Stop();Log(j,"izanami_travel_ready","");return;}
                     BeginNpcSearch(r,data,j,timer,game);return;}}
             }
             if(error.Length==0&&(DateTime.UtcNow-j.TravelAt).TotalSeconds>=30)error=phase==2?"travel_village_menu_not_ready":phase==3?"travel_sand_menu_not_ready":"travel_arrival_not_confirmed";
-            if(error.Length>0){if(j.NpcAction==2){j.IzanamiTravelStopped=true;j.IzanamiRequested=false;}CancelTravel(r,j);j.ReceiveFlowActive=false;j.ReceiveKeyRequested=false;j.DungeonStartAt=DateTime.MinValue;j.Error=error;j.State=j.NpcAction==2?"izanami_unavailable":"npc_unavailable";j.Stage="travel_stopped";r.Write(data,BitConverter.GetBytes(12));timer.Stop();Log(j,"travel_stopped",",\"reason\":"+Quote(error));}
+            if(error.Length>0){if(j.NpcAction==2){j.IzanamiTravelStopped=true;j.IzanamiRequested=false;}CancelTravel(r,j);j.ReceiveFlowActive=false;j.ReceiveKeyRequested=false;j.DungeonStartAt=DateTime.MinValue;j.Error=error;j.State=j.NpcAction==2?"izanami_unavailable":"npc_unavailable";j.Stage="travel_stopped";r.Write(data,BitConverter.GetBytes(12));timer.Stop();Log(j,"travel_stopped",",\"reason\":"+Quote(error));if(j.NpcAction==3){j.BeastStartupSandStopped=true;j.QuestStatus="Linh thú: chưa phù về Làng Cát • "+error;}}
         }
         internal static bool CanSkipDungeonReturnTravel(NativeJob j){return j.NpcAction==1&&j.DungeonHighEnabled&&!j.DungeonCycleWaiting;}
         internal static void BeginNpcSearch(Remote r,long data,NativeJob j,Stopwatch timer,long game=0,Func<InventorySnapshot> reader=null,Func<bool> returnedToSand=null){
@@ -2427,6 +2428,7 @@ namespace TGLL {
             r.Write(data,BitConverter.GetBytes(12));timer.Stop();Log(j,"dungeon_resumed",",\"map\":"+map);return true;
         }
         internal static void PumpReceiveKey(Remote r,long data,NativeJob j,Stopwatch timer,long game=0,Func<InventorySnapshot> inventoryReader=null,Func<int> mapReader=null){
+            if(j.BeastQuestEnabled&&(!j.BeastStartupSandReady||j.BeastStartupSandPid!=j.ProcessId)){PumpBeastStartupSand(r,data,j,timer,game);return;}
             if(j.DungeonHighEnabled&&j.ReceiveKeyRequested&&!j.ReceiveFlowActive&&!j.DungeonCycleWaiting){try{if(ResumeHighDungeon(r,data,j,timer,mapReader==null?ReadDungeonMap(r,game):mapReader()))return;}catch{return;}}
             if(j.KeyReceiptPending){PumpKeyReceipt(r,data,j,timer,game,inventoryReader);return;}
             if(j.QuestEnabled&&!j.ReceiveFlowActive)return;
@@ -3870,7 +3872,7 @@ namespace TGLL {
 
 namespace TGLL {
  public sealed partial class NativeJob {
-  public volatile bool BeastQuestEnabled,BeastNearRasa,BeastSoloReady;
+  public volatile bool BeastQuestEnabled,BeastNearRasa,BeastSoloReady,BeastStartupSandReady,BeastStartupSandStopped;internal int BeastStartupSandPid;
   internal long BeastRasaMenu;internal int BeastRasaTag;
   internal int BeastCombatMap=-1,BeastCombatZone=-1;internal bool BeastZoneWaiting,BeastZoneReady,BeastZoneMustConfirm,BeastZoneChangeSent;
   internal int[] BeastZoneIds=new int[0],BeastZoneCounts=new int[0];internal DateTime BeastZoneListAt,BeastZoneRetryAt;
@@ -3883,12 +3885,27 @@ namespace TGLL {
    NativeJob j=Get(id);if(j==null||!j.Auto||j.CloseRequested||j.CancelRequested||j.State=="failed"||j.State=="closed"||j.State=="cancelled")throw new Exception("Phiên game chưa sẵn sàng cho linh thú.");
    if(j.BeastQuestEnabled==enabled)return;
    if(enabled){
+    j.BeastStartupSandStopped=false;
     if(j.ReceiveFlowActive||j.MailBusy||j.InboxBusy||j.MailEnabled||j.MailQueueOnly||j.CloakQueueOnly||j.SonCapEnabled)throw new Exception("Dừng hoạt động cũ trước khi chạy linh thú.");
     if(j.DailyManaged)CancelDailyPriority(j);StopFarm(j);
     SetAutoQuest(id,false);SetReceiveKey(id,false);SetDungeonHigh(id,false);SetIzanami(id,false);j.CloseAfterKey=false;j.DungeonQueueOnly=false;j.IzanamiQueueOnly=false;j.QuestQueueOnly=true;
     SetAutoQuest(id,true);ResetBeastCombatZone(j);ClearBeastTeam(j);j.BeastSoloReady=false;j.QuestRemaining=-1;j.QuestStatus="Linh thú: tự nhận, đánh đúng quái và trả nhiệm vụ tại Rasa";
    }else{ResetBeastCombatZone(j);j.QuestQueueOnly=false;j.QuestEnabled=false;j.QuestFinished=false;j.QuestPauseAuto=false;j.TrainEnabled=false;j.GameAutoWanted=false;j.QuestStatus="Đã dừng linh thú";}
    j.BeastQuestEnabled=enabled;j.BeastNearRasa=false;j.BeastRasaMenu=0;Log(j,"beast_configured",",\"enabled\":"+(enabled?"true":"false")+",\"mode\":\"solo\"");
+  }
+  internal static void CompleteBeastStartupSand(Remote r,long data,NativeJob j,Stopwatch timer){
+   j.BeastStartupSandReady=true;j.BeastStartupSandStopped=false;j.BeastStartupSandPid=j.ProcessId;j.ReceiveFlowActive=false;j.IzanamiRequested=false;j.Error="";j.State="opened";j.Stage="beast_startup_sand_ready";j.QuestPhase=0;j.QuestAt=DateTime.UtcNow;j.QuestRetryAt=DateTime.MinValue;j.BeastNearRasa=false;j.QuestStatus="Linh thú: đã về Làng Cát, tiếp tục nhiệm vụ riêng";
+   r.Write(data,BitConverter.GetBytes(12));timer.Stop();Log(j,"beast_startup_sand_ready",",\"pid\":"+j.ProcessId);
+  }
+  internal static void PumpBeastStartupSand(Remote r,long data,NativeJob j,Stopwatch timer,long game,Func<bool> inSand=null){
+   if(!j.BeastQuestEnabled||j.CloseRequested||j.CancelRequested||!j.GameSettingsReady||!j.TrainReady||j.TravelData==0)return;
+   if(j.BeastStartupSandPid!=j.ProcessId){j.BeastStartupSandReady=false;j.BeastStartupSandStopped=false;j.BeastStartupSandPid=j.ProcessId;}
+   if(j.BeastStartupSandReady||j.BeastStartupSandStopped)return;
+   if(j.TravelActive){PumpTravel(r,data,j,timer,game,inSand);return;}
+   bool arrived=false;try{arrived=inSand!=null?inSand():ReadDungeonMap(r,game)==59&&SandNpcReady(r,game);}catch{}
+   if(arrived){CompleteBeastStartupSand(r,data,j,timer);return;}
+   j.NpcAction=3;j.TravelReady=false;j.GameAutoManaged=true;j.GameAutoWanted=false;j.QuestPauseAuto=true;j.TrainEnabled=false;j.QuestStatus="Linh thú: dùng phù 168 về Làng Cát lần đầu";
+   BeginTravel(r,data,j,timer);Log(j,"beast_startup_sand_requested",",\"pid\":"+j.ProcessId+",\"template_id\":168");
   }
   static readonly object beastZoneGate=new object();
   internal static void ResetBeastCombatZone(NativeJob j){lock(beastZoneGate){j.BeastCombatMap=-1;j.BeastCombatZone=-1;}j.BeastZoneWaiting=false;j.BeastZoneReady=false;j.BeastZoneMustConfirm=false;j.BeastZoneChangeSent=false;j.BeastZoneIds=new int[0];j.BeastZoneCounts=new int[0];j.ZonePlanMap=-1;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;j.ZonePollAt=DateTime.MinValue;j.BeastZoneRetryAt=DateTime.MinValue;j.ZoneSyncActive=false;j.ZoneStatus="";}
