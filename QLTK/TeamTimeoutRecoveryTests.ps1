@@ -33,6 +33,24 @@ try{
   $m.slotYielded=$true;$m.job='';$script:trPeer.SonCapFinished=$true;$script:trPeer.IzanamiNoAttempts=$true
   Sync-ActivityCapacity $kind $b $index
   if(!(Test-ActivityMemberExited $m) -or (Test-ActivityMemberYielded $m)){throw "$kind kept retrying after its team finished"}
+  # Regression: a crashed game can retain izanami_running/opened after its lifetime worker exits.
+  $script:trClosed=$trCtor.Invoke(@('synthetic.exe','closed','unused',$null,$true))
+  $script:trClosed.State='izanami_running';$script:trClosed.ProcessId=999999
+  $script:trPeer.State='opened';$script:trPeer.SonCapFinished=$false;$script:trPeer.IzanamiNoAttempts=$false;$script:trPeer.ZoneReadAt=[datetime]::UtcNow
+  $m=[pscustomobject]@{id='closed';job=$script:trClosed.Id;queueExited=$true};$p=[pscustomobject]@{id='peer';job=$script:trPeer.Id}
+  $b=[pscustomobject]@{state='blocked';members=@($m,$p);closeOperation=$null;error=''}
+  if(!(Test-ActivityTeamRecoveryCandidate $kind $script:trClosed)){throw "$kind missed unrequested process exit"}
+  Sync-ActivityCapacity $kind $b $index
+  if(!(Test-ActivityMemberYielded $m) -or (Test-ActivityMemberExited $m) -or !$m.timeoutTeamRecovery){throw "$kind did not recover crashed member with living team"}
+  if((58+(Get-ActivityReservedCount $b)) -ne 59){throw "$kind did not release crashed slot at 59/60"}
+  if((Restore-ActivityReservations @($b) 0) -ne 0){throw "$kind crash recovery exceeded limit"}
+  if((Restore-ActivityReservations @($b) 1) -ne 1 -or (58+(Get-ActivityReservedCount $b)) -ne 60){throw "$kind did not fill only missing team slot at 60/60"}
+  if((Restore-ActivityReservations @($b) 1) -ne 0){throw "$kind reserved crashed member twice"}
+  foreach($case in @('manual_close','cancelled','reconnecting','pending','finished')){
+   $candidate=$trCtor.Invoke(@('synthetic.exe','closed','unused',$null,$true));$candidate.State='izanami_running';$candidate.ProcessId=999999
+   switch($case){'manual_close'{$candidate.CloseRequested=$true} 'cancelled'{$candidate.CancelRequested=$true} 'reconnecting'{$candidate.ReconnectRequested=$true} 'pending'{$candidate.State='selecting_character'} 'finished'{$candidate.SonCapFinished=$true;$candidate.IzanamiNoAttempts=$true}}
+   if(Test-ActivityTeamRecoveryCandidate $kind $candidate){throw "$kind reopened $case session"}
+  }
   # Stale, village, finished, disconnected and closed peers cannot cause reopen loops.
   foreach($case in @('stale','village','finished','reconnecting','closed')){
    $script:trPeer.State='opened';$script:trPeer.ZoneReadAt=[datetime]::UtcNow;$script:trPeer.MapId=$(if($kind -eq 'SonCap'){97}else{89});$script:trPeer.SonCapFinished=$false;$script:trPeer.IzanamiNoAttempts=$false
@@ -40,7 +58,7 @@ try{
    if(Test-ActivityTeamStillRunning $kind $b 'closed'){throw "$kind accepted $case peer as active"}
   }
  }
- Write-Output 'PASS: timeout member returns to its own queue only with fresh living SonCap/Izanami peers inside; old process/close-worker exit gates, max limit and stale/village/finished/reconnecting peer exclusions. No real game action.'
+ Write-Output 'PASS: timeout and unexpectedly exited members return to its own queue only with fresh living SonCap/Izanami peers inside; old process/close-worker exit gates, max limit and stale/village/finished/reconnecting peer exclusions. No real game action.'
 }finally{
  foreach($name in $trFunctions.Keys){Set-Item ('Function:\'+$name) $trFunctions[$name]};$script:accountJobs=$trSavedJobs
 }

@@ -49,11 +49,11 @@ function Sync-ActivityCapacity([string]$kind,$batch,$index){
  foreach($m in $batch.members){
   if($m.PSObject.Properties['timeoutTeamRecovery'] -and $m.timeoutTeamRecovery -and (Test-ActivityMemberYielded $m) -and (Test-ActivityTeamEnded $kind $batch ([string]$m.id))){$m.job=$m.retiredJob;$m.slotYielded=$false;$m | Add-Member NoteProperty queueExited $true -Force;$m.timeoutTeamRecovery=$false}
   $closedJob=& ('Get-'+$kind+'MemberJob') $m;$a=$index[$m.id]
-  if($closedJob -is [TGLL.NativeJob] -and $closedJob.ActivityTimeoutClosed -and !(& ('Test-'+$kind+'MemberRunning') $m) -and !($a -and (Test-AccountOpenBlocked $a)) -and (Test-ActivityTimeoutCloseFinished $closedJob) -and (Test-ActivityTeamStillRunning $kind $batch ([string]$m.id))){
+  if((Test-ActivityTeamRecoveryCandidate $kind $closedJob) -and !(& ('Test-'+$kind+'MemberRunning') $m) -and !($a -and (Test-AccountOpenBlocked $a)) -and (Test-ActivityTimeoutCloseFinished $closedJob) -and (Test-ActivityTeamStillRunning $kind $batch ([string]$m.id))){
    $m | Add-Member NoteProperty queueExited $false -Force
    Retire-ActivityMember $batch $m $closedJob;$m.retryAt=[datetime]::UtcNow
    $m | Add-Member NoteProperty timeoutTeamRecovery $true -Force;$m | Add-Member NoteProperty recoveryKind $kind -Force
-   $batch.error='Đồng đội còn trong hoạt động; xếp hàng mở lại acc bị tắt do chờ ở làng'
+   $batch.error='Đồng đội còn trong hoạt động; xếp hàng mở lại thành viên đã thoát game'
   }
  }
  if($batch.state -eq 'done'){return}
@@ -83,6 +83,16 @@ function Restore-ActivityReservations($batches,[int]$available){
 function Handle-ActivityLaunchError([string]$kind,$batch,$m,$index){
  $j=& ('Get-'+$kind+'MemberJob') $m;$a=$index[$m.id]
  if(!(& ('Test-'+$kind+'MemberRunning') $m) -and !($a -and (Test-AccountOpenBlocked $a))){Retire-ActivityMember $batch $m $j}
+}
+
+# Timeout shutdown and an unexpected process exit both need the same team recovery.
+# Explicit stop/close, native reconnect and completed activities keep their own lifecycle.
+function Test-ActivityTeamRecoveryCandidate([string]$kind,$j){
+ if($kind -notin @('SonCap','Izanami') -or !($j -is [TGLL.NativeJob])){return $false}
+ $finished=if($kind -eq 'SonCap'){$j.SonCapFinished -or $j.SonCapNoAttempts}else{$j.IzanamiRunFinished}
+ if($finished -or $j.ReconnectRequested){return $false}
+ if($j.ActivityTimeoutClosed){return $true}
+ return (!$j.CloseRequested -and !$j.CancelRequested -and (Test-ActivityExitedSession $j))
 }
 
 function Test-ActivityTeamStillRunning([string]$kind,$batch,[string]$excluded){
