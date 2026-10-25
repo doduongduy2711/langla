@@ -49,12 +49,12 @@ function Sync-AutoRows([int]$maxRows=0) {
         $j=Get-AccountJob $script:accountJobs[$key]
         Update-AccountCharacter $row $j
         if($null -eq $j -or !$j.PSObject.Properties['GameSettingsReady']){continue}
+        if($j.State -in @('failed','closed','cancelled') -or $j.CloseRequested){Set-AutoCell $row $false;$script:autoTrainApplied.Remove($key);continue}
         Sync-TrainPriority $row.Tag $j
         if($j -is [TGLL.NativeJob]){$selected=@(Get-AccountAutoSkills $row.Tag $j);if(($selected -join ',') -ne ($j.HangingSkillIds -join ',')){$j.HangingSkillIds=[int[]]$selected;$j.HangingSkillCursor=0}}
         if($j -is [TGLL.NativeJob] -and $j.IzanamiMapAutoActive){$script:autoTrainWanted[$key]=$true;$script:autoTrainApplied[$key]=$j.Id;Set-AutoCell $row $true;continue}
         if($j -is [TGLL.NativeJob] -and ($j.DailyActive -or $j.SonCapEnabled -or $j.QuestEnabled)){continue}
         if($j.MailQueueOnly -or $j.CloakQueueOnly){continue}
-        if($j.State -in @('failed','closed','cancelled') -or $j.CloseRequested){Set-AutoCell $row $false;$script:autoTrainApplied.Remove($key);continue}
         if($j.PSObject.Properties['ReconnectRequested'] -and $j.ReconnectRequested){continue}
         if($j.EntryAutoActivations -gt 0 -and $j.GameAutoWanted -and !$script:autoTrainWanted.ContainsKey($key)){
             $script:autoTrainWanted[$key]=$true;$script:autoTrainApplied[$key]=$j.Id;Set-AutoCell $row $true

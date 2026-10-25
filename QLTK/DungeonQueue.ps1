@@ -51,6 +51,7 @@ function Pump-DungeonQueue {
     if($script:dungeonQueuePaused -or !$script:dungeonBatches.Count){return}
     $script:dungeonAccountIndex=@{};foreach($a in $script:accounts){$script:dungeonAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:dungeonBatches){
+        if($batch.state -eq 'done'){continue}
         Sync-ActivityCapacity Dungeon $batch $script:dungeonAccountIndex
         if($batch.state -eq 'done'){continue}
         # Fault shutdown is per account; free a whole batch only after every game really exited.
@@ -119,5 +120,6 @@ function Update-DungeonQueueStatus {
     $active=0;$waiting=0;$done=0;foreach($b in $script:dungeonBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $dungeonQueueHint.Text="Đang giữ lượt: $active / $([int]$dungeonMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:dungeonBatches | Where-Object {$_.error});if($errors.Count){$dungeonQueueHint.Text+="`r`n"+$errors[0].error}
+    if(!$script:dungeonWaiting.Count){return}
     foreach($row in $grid.Rows){if($null -ne (Get-DungeonQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt địa cung';Update-AccountOpen $row}}
 }

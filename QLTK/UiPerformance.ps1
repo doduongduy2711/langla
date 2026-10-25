@@ -28,11 +28,40 @@ $tabs.Add_SelectedIndexChanged({Update-ActiveTabUi})
 # A large list must yield back to the WinForms message pump between expensive scans.
 $script:largeRefreshPhase=0;$script:autoSyncCursor=0
 $script:largeRefreshTasks=@('Sync-IzanamiTeams','Sync-DailyPriorityPreferences','Sync-SonCapPreferences','Sync-CloakQueue','Sync-AutoItemPreferences','Sync-QuestPreferences','Sync-GiftPreferences','Sync-MailCollection','Sync-Distribution','Update-ActiveTabUi','Update-UiSummary','Update-ManagerStatus')
+# Keep each queue on its 500 ms cadence, but put it on a separate UI timer tick.
+function Invoke-ActivityQueuePhase {
+ switch($script:uiTicks % 5){
+  0 {Invoke-UiTimedStep 'Pump-DungeonQueue';[TGLL.NativeBackend]::PulseSonCapLimitClose()}
+  1 {Invoke-UiTimedStep 'Pump-BeastQueue';Invoke-UiTimedStep 'Pump-AutoAll'}
+  2 {Invoke-UiTimedStep 'Pump-SonCapQueue';[TGLL.NativeBackend]::PulseActivityWatchdog()}
+  3 {Invoke-UiTimedStep 'Pump-IzanamiQueue';[TGLL.NativeBackend]::PulseIzanamiRounds()}
+  4 {Invoke-UiTimedStep 'Pump-QuestQueue';[TGLL.NativeBackend]::PulseQuestAutoClose()}
+ }
+}
+function Invoke-UiTimedStep([string]$stepName){
+ $clock=[Diagnostics.Stopwatch]::StartNew()
+ try{& $stepName}
+ finally{
+  $elapsed=$clock.ElapsedMilliseconds
+  if(!$UiTest -and $elapsed -ge 100){
+   try{
+    if(!$script:uiSlowStepAt){$script:uiSlowStepAt=@{}}
+    $now=[datetime]::UtcNow
+    if(!$script:uiSlowStepAt.ContainsKey($stepName) -or ($now-$script:uiSlowStepAt[$stepName]).TotalSeconds -ge 30){
+     $script:uiSlowStepAt[$stepName]=$now
+     $record=@{time=$now.ToString('o');event='ui_slow_step';step=$stepName;elapsed_ms=$elapsed;accounts=$grid.Rows.Count}
+     $folder=Join-Path $PSScriptRoot 'logs';$null=[IO.Directory]::CreateDirectory($folder)
+     [IO.File]::AppendAllText((Join-Path $folder 'ui-performance.jsonl'),((ConvertTo-Json $record -Compress)+[Environment]::NewLine),(New-Object Text.UTF8Encoding($false)))
+    }
+   }catch{}
+  }
+ }
+}
 function Invoke-LargeManagerRefresh {
     # All account Auto/Up intentions are checked in bounded batches, independently of rendering.
-    Sync-AutoRows 24
+    Sync-AutoRows 8
     $task=$script:largeRefreshTasks[$script:largeRefreshPhase]
     $script:largeRefreshPhase=($script:largeRefreshPhase+1)%$script:largeRefreshTasks.Count
     if($task -like 'Update-*' -and ([TGLL.UiPerformance]::IsScrolling -or $script:uiDragging -or $form.WindowState -eq [Windows.Forms.FormWindowState]::Minimized)){return}
-    & $task
+    Invoke-UiTimedStep $task
 }

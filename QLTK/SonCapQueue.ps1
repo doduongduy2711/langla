@@ -65,6 +65,7 @@ function Pump-SonCapQueue {
     if($script:soncapQueuePaused -or !$script:soncapBatches.Count){return}
     $script:soncapAccountIndex=@{};foreach($a in $script:accounts){$script:soncapAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:soncapBatches){
+        if($batch.state -eq 'done'){continue}
         Sync-ActivityCapacity SonCap $batch $script:soncapAccountIndex
         if($batch.state -eq 'done'){continue}
         # Fault shutdown is per account; free a whole batch only after every game really exited.
@@ -134,6 +135,7 @@ function Update-SonCapQueueStatus {
     $active=0;$waiting=0;$done=0;foreach($b in $script:soncapBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $soncapQueueHint.Text="Đang giữ lượt: $active / $([int]$soncapMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:soncapBatches | Where-Object {$_.error});if($errors.Count){$soncapQueueHint.Text+="`r`n"+$errors[0].error}
+    if(!$script:soncapWaiting.Count){return}
     foreach($row in $grid.Rows){if($null -ne (Get-SonCapQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt Sơn Cáp';Update-AccountOpen $row}}
 }
 

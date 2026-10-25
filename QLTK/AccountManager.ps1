@@ -504,7 +504,7 @@ function Invoke-ManagerTick {
     Update-VisibleCharacterNames
     $script:uiTicks++
     if(($script:uiTicks % 10) -eq 0){Retry-FailedAccounts}
-    if(($script:uiTicks % 5) -eq 0){Pump-AutoAll;[TGLL.NativeBackend]::PulseActivityWatchdog();[TGLL.NativeBackend]::PulseIzanamiRounds();Pump-BeastQueue;Pump-SonCapQueue;Pump-IzanamiQueue;Pump-QuestQueue;Pump-DungeonQueue;[TGLL.NativeBackend]::PulseQuestAutoClose();[TGLL.NativeBackend]::PulseSonCapLimitClose()}
+    Invoke-ActivityQueuePhase
     if($grid.Rows.Count -gt 32){Invoke-LargeManagerRefresh;return}
     if(($script:uiTicks % 10) -ne 0 -and !$script:uiRefreshPending){return}
     # Native combat and queue checks above keep running; coalesce UI-wide preference/paint passes during wheel/scrollbar input.

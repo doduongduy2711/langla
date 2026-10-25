@@ -50,6 +50,7 @@ function Pump-QuestQueue {
     if($script:questQueuePaused -or !$script:questBatches.Count){return}
     $script:questAccountIndex=@{};foreach($a in $script:accounts){$script:questAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:questBatches){
+        if($batch.state -eq 'done'){continue}
         Sync-ActivityCapacity Quest $batch $script:questAccountIndex
         if($batch.state -eq 'done'){continue}
         # Fault shutdown is per account; free a whole batch only after every game really exited.
@@ -118,5 +119,6 @@ function Update-QuestQueueStatus {
     $active=0;$waiting=0;$done=0;foreach($b in $script:questBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $questQueueHint.Text="Đang giữ lượt: $active / $([int]$questMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:questBatches | Where-Object {$_.error});if($errors.Count){$questQueueHint.Text+="`r`n"+$errors[0].error}
+    if(!$script:questWaiting.Count){return}
     foreach($row in $grid.Rows){if($null -ne (Get-QuestQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt nhiệm vụ';Update-AccountOpen $row}}
 }

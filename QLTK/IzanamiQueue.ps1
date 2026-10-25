@@ -59,6 +59,7 @@ function Pump-IzanamiQueue {
     if($script:izanamiQueuePaused -or !$script:izanamiBatches.Count){return}
     $script:izanamiAccountIndex=@{};foreach($a in $script:accounts){$script:izanamiAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:izanamiBatches){
+        if($batch.state -eq 'done'){continue}
         Sync-ActivityCapacity Izanami $batch $script:izanamiAccountIndex
         if($batch.state -eq 'done'){continue}
         # Fault shutdown is per account; free a whole batch only after every game really exited.
@@ -131,6 +132,7 @@ function Update-IzanamiQueueStatus {
     $active=0;$waiting=0;$done=0;foreach($b in $script:izanamiBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $izanamiQueueHint.Text="Đang giữ lượt: $active / $([int]$izanamiMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:izanamiBatches | Where-Object {$_.error});if($errors.Count){$izanamiQueueHint.Text+="`r`n"+$errors[0].error}
+    if(!$script:izanamiWaiting.Count){return}
     foreach($row in $grid.Rows){if($null -ne (Get-IzanamiQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt cấm thuật';Update-AccountOpen $row}}
 }
 

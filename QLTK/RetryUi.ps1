@@ -44,7 +44,7 @@ function Retire-ActivityMember($batch,$m,$j){
  $batch.state='launching';$batch.error='Mở game lỗi; đã nhả lượt, chờ thử lại qua hàng đợi'
 }
 function Sync-ActivityCapacity([string]$kind,$batch,$index){
- if($batch.state -eq 'waiting'){return}
+ if($batch.state -in @('waiting','done')){return}
  if($batch.closeOperation){Complete-ActivityDrainedClose $kind $batch $index;return}
  foreach($m in $batch.members){
   if($m.PSObject.Properties['timeoutTeamRecovery'] -and $m.timeoutTeamRecovery -and (Test-ActivityMemberYielded $m) -and (Test-ActivityTeamEnded $kind $batch ([string]$m.id))){$m.job=$m.retiredJob;$m.slotYielded=$false;$m | Add-Member NoteProperty queueExited $true -Force;$m.timeoutTeamRecovery=$false}
