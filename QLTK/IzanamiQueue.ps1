@@ -110,18 +110,19 @@ function Pump-IzanamiQueue {
     $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and ($a.izanami -or (Get-AccountLaunchMode $a) -eq 'izanami') -and (Test-AccountOpenBlocked $a)){$outside++}}
     $limit=[int]$izanamiMax.Value
     $active+=(Restore-ActivityReservations $script:izanamiBatches ($limit-$active-$outside))
+    $priorityHeld=Get-ActivityPriorityHoldCount $script:izanamiBatches
     foreach($batch in $script:izanamiBatches){
         if($batch.state -ne 'waiting'){continue}
         $alreadyOpen=0;foreach($m in $batch.members){$a=$script:izanamiAccountIndex[$m.id];if($a -and (Test-AccountOpenBlocked $a)){$alreadyOpen++}}
-        if($active+$outside+$batch.members.Count-$alreadyOpen -gt $limit){continue}
+        if($active+$outside+$priorityHeld+$batch.members.Count-$alreadyOpen -gt $limit){continue}
         $batch.state='launching';$active+=(Get-ActivityReservedCount $batch);$outside-=$alreadyOpen
         foreach($m in $batch.members){$script:izanamiWaiting.Remove($m.id)}
     }
     # Submit at most one account per timer tick; native login still runs six at a time.
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
-    foreach($batch in $script:izanamiBatches){if($batch.state -ne 'launching'){continue}
-        $member=@($batch.members | Where-Object {!$_.job -and !(Test-ActivityMemberYielded $_) -and !(Test-ActivityMemberExited $_)}) | Select-Object -First 1
-        if($member){try{Start-IzanamiMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Izanami $batch $member $script:izanamiAccountIndex};Sync-IzanamiTeams;break}
+    foreach($batch in @(Get-ActivityLaunchBatches $script:izanamiBatches)){
+        $member=Get-ActivityLaunchMember $batch
+        if($member){try{Start-IzanamiMember $member;if(Test-ActivityRetryPriority $batch $member){$null=[TGLL.NativeBackend]::PrioritizeLaunch([string]$member.job)}}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Izanami $batch $member $script:izanamiAccountIndex};Sync-IzanamiTeams;break}
         if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
     }
@@ -131,6 +132,8 @@ function Update-IzanamiQueueStatus {
     $script:izanamiWaiting=@{};foreach($b in $script:izanamiBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){$script:izanamiWaiting[$m.id]=$m}}}
     $active=0;$waiting=0;$done=0;foreach($b in $script:izanamiBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $izanamiQueueHint.Text="Đang giữ lượt: $active / $([int]$izanamiMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
+    $held=Get-ActivityPriorityHoldCount $script:izanamiBatches
+    if($held -gt 0){ $izanamiQueueHint.Text+="`r`nƯu tiên mở lại tổ đang chạy: $held acc (đã giữ chỗ)" }
     $errors=@($script:izanamiBatches | Where-Object {$_.error});if($errors.Count){$izanamiQueueHint.Text+="`r`n"+$errors[0].error}
     if(!$script:izanamiWaiting.Count){return}
     foreach($row in $grid.Rows){if($null -ne (Get-IzanamiQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt cấm thuật';Update-AccountOpen $row}}

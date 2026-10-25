@@ -113,18 +113,19 @@ function Pump-SonCapQueue {
     $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and ($a.soncap -or (Get-AccountLaunchMode $a) -eq 'soncap') -and (Test-AccountOpenBlocked $a)){$outside++}}
     $limit=[int]$soncapMax.Value
     $active+=(Restore-ActivityReservations $script:soncapBatches ($limit-$active-$outside))
+    $priorityHeld=Get-ActivityPriorityHoldCount $script:soncapBatches
     foreach($batch in $script:soncapBatches){
         if($batch.state -ne 'waiting'){continue}
         $alreadyOpen=0;foreach($m in $batch.members){$a=$script:soncapAccountIndex[$m.id];if($a -and (Test-AccountOpenBlocked $a)){$alreadyOpen++}}
-        if($active+$outside+$batch.members.Count-$alreadyOpen -gt $limit){continue}
+        if($active+$outside+$priorityHeld+$batch.members.Count-$alreadyOpen -gt $limit){continue}
         $batch.state='launching';$active+=(Get-ActivityReservedCount $batch);$outside-=$alreadyOpen
         foreach($m in $batch.members){$script:soncapWaiting.Remove($m.id)}
     }
     # Submit at most one account per timer tick; native login still runs six at a time.
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
-    foreach($batch in $script:soncapBatches){if($batch.state -ne 'launching'){continue}
-        $member=@($batch.members | Where-Object {!$_.job -and !(Test-ActivityMemberYielded $_) -and !(Test-ActivityMemberExited $_)}) | Select-Object -First 1
-        if($member){try{Start-SonCapMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError SonCap $batch $member $script:soncapAccountIndex};Sync-SonCapTeams;break}
+    foreach($batch in @(Get-ActivityLaunchBatches $script:soncapBatches)){
+        $member=Get-ActivityLaunchMember $batch
+        if($member){try{Start-SonCapMember $member;if(Test-ActivityRetryPriority $batch $member){$null=[TGLL.NativeBackend]::PrioritizeLaunch([string]$member.job)}}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError SonCap $batch $member $script:soncapAccountIndex};Sync-SonCapTeams;break}
         if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
     }
@@ -134,6 +135,8 @@ function Update-SonCapQueueStatus {
     $script:soncapWaiting=@{};foreach($b in $script:soncapBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){$script:soncapWaiting[$m.id]=$m}}}
     $active=0;$waiting=0;$done=0;foreach($b in $script:soncapBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
     $soncapQueueHint.Text="Đang giữ lượt: $active / $([int]$soncapMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
+    $held=Get-ActivityPriorityHoldCount $script:soncapBatches
+    if($held -gt 0){ $soncapQueueHint.Text+="`r`nƯu tiên mở lại tổ đang chạy: $held acc (đã giữ chỗ)" }
     $errors=@($script:soncapBatches | Where-Object {$_.error});if($errors.Count){$soncapQueueHint.Text+="`r`n"+$errors[0].error}
     if(!$script:soncapWaiting.Count){return}
     foreach($row in $grid.Rows){if($null -ne (Get-SonCapQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt Sơn Cáp';Update-AccountOpen $row}}

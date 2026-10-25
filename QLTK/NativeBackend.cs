@@ -14,14 +14,24 @@ using System.Threading;
 namespace TGLL {
     // Bound startup concurrency; a slow login/popup must not block every account.
     internal sealed class LaunchQueue : IDisposable {
-        readonly BlockingCollection<NativeJob> pending;
+        readonly BlockingCollection<NativeJob> pending;readonly HashSet<NativeJob> urgent=new HashSet<NativeJob>();
         readonly List<Thread> workers=new List<Thread>();readonly object gate=new object();readonly Action<NativeJob> run;int limit,active;bool stopping;
         internal LaunchQueue(int concurrency,int capacity,Action<NativeJob> run){
             pending=new BlockingCollection<NativeJob>(capacity);this.run=run;SetConcurrency(concurrency);
         }
         internal void SetConcurrency(int value){if(value<1||value>100)throw new ArgumentOutOfRangeException("value");lock(gate){limit=value;while(!stopping&&workers.Count<value){Thread worker=new Thread(Consume);worker.IsBackground=true;workers.Add(worker);worker.Start();}Monitor.PulseAll(gate);}}
-        void Consume(){while(true){NativeJob job;lock(gate){while(true){if(stopping&&pending.Count==0)return;if(active<limit&&pending.TryTake(out job)){active++;break;}Monitor.Wait(gate);}}try{run(job);}finally{lock(gate){active--;Monitor.PulseAll(gate);}}}}
+        void Consume(){while(true){NativeJob job;lock(gate){while(true){if(stopping&&pending.Count==0)return;if(active<limit&&pending.TryTake(out job)){urgent.Remove(job);active++;break;}Monitor.Wait(gate);}}try{run(job);}finally{lock(gate){active--;Monitor.PulseAll(gate);}}}}
         internal bool TryAdd(NativeJob job){lock(gate){if(stopping)return false;bool added=pending.TryAdd(job);Monitor.PulseAll(gate);return added;}}
+        internal bool Prioritize(NativeJob job){
+            lock(gate){
+                if(stopping)return false;
+                NativeJob[] items=pending.ToArray();if(!items.Contains(job))return false;
+                urgent.Add(job);NativeJob ignored;while(pending.TryTake(out ignored)){}
+                foreach(NativeJob item in items)if(urgent.Contains(item))pending.Add(item);
+                foreach(NativeJob item in items)if(!urgent.Contains(item))pending.Add(item);
+                Monitor.PulseAll(gate);return true;
+            }
+        }
         public void Dispose(){Thread[] snapshot;lock(gate){stopping=true;pending.CompleteAdding();snapshot=workers.ToArray();Monitor.PulseAll(gate);}foreach(Thread worker in snapshot)worker.Join(1000);}
     }
     internal sealed class LaunchPacer {
@@ -2576,6 +2586,7 @@ namespace TGLL {
         static readonly LaunchPacer launchPacer=new LaunchPacer();
         public static void SetLaunchDelayMs(int milliseconds){launchPacer.SetDelay(milliseconds);}
         public static void SetLaunchConcurrency(int count){queue.SetConcurrency(count);}
+        public static bool PrioritizeLaunch(string id){NativeJob j=Get(id);return j!=null&&queue.Prioritize(j);}
         public static NativeJob EnqueueManual(ProcessStartInfo info,string target,string username){if(info==null)throw new ArgumentNullException("info");NativeJob j=new NativeJob(target,username,null,null,false);j.ManualLaunch=info;jobs[j.Id]=j;if(!queue.TryAdd(j)){NativeJob ignored;jobs.TryRemove(j.Id,out ignored);throw new Exception("login_queue_full");}return j;}
         static void RunManual(NativeJob j){j.State="starting";j.Stage="start_game";launchPacer.Wait(delegate{Check(j);});Process p=null;try{Check(j);p=Process.Start(j.ManualLaunch);if(p==null)throw new Exception("game_exited");j.ProcessId=p.Id;j.Stage="register_game";ManagedGames.Register(p,j.Target);Check(j);j.State="opened";j.Error="";}catch{if(p!=null)try{if(!p.HasExited){p.Kill();p.WaitForExit(3000);}}catch{}throw;}finally{if(p!=null)p.Dispose();}}
         static void Work(NativeJob j){ExecuteLaunch(j,j.ManualLaunch==null?(Action<NativeJob>)Run:RunManual,WaitRetry);}

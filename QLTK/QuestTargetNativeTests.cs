@@ -16,6 +16,19 @@ class TrainTests{
  static void Put(Remote r,long p,long v){r.Write(p,BitConverter.GetBytes(v));}
  static void Hp(Remote r,long mob,int value){r.Write(mob+0x70,BitConverter.GetBytes(value));r.Write(mob+0x78,BitConverter.GetBytes(value));}
  static long Fn(Delegate d){return Marshal.GetFunctionPointerForDelegate(d).ToInt64();}
+ static void LaunchPriority(){
+  var seen=new System.Collections.Concurrent.ConcurrentQueue<string>();var entered=new System.Threading.ManualResetEventSlim(false);var release=new System.Threading.ManualResetEventSlim(false);
+  using(var q=new LaunchQueue(1,8,delegate(NativeJob j){seen.Enqueue(j.Username);if(j.Username=="busy"){entered.Set();release.Wait(5000);}})){
+   try{
+    var busy=new NativeJob("fixture.exe","busy","unused",null,true);var normal=new NativeJob("fixture.exe","normal","unused",null,true);var retry=new NativeJob("fixture.exe","team-retry","unused",null,true);var tail=new NativeJob("fixture.exe","tail","unused",null,true);
+    Assert(q.TryAdd(busy)&&entered.Wait(5000),"startup fixture did not occupy slot");Assert(q.TryAdd(normal)&&q.TryAdd(retry)&&q.TryAdd(tail),"startup pending fixtures not queued");
+    Assert(q.Prioritize(retry)&&q.Prioritize(retry),"pending team recovery not prioritized");release.Set();
+    Assert(System.Threading.SpinWait.SpinUntil(delegate{return seen.Count==4;},5000),"priority startup queue stalled");
+    Assert(String.Join(",",seen.ToArray())=="busy,team-retry,normal,tail","priority startup duplicated/lost work or moved normal accounts ahead of team retry");Assert(!q.Prioritize(retry),"already consumed startup job duplicated");
+   }finally{release.Set();}
+  }
+  Console.WriteLine("PASS: pending team recovery takes next startup slot ahead of normal accounts, preserves normal FIFO, deduplicates repeated priority requests and does not preempt active startup.");
+ }
  static void LogSampling(){
   foreach(int code in new[]{6,299,183})Assert(NativeBackend.ReadStartupModules<string>(delegate{throw new System.ComponentModel.Win32Exception(code);})==null,"transient module read aborted startup");
   Assert(NativeBackend.ReadStartupModules(delegate{return "ready";})=="ready","module read did not recover on next poll");
@@ -30,7 +43,7 @@ class TrainTests{
   j.TrainSkillId=2;Assert(NativeBackend.ShouldLogHangingResult(j,t.AddSeconds(11)),"skill change hidden");
   Console.WriteLine("PASS: repeated skill result logs sampled every 10 seconds; first result, status/error/recovery and skill changes remain immediate; no skill commands changed.");
  }
- static int Main(){try{LogSampling();using(Remote r=new Remote(Process.GetCurrentProcess())){
+ static int Main(){try{LaunchPriority();LogSampling();using(Remote r=new Remote(Process.GetCurrentProcess())){
   long data=r.Allocate(4096),canvasSlot=r.Allocate(8),canvasClass=r.Allocate(256),statics=r.Allocate(16),canvas=r.Allocate(512),fcClass=r.Allocate(512),fcSlot=r.Allocate(8),fc=r.Allocate(1024),charClass=r.Allocate(256),charSlot=r.Allocate(8),charStatics=r.Allocate(16),player=r.Allocate(512),mobSlot=r.Allocate(8),mobClass=r.Allocate(512),npcClass=r.Allocate(512);
   Put(r,canvasSlot,canvasClass);Put(r,canvasClass+0xb8,statics);Put(r,statics,canvas);Put(r,canvas+0x1b8,fc);Put(r,fcSlot,fcClass);Put(r,fc,fcClass);Put(r,charSlot,charClass);Put(r,charClass+0xb8,charStatics);Put(r,charStatics+8,player);r.Write(player+0xac,BitConverter.GetBytes(100));Put(r,mobSlot,mobClass);
   long skill=r.Allocate(80),buff=r.Allocate(80),template=r.Allocate(64),buffTemplate=r.Allocate(64),name=r.Allocate(64);r.Write(skill+0x10,BitConverter.GetBytes((short)901));r.Write(skill+0x12,BitConverter.GetBytes((short)7));r.Write(skill+0x14,new byte[]{1});r.Write(skill+0x1c,BitConverter.GetBytes(450));r.Write(buff+0x10,BitConverter.GetBytes((short)902));r.Write(buffTemplate+0x2c,new byte[]{6});r.Write(template+0x2c,new byte[]{1});Put(r,template+0x18,name);r.Write(name+16,BitConverter.GetBytes(6));r.Write(name+20,Encoding.Unicode.GetBytes("Attack"));
