@@ -26,6 +26,14 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Native test compilation failed'}
           ./QuestTargetNativeTests.exe
           if($LASTEXITCODE -ne 0){throw 'Native target tests failed'}
+      - name: Gem level 12 at 100 percent checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:GemCombineTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/GemCombineTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Gem test compilation failed'}
+          ./GemCombineTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Gem combine tests failed'}
       - name: Online notice confirmation checks
         shell: powershell
         run: |

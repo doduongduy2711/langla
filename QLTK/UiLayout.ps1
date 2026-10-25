@@ -341,6 +341,7 @@ Resize-UiLayout;Update-UiSummary
 
 
 . (Join-Path $PSScriptRoot 'MarketUi.ps1')
+. (Join-Path $PSScriptRoot 'GemCombineUi.ps1')
 . (Join-Path $PSScriptRoot 'AutoAllUi.ps1')
 
 foreach($page in $tabs.TabPages){$page.AutoScroll=$true}

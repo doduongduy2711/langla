@@ -596,11 +596,11 @@ namespace TGLL {
             Code64 a=new Code64();a.Emit(0x53,0x48,0x83,0xec,0x20);a.Call(original);a.Emit(0x48,0xbb);a.Q(data);a.Emit(0x83,0x7b,4,1);a.J(0x85,"done");a.Emit(0x83,0x7b,8,2);a.J(0x85,"done");a.Emit(0xff,0x43,28);a.Label("done");a.Emit(0x48,0x83,0xc4,0x20,0x5b,0xc3);return a.Finish();
         }
 
-        internal static byte[] Login(long data,long classSlot,long original,long stringNew,long setter,long login,long characterCode=0,long trainingCode=0,long settingsCode=0,long teamCode=0,long followCode=0,long zoneCode=0,long itemCode=0,long questCode=0,long travelItemCode=0,long travelMenuCode=0,long giftCode=0,long mailCode=0,long inboxCode=0,long farmCode=0,long chestCode=0,long cloakCode=0,long marketCode=0,long reminderCode=0) {
+        internal static byte[] Login(long data,long classSlot,long original,long stringNew,long setter,long login,long characterCode=0,long trainingCode=0,long settingsCode=0,long teamCode=0,long followCode=0,long zoneCode=0,long itemCode=0,long questCode=0,long travelItemCode=0,long travelMenuCode=0,long giftCode=0,long mailCode=0,long inboxCode=0,long farmCode=0,long chestCode=0,long cloakCode=0,long marketCode=0,long reminderCode=0,long gemCode=0) {
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x40);
             // Thử skill trước Update treo; giữ nguyên tham số của Update gốc.
             a.Emit(0x48,0x89,0x4c,0x24,0x20,0x48,0x89,0x54,0x24,0x28,0x4c,0x89,0x44,0x24,0x30,0x4c,0x89,0x4c,0x24,0x38);
-            if(trainingCode!=0)a.Call(trainingCode);
+            if(trainingCode!=0)a.Call(trainingCode);if(gemCode!=0)a.Call(gemCode);
             a.Emit(0x48,0x8b,0x4c,0x24,0x20,0x48,0x8b,0x54,0x24,0x28,0x4c,0x8b,0x44,0x24,0x30,0x4c,0x8b,0x4c,0x24,0x38);a.Call(original);
             a.Emit(0x48,0xbb);a.Q(data);a.Emit(0x83,0x3b,0x01);a.J(0x85,"done");a.Phase(11);
             a.Rax(classSlot);a.Emit(0x48,0x8b,0x38,0x48,0x85,0xff);a.J(0x84,"done");a.Emit(0x40,0xf6,0xc7,0x01);a.J(0x85,"done");
@@ -1016,6 +1016,94 @@ namespace TGLL {
     public sealed class GameOption {
         public int Tab,Code,Kind,Value;public string Label;public string[] Choices=new string[0];
         internal long Handle;internal GameOption Copy(){return (GameOption)MemberwiseClone();}
+    }
+    public sealed partial class NativeJob {
+        public volatile bool GemEnabled;public volatile string GemStatus="Tắt";public volatile int GemCompleted;
+        internal bool GemBusy,GemArmed;internal DateTime GemAt,GemNext;internal long GemBeforeSource,GemBeforeTarget,GemBeforeSilver,GemFee;
+    }
+    internal sealed class GemPlan {
+        internal long Player,Bag,Canvas,Weights,Costs,SourceWeight,TargetWeight,Fee,Silver;internal InventoryItem[] Items;
+    }
+    public static partial class NativeBackend {
+        // Item template IDs are zero based: ID 9 = stone level 10, ID 11 = level 12.
+        internal static InventoryItem[] PlanGemCombine(InventorySnapshot bag,long sourceWeight,long targetWeight){
+            if(bag==null||!bag.Ready||sourceWeight<=0||sourceWeight>long.MaxValue/16||targetWeight!=sourceWeight*16)throw new Exception("gem_rate_unverified");
+            var items=bag.Items.Where(x=>x.TemplateId==9&&x.Quantity==1&&x.Slot==x.BagIndex&&x.Slot>=0&&x.Slot<bag.Capacity).Take(16).ToArray();
+            if(items.Select(x=>x.Slot).Distinct().Count()!=items.Length)throw new Exception("gem_slots_duplicated");return items;
+        }
+        public static void StartGemCombine(string id){
+            NativeJob j=Get(id);if(j==null||!j.TrainReady||!j.GameSettingsReady||j.CloseRequested||j.CancelRequested)throw new Exception("Chờ tài khoản vào game.");
+            lock(j){if(j.GemBusy)throw new Exception("Đợi xác nhận lần ghép trước.");if(j.MailEnabled||j.InboxEnabled||j.MarketEnabled||j.ChestEnabled||j.CloakEnabled||j.AutoItemEnabled)throw new Exception("Dừng auto vật phẩm, gửi/nhận thư, chợ và rương trước khi ghép đá.");SetGameOption(id,307,0);j.GemCompleted=0;j.GemNext=DateTime.MinValue;j.GemEnabled=true;j.GemStatus="Chờ kiểm tra 16 đá cấp 10 và tỷ lệ 100%";Log(j,"gem_combine_started",",\"source_level\":10,\"target_level\":12,\"rate\":100");}
+        }
+        public static void StopGemCombine(string id){NativeJob j=Get(id);if(j==null)return;lock(j){j.GemEnabled=false;j.GemStatus=j.GemBusy?"Đã dừng; đợi xác nhận lượt đang ghép":"Đã dừng";}}
+        static GemPlan ReadGemPlan(Remote r,long game,InventorySnapshot bag){
+            long player=r.Ptr(r.Ptr(ResolvedClass(r,game+0x16ee330)+0xb8)+8),canvas=r.Ptr(r.Ptr(ResolvedClass(r,game+0x16ed658)+0xb8));
+            if(player==0||canvas==0)throw new Exception("gem_not_ready");long weights=r.Ptr(canvas+0x1e8),costs=r.Ptr(canvas+0x1c0);
+            if(weights==0||costs==0||FarmI(r,weights+24)<12||FarmI(r,weights+24)>64||FarmI(r,costs+24)<12||FarmI(r,costs+24)>64)throw new Exception("gem_tables_unverified");
+            long sw=r.Ptr(weights+32+9*8),tw=r.Ptr(weights+32+11*8),fee=FarmI(r,costs+32+11*4);if(fee<=0)throw new Exception("gem_cost_unverified");
+            return new GemPlan{Player=player,Bag=r.Ptr(player+0x128),Canvas=canvas,Weights=weights,Costs=costs,SourceWeight=sw,TargetWeight=tw,Fee=fee,Silver=r.Ptr(player+0xc0),Items=PlanGemCombine(bag,sw,tw)};
+        }
+        internal static bool ConfirmGemCombine(NativeJob j,InventorySnapshot bag,long silver){
+            return bag!=null&&bag.Ready&&MailItemTotal(bag,9)==j.GemBeforeSource-16&&MailItemTotal(bag,11)==j.GemBeforeTarget+1&&silver==j.GemBeforeSilver-j.GemFee;
+        }
+        static void HaltGem(NativeJob j,string text){j.GemEnabled=false;j.GemBusy=false;j.GemStatus=text;Log(j,"gem_combine_stopped",",\"status\":"+Quote(text));}
+        internal static void PumpGemCombine(Remote r,long d,long game,NativeJob j){
+            if(!j.GemEnabled&&!j.GemBusy&&!j.GemArmed)return;
+            lock(j){if(!j.GemEnabled&&!j.GemBusy){r.Write(d+12,new byte[4]);j.GemArmed=false;return;}DateTime now=DateTime.UtcNow;if(now<j.GemNext)return;j.GemNext=now.AddSeconds(1);
+                try{
+                    if(j.CloseRequested||j.CancelRequested||!j.TrainReady){r.Write(d+12,new byte[4]);HaltGem(j,"Dừng: game chưa sẵn sàng");return;}
+                    r.Write(d+12,BitConverter.GetBytes(j.GemEnabled?1:0));j.GemArmed=j.GemEnabled;
+                    if(j.GemBusy){
+                        if(FarmI(r,d)!=0){if((now-j.GemAt).TotalSeconds>15){r.Write(d+12,new byte[4]);HaltGem(j,"Dừng: game chưa xử lý lượt ghép; kiểm tra túi trước khi bật lại");}return;}
+                        if(FarmI(r,d+16)!=2){HaltGem(j,"Dừng: nguyên liệu/tỷ lệ/phí thay đổi trước khi ghép; chưa gửi lệnh");return;}
+                        InventorySnapshot after=ReadInventorySnapshot(r,game);long player=r.Ptr(r.Ptr(ResolvedClass(r,game+0x16ee330)+0xb8)+8);
+                        if(ConfirmGemCombine(j,after,r.Ptr(player+0xc0))){j.GemBusy=false;j.GemCompleted++;j.GemStatus=j.GemEnabled?"Đã nhận đá cấp 12; chờ lượt tiếp theo":"Đã dừng; đã xác nhận đá cấp 12";Log(j,"gem_combine_confirmed",",\"completed\":"+j.GemCompleted);return;}
+                        if((now-j.GemAt).TotalSeconds>30)HaltGem(j,"Dừng: chưa xác nhận đá 12 và phí; kiểm tra túi, không tự ghép lại");return;
+                    }
+                    if(!j.GemEnabled)return;
+                    if(FarmI(r,d)!=0){HaltGem(j,"Dừng: lệnh ghép trước chưa kết thúc; mở lại game trước khi ghép tiếp");return;}
+                    if(j.MailEnabled||j.MailBusy||j.InboxEnabled||j.InboxBusy||j.MarketEnabled||j.ChestEnabled||j.CloakEnabled||j.AutoItemEnabled){HaltGem(j,"Dừng: có auto khác đang dùng túi đồ");return;}
+                    InventorySnapshot bag=ReadInventorySnapshot(r,game);GemPlan p=ReadGemPlan(r,game,bag);
+                    if(p.Items.Length<16){j.GemStatus="Chờ đủ 16 đá cấp 10 • hiện có "+p.Items.Length+"/16";return;}
+                    if(p.Silver<p.Fee){j.GemStatus="Chờ đủ "+p.Fee.ToString("N0")+" bạc khóa";return;}
+                    byte[] b=new byte[512];Buffer.BlockCopy(BitConverter.GetBytes(1),0,b,12,4);
+                    foreach(var field in new[]{new[]{24L,p.SourceWeight},new[]{32L,p.TargetWeight},new[]{40L,p.Fee},new[]{48L,p.Player},new[]{56L,p.Bag},new[]{64L,p.Canvas},new[]{72L,p.Weights},new[]{80L,p.Costs}})Buffer.BlockCopy(BitConverter.GetBytes(field[1]),0,b,(int)field[0],8);
+                    for(int i=0;i<16;i++){long address=r.Ptr(p.Bag+32+p.Items[i].BagIndex*8);Buffer.BlockCopy(BitConverter.GetBytes(address),0,b,128+i*16,8);Buffer.BlockCopy(BitConverter.GetBytes(p.Items[i].BagIndex),0,b,136+i*16,4);}
+                    j.GemBeforeSource=MailItemTotal(bag,9);j.GemBeforeTarget=MailItemTotal(bag,11);j.GemBeforeSilver=p.Silver;j.GemFee=p.Fee;j.GemAt=now;j.GemBusy=true;j.GemStatus="Đang ghép 16 đá cấp 10 → đá cấp 12 (100%)";
+                    r.Write(d,b);r.Write(d,BitConverter.GetBytes(1));Log(j,"gem_combine_requested",",\"count\":16,\"rate\":100,\"locked_silver_fee\":"+p.Fee);
+                }catch(Exception e){if(j.GemBusy){if((now-j.GemAt).TotalSeconds>30)HaltGem(j,"Dừng: chưa đọc được kết quả ghép; không tự gửi lại");}else if(e.Message=="inventory_changed"||e.Message=="inventory_not_ready")j.GemStatus="Chờ túi đồ ổn định để kiểm tra tỷ lệ 100%";else HaltGem(j,"Dừng: chưa xác minh ghép 100% • "+e.Message);}
+            }
+        }
+    }
+    internal static partial class NativeCode {
+        internal static byte[] GemCombine(long d,long game){return GemCombineCore(d,game+0x16ee330,game+0x16ee808,game+0x16ed658,game+0x16ee820,game+0x16f760,game+0x2e2aa0,game+0x1dd900);}
+        internal static byte[] GemCombineCore(long d,long playerSlot,long settingsSlot,long canvasSlot,long serviceSlot,long alloc,long ctor,long initialize){
+            Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x20,0x48,0xbb);a.Q(d);
+            a.Emit(0x83,0x7b,12,1);a.J(0x85,"cancel");
+            // Suppress the game's >50% mode BEFORE its original Update. Do not change treo.
+            Slot(a,settingsSlot,"failed",initialize);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"failed");a.Emit(0x48,0x8b,0x40,8,0x48,0x85,0xc0);a.J(0x84,"failed");
+            a.Emit(0x48,0x8b,0x80,0xe8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"failed");a.Emit(0x83,0x78,24,7);a.J(0x86,"failed");a.Emit(0xc6,0x40,39,0xff);
+            a.Emit(0x83,0x3b,1);a.J(0x85,"return");a.Emit(0xc7,0x03,2,0,0,0,0xc7,0x43,16,1,0,0,0);
+            Slot(a,playerSlot,"failed",initialize);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"failed");a.Emit(0x48,0x8b,0x70,8,0x48,0x3b,0x73,48);a.J(0x85,"failed");
+            a.Emit(0x48,0x8b,0x86,0x28,1,0,0,0x48,0x3b,0x43,56);a.J(0x85,"failed");
+            Slot(a,canvasSlot,"failed",initialize);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"failed");a.Emit(0x48,0x8b,0x00,0x48,0x3b,0x43,64);a.J(0x85,"failed");
+            foreach(int off in new[]{0x1e8,0x1c0}){a.Emit(0x48,0x8b,0x90);a.I(off);a.Emit(0x48,0x3b,0x53,(byte)(off==0x1e8?72:80));a.J(0x85,"failed");a.Emit(0x83,0x7a,24,12);a.J(0x82,"failed");}
+            a.Emit(0x48,0x8b,0x4b,72,0x48,0x8b,0x51,104,0x48,0x3b,0x53,24);a.J(0x85,"failed");a.Emit(0x48,0x8b,0x51,120,0x48,0x3b,0x53,32);a.J(0x85,"failed");
+            a.Emit(0x48,0x8b,0x53,24,0x48,0x85,0xd2);a.J(0x8e,"failed");a.Emit(0x48,0x6b,0xca,16);a.J(0x80,"failed");a.Emit(0x48,0x3b,0x4b,32);a.J(0x85,"failed");
+            a.Emit(0x48,0x8b,0x4b,80,0x48,0x63,0x51,76,0x48,0x3b,0x53,40);a.J(0x85,"failed");a.Emit(0x48,0x39,0x96,0xc0,0,0,0);a.J(0x8c,"failed");
+            a.Emit(0x48,0x8b,0x73,56);
+            for(int i=0;i<16;i++){
+                a.Emit(0x8b,0x93);a.I(136+i*16);a.Emit(0x85,0xd2);a.J(0x88,"failed");a.Emit(0x3b,0x56,24);a.J(0x83,"failed");a.Emit(0x48,0x8b,0x44,0xd6,32,0x48,0x3b,0x83);a.I(128+i*16);a.J(0x85,"failed");a.Emit(0x48,0x85,0xc0);a.J(0x84,"failed");
+                a.Emit(0x83,0x78,20,9);a.J(0x85,"failed");a.Emit(0x83,0x78,24,1);a.J(0x85,"failed");a.Emit(0x39,0x50,32);a.J(0x85,"failed");
+            }
+            // Same wire format as fc.bwf: opcode108, byte1 (locked silver), short count, int bag slots.
+            Slot(a,serviceSlot,"failed",initialize);a.Emit(0x48,0x89,0xc1);a.Call(alloc);a.Emit(0x48,0x85,0xc0);a.J(0x84,"failed");a.Emit(0x48,0x89,0xc7,0x48,0x89,0xc1,0xba,108,0,0,0,0x45,0x33,0xc0);a.Call(ctor);
+            a.Emit(0x48,0x8b,0x07,0x4c,0x8b,0x80,0x20,2,0,0,0x48,0x89,0xf9,0xba,1,0,0,0,0xff,0x90,0x18,2,0,0);
+            a.Emit(0x48,0x8b,0x07,0x4c,0x8b,0x80,0x30,2,0,0,0x48,0x89,0xf9,0xba,16,0,0,0,0xff,0x90,0x28,2,0,0);
+            for(int i=0;i<16;i++)MarketWrite(a,136+i*16,false,0x248);
+            a.Emit(0xc7,0x43,16,2,0,0,0,0x48,0x8b,0x07,0x48,0x8b,0x90,0xa0,2,0,0,0x48,0x89,0xf9,0xff,0x90,0x98,2,0,0);a.Jump("done");
+            a.Label("cancel");a.Emit(0x83,0x3b,1);a.J(0x85,"return");a.Label("failed");a.Emit(0x83,0x3b,0);a.J(0x84,"return");a.Emit(0xc7,0x43,16,1,0,0,0);a.Label("done");a.Emit(0xc7,0x03,0,0,0,0);a.Label("return");a.Emit(0x48,0x83,0xc4,0x20,0x5f,0x5e,0x5b,0xc3);return a.Finish();
+        }
     }
     public sealed class InventoryItem {
         public long ExpiryUtcMs;public int BagIndex,Slot,TemplateId,Quantity,Type;public string Name;public bool Equipment,Locked;
@@ -1513,6 +1601,7 @@ namespace TGLL {
         }
         public static void SetGameOption(string id,int code,int value){
             NativeJob j=Get(id);if(j==null||!j.GameSettingsReady||j.CloseRequested)throw new Exception("settings_session_unavailable");
+            if((j.GemEnabled||j.GemBusy)&&code==307&&value!=0)throw new Exception("Dừng Auto ghép đá 12 trước khi bật ghép trên 50%.");
             GameOption found=null;foreach(GameOption o in j.GameOptions)if(o.Code==code)found=o;
             if(found==null||value<0||value>=(found.Kind==0?2:found.Choices.Length))throw new Exception("settings_value_invalid");
             if(j.SettingsQueue.Count>=128)throw new Exception("settings_queue_full");GameOption command=found.Copy();command.Value=value;j.SettingsQueue.Enqueue(command);
@@ -2648,7 +2737,7 @@ namespace TGLL {
             Log(j,"build_verified",",\"elapsed_ms\":"+launchTimer.ElapsedMilliseconds);
             j.State="starting";Check(j);if(j.Proxy!=null){j.Stage="proxy_auth";long authAt=launchTimer.ElapsedMilliseconds;using(TcpClient check=SocksRelay.Authenticate(j.Proxy)){}Check(j);Log(j,"proxy_verified",",\"duration_ms\":"+(launchTimer.ElapsedMilliseconds-authAt));}
             Process p=null;
-            Remote r=null;SocksRelay relay=null;bool installed=false;long data=0,reminderData=0,reminderCode=0,user=0,pass=0,trainData=0,questData=0,farmData=0,chestData=0,cloakData=0,marketData=0,itemData=0,giftData=0,mailData=0,inboxData=0,settingsData=0;
+            Remote r=null;SocksRelay relay=null;bool installed=false;long data=0,reminderData=0,reminderCode=0,user=0,pass=0,trainData=0,questData=0,farmData=0,chestData=0,cloakData=0,marketData=0,gemData=0,itemData=0,giftData=0,mailData=0,inboxData=0,settingsData=0;
             try {
                 j.Stage="start_game";
                 long delayAt=launchTimer.ElapsedMilliseconds;
@@ -2693,6 +2782,7 @@ namespace TGLL {
                     giftData=r.Allocate(4096);long giftCode=r.Allocate(4096);byte[] giftBytes=NativeCode.GiftCode(giftData,game);r.Write(giftCode,giftBytes);r.Protect(giftCode,4096,0x20);
                     mailData=r.Allocate(4096);long mailCode=r.Allocate(4096);byte[] mailBytes=NativeCode.Mail(mailData,game);if(mailBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(mailCode,mailBytes);r.Protect(mailCode,4096,0x20);
                     marketData=r.Allocate(8192);long marketCode=r.Allocate(4096),marketSplit=r.Allocate(4096);r.Write(marketSplit,NativeCode.Mail(marketData+4096,game));r.Protect(marketSplit,4096,0x20);byte[] marketBytes=NativeCode.Market(marketData,game,marketSplit);if(marketBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(marketCode,marketBytes);r.Protect(marketCode,4096,0x20);
+                    gemData=r.Allocate(4096);long gemCode=r.Allocate(4096);byte[] gemBytes=NativeCode.GemCombine(gemData,game);if(gemBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(gemCode,gemBytes);r.Protect(gemCode,4096,0x20);
                     inboxData=r.Allocate(4096);long inboxCode=r.Allocate(4096);r.Write(inboxCode,NativeCode.Inbox(inboxData,game));r.Protect(inboxCode,4096,0x20);
                     long inboxResponse=game+0x4f0300;byte[] inboxPrefix=r.Read(inboxResponse,15);
                     if(NativeCode.InboxPrefixSupported(inboxPrefix)){
@@ -2710,7 +2800,7 @@ namespace TGLL {
                     teamData=r.Allocate(4096);teamCode=r.Allocate(4096);byte[] teamBytes=NativeCode.Team(teamData,game,game+0x1dd900);if(teamBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(teamCode,teamBytes);r.Protect(teamCode,4096,0x20);
                     followCode=r.Allocate(4096);byte[] followBytes=NativeCode.Follow(teamData+1024,game,game+0x1dd900);if(followBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(followCode,followBytes);r.Protect(followCode,4096,0x20);
                     zoneCode=r.Allocate(4096);byte[] zoneBytes=NativeCode.Zone(teamData+2048,game,game+0x1dd900);if(zoneBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(zoneCode,zoneBytes);r.Protect(zoneCode,4096,0x20);
-                    loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
+                    loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode,gemCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
                     patch=new byte[16];for(int i=0;i<16;i++)patch[i]=0x90;patch[0]=0xe9;Array.Copy(BitConverter.GetBytes(checked((int)(loginCode-update-5))),0,patch,1,4);
                 }
                 Check(j);r.Suspended(delegate{if(j.Proxy!=null){r.Install(game+0x129e618,BitConverter.GetBytes(connectCode));r.Install(baseModule+0x45448,BitConverter.GetBytes(connectCode));}if(j.Auto)r.Install(update,patch);});installed=true;
@@ -2755,13 +2845,13 @@ namespace TGLL {
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
                     if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpActivityRetry(keep,data,questData,j,npcTimer);PumpQuest(keep,questData,j);PumpGameSettings(keep,settingsData,j);}
                     PumpThiQuyPriority(keep,game,trainData,j);PumpTraining(keep,trainData,j);
-                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);PumpAutoItem(keep,itemData,j);PumpInventory(keep,game,j);PumpBiMa(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
+                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpGemCombine(keep,gemData,game,j);PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);PumpAutoItem(keep,itemData,j);PumpInventory(keep,game,j);PumpBiMa(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
                     ReadDiagnostics(keep,data,j);PumpIzanamiAttemptLimit(keep,game,j);PumpDungeonCycle(keep,data,game,j,npcTimer);PumpReceiveKey(keep,data,j,npcTimer,game);if(j.ReplayRequested){Replay(keep,data,j);npcTimer.Restart();}
                     if(npcTimer.IsRunning&&!j.TravelActive&&(j.ReceiveKeyEnabled||j.DungeonHighEnabled||j.IzanamiEnabled)){int state=BitConverter.ToInt32(keep.Read(data,4),0);if(state==9)j.State=j.NpcAction==2?"choosing_izanami":j.NpcAction==0?"choosing_key":"choosing_dungeon";
                         if(state==11){FinishNpcAction(keep,data,j,npcTimer);}
                         else if(npcTimer.ElapsedMilliseconds>60000){j.ReceiveFlowActive=false;j.Error=state==8?(j.NpcAction==2?"onoki_not_found":"npc_not_found"):state==13||state==14||state==15||state==17?"startup_popup_not_ready":(j.NpcAction==2?"npc_izanami_menu_not_ready":j.NpcAction==1?"npc_dungeon_menu_not_ready":"npc_key_menu_not_ready");j.State=j.NpcAction==2?"izanami_unavailable":"npc_unavailable";keep.Write(data,BitConverter.GetBytes(12));npcTimer.Stop();}}
                     }
-                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
+                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.GemEnabled=false;j.GemBusy=false;j.GemStatus="Game đã thoát";j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
             }catch{
                 bool stopped=true;
                 if(p!=null){try{if(!p.HasExited){p.Kill();stopped=p.WaitForExit(3000);}}catch{stopped=false;}finally{p.Dispose();}}

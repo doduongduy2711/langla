@@ -11,6 +11,7 @@ function Update-ActiveTabUi {
     elseif($selected -eq $soncapPage){Update-SonCapUi}
     elseif($selected -eq $chestPage){Update-StoneChestUi}
     elseif($selected -eq $marketPage){Update-MarketUi}
+    elseif($selected -eq $gemPage){Update-GemCombineUi}
     elseif($selected -eq $cloakPage){Update-CloakUi}
     elseif($selected -eq $trainPage){Update-TrainUi}
     elseif($selected -eq $farmPage){Update-FarmUi}
