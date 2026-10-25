@@ -26,6 +26,14 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Native test compilation failed'}
           ./QuestTargetNativeTests.exe
           if($LASTEXITCODE -ne 0){throw 'Native target tests failed'}
+      - name: Online notice confirmation checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:OnlineNoticeTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/OnlineNoticeTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Online notice test compilation failed'}
+          ./OnlineNoticeTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Online notice tests failed'}
       - name: Beast solo quest checks
         shell: powershell
         run: |

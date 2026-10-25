@@ -586,7 +586,7 @@ namespace TGLL {
             Code64 a=new Code64();a.Emit(0x53,0x48,0x83,0xec,0x20);a.Call(original);a.Emit(0x48,0xbb);a.Q(data);a.Emit(0x83,0x7b,4,1);a.J(0x85,"done");a.Emit(0x83,0x7b,8,2);a.J(0x85,"done");a.Emit(0xff,0x43,28);a.Label("done");a.Emit(0x48,0x83,0xc4,0x20,0x5b,0xc3);return a.Finish();
         }
 
-        internal static byte[] Login(long data,long classSlot,long original,long stringNew,long setter,long login,long characterCode=0,long trainingCode=0,long settingsCode=0,long teamCode=0,long followCode=0,long zoneCode=0,long itemCode=0,long questCode=0,long travelItemCode=0,long travelMenuCode=0,long giftCode=0,long mailCode=0,long inboxCode=0,long farmCode=0,long chestCode=0,long cloakCode=0,long marketCode=0) {
+        internal static byte[] Login(long data,long classSlot,long original,long stringNew,long setter,long login,long characterCode=0,long trainingCode=0,long settingsCode=0,long teamCode=0,long followCode=0,long zoneCode=0,long itemCode=0,long questCode=0,long travelItemCode=0,long travelMenuCode=0,long giftCode=0,long mailCode=0,long inboxCode=0,long farmCode=0,long chestCode=0,long cloakCode=0,long marketCode=0,long reminderCode=0) {
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x40);
             // Thử skill trước Update treo; giữ nguyên tham số của Update gốc.
             a.Emit(0x48,0x89,0x4c,0x24,0x20,0x48,0x89,0x54,0x24,0x28,0x4c,0x89,0x44,0x24,0x30,0x4c,0x89,0x4c,0x24,0x38);
@@ -602,7 +602,7 @@ namespace TGLL {
             a.Emit(0x48,0x8b,0x4b,0x08);a.Call(stringNew);a.Emit(0x48,0x89,0xc2,0x48,0x8b,0x8e,0xa0,0,0,0,0x45,0x33,0xc0);a.Call(setter);
             a.Emit(0x48,0x8b,0x4b,0x10);a.Call(stringNew);a.Emit(0x48,0x89,0xc2,0x48,0x8b,0x8e,0xa8,0,0,0,0x45,0x33,0xc0);a.Call(setter);
             a.Emit(0x48,0x89,0xf1,0xba,0x01,0,0,0,0x45,0x33,0xc0);a.Call(login);a.Emit(0xc7,0x03,0x03,0,0,0);
-            a.Label("done");if(characterCode!=0)a.Call(characterCode);if(settingsCode!=0)a.Call(settingsCode);if(teamCode!=0)a.Call(teamCode);if(followCode!=0)a.Call(followCode);if(zoneCode!=0)a.Call(zoneCode);if(itemCode!=0)a.Call(itemCode);if(questCode!=0)a.Call(questCode);if(travelItemCode!=0)a.Call(travelItemCode);if(travelMenuCode!=0)a.Call(travelMenuCode);if(giftCode!=0)a.Call(giftCode);if(mailCode!=0)a.Call(mailCode);if(inboxCode!=0)a.Call(inboxCode);if(farmCode!=0)a.Call(farmCode);if(chestCode!=0)a.Call(chestCode);if(cloakCode!=0)a.Call(cloakCode);if(marketCode!=0)a.Call(marketCode);a.Emit(0x48,0x83,0xc4,0x40,0x5f,0x5e,0x5b,0xc3);return a.Finish();
+            a.Label("done");if(reminderCode!=0)a.Call(reminderCode);if(characterCode!=0)a.Call(characterCode);if(settingsCode!=0)a.Call(settingsCode);if(teamCode!=0)a.Call(teamCode);if(followCode!=0)a.Call(followCode);if(zoneCode!=0)a.Call(zoneCode);if(itemCode!=0)a.Call(itemCode);if(questCode!=0)a.Call(questCode);if(travelItemCode!=0)a.Call(travelItemCode);if(travelMenuCode!=0)a.Call(travelMenuCode);if(giftCode!=0)a.Call(giftCode);if(mailCode!=0)a.Call(mailCode);if(inboxCode!=0)a.Call(inboxCode);if(farmCode!=0)a.Call(farmCode);if(chestCode!=0)a.Call(chestCode);if(cloakCode!=0)a.Call(cloakCode);if(marketCode!=0)a.Call(marketCode);a.Emit(0x48,0x83,0xc4,0x40,0x5f,0x5e,0x5b,0xc3);return a.Finish();
         }
         // Shared data: request, generation, count, enabled, selected ID, attempts,
         // status; records at +128 (32 bytes: ID/template/MP/cast/name/level/type).
@@ -923,13 +923,14 @@ namespace TGLL {
         }
         static void NpcRecord(Code64 a){a.Emit(0x4d,0x89,0xe2,0x49,0xc1,0xe2,0x04,0x49,0x01,0xda,0x49,0x83,0xc2,0x40);}
         // Main-thread gate: map ready -> worker waits 5 seconds -> dismiss exact reminder -> NPC.
-        internal static byte[] PrepareMap(long data,long canvasSlot,long gameSlot,long dialogSlot,long initialize,long next){
+        internal static byte[] PrepareMap(long data,long canvasSlot,long gameSlot,long dialogSlot,long initialize,long next,bool expectedPopupOnly=false){
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x30);a.Emit(0x48,0xbb);a.Q(data);
             a.Emit(0x83,0x3b,0x0d);a.J(0x84,"active");a.Emit(0x83,0x3b,0x0f);a.J(0x84,"active");a.Emit(0x83,0x3b,0x11);a.J(0x85,"done");
             a.Label("active");a.Phase(37);Slot(a,canvasSlot,"done",initialize);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x00,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0xb0,0xb8,0x01,0,0,0x48,0x85,0xf6);a.J(0x84,"done");
             Slot(a,gameSlot,"done",initialize);a.Emit(0x48,0x39,0x06);a.J(0x85,"done");
             a.Emit(0x83,0x3b,0x0d);a.J(0x85,"popup");a.Emit(0xc7,0x03,0x0e,0,0,0);a.Jump("done"); // Active gameplay screen is ready even on maps with no NPCs.
             a.Label("popup");a.Phase(38);a.Emit(0x48,0x8b,0xbe,0x90,0,0,0,0x48,0x85,0xff);a.J(0x84,"clear");
+            if(expectedPopupOnly){a.Emit(0x48,0x3b,0xbb);a.I(3272);a.J(0x85,"clear");a.Emit(0x48,0x8b,0x87,0xb0,0,0,0,0x48,0x3b,0x83);a.I(3288);a.J(0x85,"clear");}
             a.Emit(0x83,0x3b,0x11);a.J(0x85,"membership");a.Emit(0x48,0x3b,0xbb);a.I(3272);a.J(0x85,"clear");a.Label("membership");
             // +0x90 can retain the dismissed dialog. Check membership of the live overlay stack.
             a.Emit(0x48,0x8b,0x8e,0x88,0,0,0,0x48,0x85,0xc9);a.J(0x84,"clear");a.Emit(0x48,0x8b,0x01,0x48,0x89,0xfa,0x4c,0x8b,0x80,0x10,0x02,0,0,0xff,0x90,0x08,0x02,0,0,0x84,0xc0);a.J(0x84,"clear");
@@ -1019,7 +1020,7 @@ namespace TGLL {
         public volatile bool FollowActive;public volatile string FollowStatus="";public volatile int FollowDistance=-1,FollowMoves;internal bool FollowStopPending;internal DateTime FollowPollAt=DateTime.MinValue;
         public volatile bool PersistentUp;internal bool UpRepeatDaily;internal DateTime UpDay;internal bool[] UpCompleted=new bool[5];internal string[] UpSonCapTeamIds=new string[0];internal bool UpIzanamiFull,UpSonCapFull;public volatile bool DailyManaged,DailyActive,DailyExecuting;internal bool DailyApplying;public volatile int DailyStage;public volatile string DailyStatus="";internal bool[] DailyPlan=new bool[4],DailyRunPlan=new bool[4];internal DateTime DailyLastDate;internal string[] DailyTeamIds=new string[0];internal FarmSpot DailyReturnSpot;internal bool DailyReturnQuiet;public volatile bool KeyReceiptVerified;public volatile bool CurseActive;public DateTime CurseReadAt=DateTime.MinValue;internal DateTime CursePollAt=DateTime.MinValue;public volatile int MapId=-1,ZoneId=-1;public DateTime ZoneReadAt=DateTime.MinValue;public volatile string ZoneStatus="";public volatile bool ZoneSyncActive;
         internal int PlannedZone=-1,ZonePlanMap=-1,ZoneAttempts;internal volatile bool ZonePrepared;internal DateTime ZoneActionAt=DateTime.MinValue,ZonePollAt=DateTime.MinValue;internal long ZoneOldPopup;internal bool ZoneListWaiting;
-        public volatile VitalsSnapshot Vitals;internal DateTime VitalsPollAt,IdentityPollAt;public volatile bool PrioritizeThiQuy,ThiQuyCombatActive;internal int ThiQuySkillCursor,ThiQuyNativeMode;public volatile string ThiQuyPriorityStatus="Tắt";internal DateTime ThiQuyPriorityAt=DateTime.MinValue;internal bool ThiQuyPriorityArmed,ThiQuyFarmPaused,ThiQuyReadSuspended;internal DateTime ThiQuyMissingAt=DateTime.MinValue,ThiQuyScanLogAt=DateTime.MinValue;internal string ThiQuyScanLast="";public volatile string CharacterName="",TeamStatus="";public volatile string[] TeamMembers=new string[0],Friends=new string[0];
+        public volatile VitalsSnapshot Vitals;internal DateTime VitalsPollAt,IdentityPollAt;public volatile bool PrioritizeThiQuy,ThiQuyCombatActive;internal int ThiQuySkillCursor,ThiQuyNativeMode;public volatile string ThiQuyPriorityStatus="Tắt";internal DateTime ThiQuyPriorityAt=DateTime.MinValue;internal bool ThiQuyPriorityArmed,ThiQuyFarmPaused,ThiQuyReadSuspended;internal DateTime ThiQuyMissingAt=DateTime.MinValue,ThiQuyScanLogAt=DateTime.MinValue;internal string ThiQuyScanLast="";internal DateTime OnlineNoticePollAt;public volatile string CharacterName="",TeamStatus="";public volatile string[] TeamMembers=new string[0],Friends=new string[0];
         internal string LeaderZoneJob="";internal int LeaderZoneMap=-1,LeaderZoneTarget=-1;internal bool LeaderZoneConfirmed;
         internal string[] TeamJobIds=new string[0];internal DateTime TeamReadAt=DateTime.MinValue,TeamActionAt=DateTime.MinValue;internal int TeamAttempts,TeamAttemptCommand;internal bool TeamFriendRequested;internal string TeamTarget="";internal bool TeamManaged,TeamConfirmed;internal long TeamAcceptedPopup;
         public volatile bool CloseAfterKey,KeyReceiptPending;internal int KeyReceiptBefore=-1,KeyReceiptLastCount=-1;internal DateTime KeyReceiptAt,KeyReceiptPollAt,KeyBaselineAt;internal string KeyReceiptReadError="";public volatile bool QuestQueueOnly,QuestFinished;public volatile bool QuestEnabled,QuestPauseAuto;public volatile int QuestCompleted,QuestRemaining=-1;public volatile string QuestStatus="Tắt";internal CloseBatchOperation QuestAutoCloseOperation;
@@ -2275,6 +2276,26 @@ namespace TGLL {
                 }
             });worker.IsBackground=true;worker.Start();
         }
+        internal static bool IsOnlineFanpageNotice(string text){
+            if(String.IsNullOrWhiteSpace(text)||text.Length>2048)return false;
+            StringBuilder b=new StringBuilder();foreach(char c in text.ToLowerInvariant().Normalize(NormalizationForm.FormD)){if(System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)==System.Globalization.UnicodeCategory.NonSpacingMark)continue;b.Append(c=='đ'?'d':Char.IsLetterOrDigit(c)?c:' ');}
+            string n=System.Text.RegularExpressions.Regex.Replace(b.ToString(),@"\s+"," ").Trim();
+            return System.Text.RegularExpressions.Regex.IsMatch(n,@"^dang co \d+(?: \d{3})* player online tich cuc tham gia tuong tac o fanpage de nhan qua fan cung hang tuan nhe$");
+        }
+        internal static bool QueueOnlineNotice(Remote r,long data,NativeJob j,long popup,long message,string text){
+            if(data==0||popup==0||message==0||!IsOnlineFanpageNotice(text))return false;
+            int state=BitConverter.ToInt32(r.Read(data,4),0);if(state==15||state==17)return false;
+            r.Write(data+3272,BitConverter.GetBytes(popup));r.Write(data+3288,BitConverter.GetBytes(message));r.Write(data,BitConverter.GetBytes(15));Log(j,"online_notice_dismiss_requested",",\"pid\":"+j.ProcessId);return true;
+        }
+        internal static void PumpOnlineNotice(Remote r,long data,NativeJob j,long game){
+            if(data==0||j.CloseRequested||j.CancelRequested)return;
+            try{
+                long cls=ResolvedClass(r,game+0x16ee888),fc=r.Ptr(r.Ptr(cls+0xb8)+16);if(fc==0||r.Ptr(fc)!=cls)return;
+                long popup=r.Ptr(fc+0x90);if(popup==0||r.Ptr(popup)!=ResolvedClass(r,game+0x16eeba8)||Array.IndexOf(ReadVector(r,r.Ptr(fc+0x88)),popup)<0)return;
+                long message=r.Ptr(popup+0xb0);string text=ReadLabel(r,message);if(r.Ptr(fc+0x90)!=popup||r.Ptr(popup+0xb0)!=message)return;
+                QueueOnlineNotice(r,data,j,popup,message,text);
+            }catch{}
+        }
         internal static string ReadKeyNotice(Remote r,long game){
             try{
                 long cls=ResolvedClass(r,game+0x16ee888),stat=r.Ptr(cls+0xb8),fc=r.Ptr(stat+16);if(fc==0||r.Ptr(fc)!=cls)return "";
@@ -2608,7 +2629,7 @@ namespace TGLL {
             Log(j,"build_verified",",\"elapsed_ms\":"+launchTimer.ElapsedMilliseconds);
             j.State="starting";Check(j);if(j.Proxy!=null){j.Stage="proxy_auth";long authAt=launchTimer.ElapsedMilliseconds;using(TcpClient check=SocksRelay.Authenticate(j.Proxy)){}Check(j);Log(j,"proxy_verified",",\"duration_ms\":"+(launchTimer.ElapsedMilliseconds-authAt));}
             Process p=null;
-            Remote r=null;SocksRelay relay=null;bool installed=false;long data=0,user=0,pass=0,trainData=0,questData=0,farmData=0,chestData=0,cloakData=0,marketData=0,itemData=0,giftData=0,mailData=0,inboxData=0,settingsData=0;
+            Remote r=null;SocksRelay relay=null;bool installed=false;long data=0,reminderData=0,reminderCode=0,user=0,pass=0,trainData=0,questData=0,farmData=0,chestData=0,cloakData=0,marketData=0,itemData=0,giftData=0,mailData=0,inboxData=0,settingsData=0;
             try {
                 j.Stage="start_game";
                 long delayAt=launchTimer.ElapsedMilliseconds;
@@ -2632,7 +2653,7 @@ namespace TGLL {
                     if(prefix[12]!=0||prefix[13]!=0x48||prefix[14]!=0x8b||prefix[15]!=0xf9)throw new Exception("native_build_unsupported");
                     trampoline=r.Near(update,4096);byte[] relocated=(byte[])prefix.Clone();long comparison=update+13+BitConverter.ToInt32(prefix,8);Array.Copy(BitConverter.GetBytes(checked((int)(comparison-trampoline-13))),0,relocated,8,4);
                     Code64 tr=new Code64();tr.Emit(relocated);tr.Emit(0xff,0x25,0,0,0,0);tr.Q(update+16);r.Write(trampoline,tr.Finish());
-                    data=r.Allocate(139264);user=r.Utf8(j.Username);pass=r.Utf8(j.Password);r.Write(data+8,BitConverter.GetBytes(user));r.Write(data+16,BitConverter.GetBytes(pass));
+                    data=r.Allocate(139264);reminderData=r.Allocate(4096);reminderCode=r.Allocate(4096);byte[] reminderBytes=NativeCode.PrepareMap(reminderData,game+0x16ed658,game+0x16ee888,game+0x16eeba8,game+0x1dd900,0,true);r.Write(reminderCode,reminderBytes);r.Protect(reminderCode,4096,0x20);user=r.Utf8(j.Username);pass=r.Utf8(j.Password);r.Write(data+8,BitConverter.GetBytes(user));r.Write(data+16,BitConverter.GetBytes(pass));
                     long partyCode=r.Allocate(4096);byte[] partyBytes=NativeCode.Party(data,game+0x16ee888,game+0x16f0240,game+0x16ee820,game+0x16f760,game+0x2e2aa0,game+0x1dd900);r.Write(partyCode,partyBytes);r.Protect(partyCode,4096,0x20);
                     long npcCode=r.Allocate(8192);byte[] npcBytes=NativeCode.Npc(data,game+0x16ed658,game+0x16ee888,game+0x16ee910,game+0x16efe08,game+0x4e19f0,game+0x2d8f00,game+0x12d9e0,game+0x1dd900,game+0x303250,partyCode);
                     if(npcBytes.Length>8192)throw new Exception("native_code_too_large");r.Write(npcCode,npcBytes);r.Protect(npcCode,8192,0x20);
@@ -2670,7 +2691,7 @@ namespace TGLL {
                     teamData=r.Allocate(4096);teamCode=r.Allocate(4096);byte[] teamBytes=NativeCode.Team(teamData,game,game+0x1dd900);if(teamBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(teamCode,teamBytes);r.Protect(teamCode,4096,0x20);
                     followCode=r.Allocate(4096);byte[] followBytes=NativeCode.Follow(teamData+1024,game,game+0x1dd900);if(followBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(followCode,followBytes);r.Protect(followCode,4096,0x20);
                     zoneCode=r.Allocate(4096);byte[] zoneBytes=NativeCode.Zone(teamData+2048,game,game+0x1dd900);if(zoneBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(zoneCode,zoneBytes);r.Protect(zoneCode,4096,0x20);
-                    loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
+                    loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
                     patch=new byte[16];for(int i=0;i<16;i++)patch[i]=0x90;patch[0]=0xe9;Array.Copy(BitConverter.GetBytes(checked((int)(loginCode-update-5))),0,patch,1,4);
                 }
                 Check(j);r.Suspended(delegate{if(j.Proxy!=null){r.Install(game+0x129e618,BitConverter.GetBytes(connectCode));r.Install(baseModule+0x45448,BitConverter.GetBytes(connectCode));}if(j.Auto)r.Install(update,patch);});installed=true;
@@ -2709,6 +2730,7 @@ namespace TGLL {
                 Thread lifetime=new Thread(delegate(){Stopwatch maintenance=new Stopwatch();Stopwatch npcTimer=new Stopwatch();if(j.ReceiveFlowActive)npcTimer.Start();try{while(!p.HasExited){if(data!=0&&!j.CloseRequested){try{
                     if(!j.ReconnectRequested&&(DateTime.UtcNow-j.DisconnectPollAt).TotalSeconds>=1){j.DisconnectPollAt=DateTime.UtcNow;if(ObserveDisconnect(j,ReadDisconnectNotice(keep,game),j.DisconnectPollAt))BeginDisconnectRecovery(j);}
                     if(j.ReconnectRequested){Thread.Sleep(150);continue;}
+                    if((DateTime.UtcNow-j.OnlineNoticePollAt).TotalSeconds>=1){j.OnlineNoticePollAt=DateTime.UtcNow;PumpOnlineNotice(keep,reminderData,j,game);}
                     if((DateTime.UtcNow-j.CursePollAt).TotalSeconds>=1){j.CursePollAt=DateTime.UtcNow;ObserveCurseNotice(j,ReadDisconnectNotice(keep,game),j.CursePollAt);}
 
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
