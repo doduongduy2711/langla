@@ -1018,7 +1018,7 @@ namespace TGLL {
         internal long Handle;internal GameOption Copy(){return (GameOption)MemberwiseClone();}
     }
     public sealed partial class NativeJob {
-        public volatile bool GemEnabled;public volatile string GemStatus="Tắt";public volatile int GemCompleted;
+        public volatile bool GemEnabled,GemSkipped;public volatile string GemStatus="Tắt";public volatile int GemCompleted;
         internal bool GemBusy,GemArmed;internal DateTime GemAt,GemNext;internal long GemBeforeSource,GemBeforeTarget,GemBeforeSilver,GemFee;
     }
     internal sealed class GemPlan {
@@ -1033,7 +1033,7 @@ namespace TGLL {
         }
         public static void StartGemCombine(string id){
             NativeJob j=Get(id);if(j==null||!j.TrainReady||!j.GameSettingsReady||j.CloseRequested||j.CancelRequested)throw new Exception("Chờ tài khoản vào game.");
-            lock(j){if(j.GemBusy)throw new Exception("Đợi xác nhận lần ghép trước.");if(j.MailEnabled||j.InboxEnabled||j.MarketEnabled||j.ChestEnabled||j.CloakEnabled||j.AutoItemEnabled)throw new Exception("Dừng auto vật phẩm, gửi/nhận thư, chợ và rương trước khi ghép đá.");SetGameOption(id,307,0);j.GemCompleted=0;j.GemNext=DateTime.MinValue;j.GemEnabled=true;j.GemStatus="Chờ kiểm tra 16 đá cấp 10 và tỷ lệ 100%";Log(j,"gem_combine_started",",\"source_level\":10,\"target_level\":12,\"rate\":100");}
+            lock(j){if(j.GemEnabled)return;if(j.GemBusy)throw new Exception("Đợi xác nhận lần ghép trước.");if(j.MailEnabled||j.InboxEnabled||j.MarketEnabled||j.ChestEnabled||j.CloakEnabled||j.AutoItemEnabled)throw new Exception("Dừng auto vật phẩm, gửi/nhận thư, chợ và rương trước khi ghép đá.");SetGameOption(id,307,1);j.GemSkipped=false;j.GemCompleted=0;j.GemNext=DateTime.MinValue;j.GemEnabled=true;j.GemStatus="Chờ kiểm tra 16 đá cấp 10 và tỷ lệ 100%";Log(j,"gem_combine_started",",\"source_level\":10,\"target_level\":12,\"rate\":100");}
         }
         public static void StopGemCombine(string id){NativeJob j=Get(id);if(j==null)return;lock(j){j.GemEnabled=false;j.GemStatus=j.GemBusy?"Đã dừng; đợi xác nhận lượt đang ghép":"Đã dừng";}}
         static GemPlan ReadGemPlan(Remote r,long game,InventorySnapshot bag){
@@ -1047,29 +1047,29 @@ namespace TGLL {
             return bag!=null&&bag.Ready&&MailItemTotal(bag,9)==j.GemBeforeSource-16&&MailItemTotal(bag,11)==j.GemBeforeTarget+1&&silver==j.GemBeforeSilver-j.GemFee;
         }
         static void HaltGem(NativeJob j,string text){j.GemEnabled=false;j.GemBusy=false;j.GemStatus=text;Log(j,"gem_combine_stopped",",\"status\":"+Quote(text));}
-        internal static void PumpGemCombine(Remote r,long d,long game,NativeJob j){
+        internal static void PumpGemCombine(Remote r,long d,long game,NativeJob j,Func<InventorySnapshot> bagReader=null,Func<InventorySnapshot,GemPlan> planReader=null,Func<long> silverReader=null,Action restore=null,DateTime? clock=null){
             if(!j.GemEnabled&&!j.GemBusy&&!j.GemArmed)return;
-            lock(j){if(!j.GemEnabled&&!j.GemBusy){r.Write(d+12,new byte[4]);j.GemArmed=false;return;}DateTime now=DateTime.UtcNow;if(now<j.GemNext)return;j.GemNext=now.AddSeconds(1);
+            lock(j){if(!j.GemEnabled&&!j.GemBusy){r.Write(d+12,new byte[4]);j.GemArmed=false;return;}DateTime now=clock??DateTime.UtcNow;if(now<j.GemNext)return;j.GemNext=now.AddSeconds(1);
                 try{
                     if(j.CloseRequested||j.CancelRequested||!j.TrainReady){r.Write(d+12,new byte[4]);HaltGem(j,"Dừng: game chưa sẵn sàng");return;}
-                    r.Write(d+12,BitConverter.GetBytes(j.GemEnabled?1:0));j.GemArmed=j.GemEnabled;
+                    r.Write(d+12,BitConverter.GetBytes(j.GemBusy&&j.GemEnabled?1:0));j.GemArmed=j.GemBusy&&j.GemEnabled;
                     if(j.GemBusy){
                         if(FarmI(r,d)!=0){if((now-j.GemAt).TotalSeconds>15){r.Write(d+12,new byte[4]);HaltGem(j,"Dừng: game chưa xử lý lượt ghép; kiểm tra túi trước khi bật lại");}return;}
                         if(FarmI(r,d+16)!=2){HaltGem(j,"Dừng: nguyên liệu/tỷ lệ/phí thay đổi trước khi ghép; chưa gửi lệnh");return;}
-                        InventorySnapshot after=ReadInventorySnapshot(r,game);long player=r.Ptr(r.Ptr(ResolvedClass(r,game+0x16ee330)+0xb8)+8);
-                        if(ConfirmGemCombine(j,after,r.Ptr(player+0xc0))){j.GemBusy=false;j.GemCompleted++;j.GemStatus=j.GemEnabled?"Đã nhận đá cấp 12; chờ lượt tiếp theo":"Đã dừng; đã xác nhận đá cấp 12";Log(j,"gem_combine_confirmed",",\"completed\":"+j.GemCompleted);return;}
+                        InventorySnapshot after=bagReader==null?ReadInventorySnapshot(r,game):bagReader();long silver=silverReader==null?r.Ptr(r.Ptr(r.Ptr(ResolvedClass(r,game+0x16ee330)+0xb8)+8)+0xc0):silverReader();
+                        if(ConfirmGemCombine(j,after,silver)){j.GemBusy=false;j.GemCompleted++;r.Write(d+12,new byte[4]);j.GemArmed=false;if(restore==null)SetGameOption(j.Id,307,1);else restore();j.GemStatus=j.GemEnabled?"Đã nhận đá cấp 12; bật lại ghép trên 50%, chờ đủ 16 đá cấp 10":"Đã dừng; đã nhận đá cấp 12 và bật lại ghép trên 50%";Log(j,"gem_combine_confirmed",",\"completed\":"+j.GemCompleted);return;}
                         if((now-j.GemAt).TotalSeconds>30)HaltGem(j,"Dừng: chưa xác nhận đá 12 và phí; kiểm tra túi, không tự ghép lại");return;
                     }
                     if(!j.GemEnabled)return;
                     if(FarmI(r,d)!=0){HaltGem(j,"Dừng: lệnh ghép trước chưa kết thúc; mở lại game trước khi ghép tiếp");return;}
                     if(j.MailEnabled||j.MailBusy||j.InboxEnabled||j.InboxBusy||j.MarketEnabled||j.ChestEnabled||j.CloakEnabled||j.AutoItemEnabled){HaltGem(j,"Dừng: có auto khác đang dùng túi đồ");return;}
-                    InventorySnapshot bag=ReadInventorySnapshot(r,game);GemPlan p=ReadGemPlan(r,game,bag);
+                    InventorySnapshot bag=bagReader==null?ReadInventorySnapshot(r,game):bagReader();GemPlan p=planReader==null?ReadGemPlan(r,game,bag):planReader(bag);
                     if(p.Items.Length<16){j.GemStatus="Chờ đủ 16 đá cấp 10 • hiện có "+p.Items.Length+"/16";return;}
-                    if(p.Silver<p.Fee){j.GemStatus="Chờ đủ "+p.Fee.ToString("N0")+" bạc khóa";return;}
+                    if(p.Silver<p.Fee){j.GemSkipped=true;HaltGem(j,"Bỏ qua ghép đá 12: không đủ "+p.Fee.ToString("N0")+" bạc khóa; đã dừng, không tự ghép lại");return;}
                     byte[] b=new byte[512];Buffer.BlockCopy(BitConverter.GetBytes(1),0,b,12,4);
                     foreach(var field in new[]{new[]{24L,p.SourceWeight},new[]{32L,p.TargetWeight},new[]{40L,p.Fee},new[]{48L,p.Player},new[]{56L,p.Bag},new[]{64L,p.Canvas},new[]{72L,p.Weights},new[]{80L,p.Costs}})Buffer.BlockCopy(BitConverter.GetBytes(field[1]),0,b,(int)field[0],8);
                     for(int i=0;i<16;i++){long address=r.Ptr(p.Bag+32+p.Items[i].BagIndex*8);Buffer.BlockCopy(BitConverter.GetBytes(address),0,b,128+i*16,8);Buffer.BlockCopy(BitConverter.GetBytes(p.Items[i].BagIndex),0,b,136+i*16,4);}
-                    j.GemBeforeSource=MailItemTotal(bag,9);j.GemBeforeTarget=MailItemTotal(bag,11);j.GemBeforeSilver=p.Silver;j.GemFee=p.Fee;j.GemAt=now;j.GemBusy=true;j.GemStatus="Đang ghép 16 đá cấp 10 → đá cấp 12 (100%)";
+                    j.GemArmed=true;j.GemBeforeSource=MailItemTotal(bag,9);j.GemBeforeTarget=MailItemTotal(bag,11);j.GemBeforeSilver=p.Silver;j.GemFee=p.Fee;j.GemAt=now;j.GemBusy=true;j.GemStatus="Đang ghép 16 đá cấp 10 → đá cấp 12 (100%)";
                     r.Write(d,b);r.Write(d,BitConverter.GetBytes(1));Log(j,"gem_combine_requested",",\"count\":16,\"rate\":100,\"locked_silver_fee\":"+p.Fee);
                 }catch(Exception e){if(j.GemBusy){if((now-j.GemAt).TotalSeconds>30)HaltGem(j,"Dừng: chưa đọc được kết quả ghép; không tự gửi lại");}else if(e.Message=="inventory_changed"||e.Message=="inventory_not_ready")j.GemStatus="Chờ túi đồ ổn định để kiểm tra tỷ lệ 100%";else HaltGem(j,"Dừng: chưa xác minh ghép 100% • "+e.Message);}
             }
@@ -1601,7 +1601,7 @@ namespace TGLL {
         }
         public static void SetGameOption(string id,int code,int value){
             NativeJob j=Get(id);if(j==null||!j.GameSettingsReady||j.CloseRequested)throw new Exception("settings_session_unavailable");
-            if((j.GemEnabled||j.GemBusy)&&code==307&&value!=0)throw new Exception("Dừng Auto ghép đá 12 trước khi bật ghép trên 50%.");
+            if(j.GemBusy&&code==307&&value!=0)throw new Exception("Đợi xác nhận lượt ghép đá 12 trước khi bật ghép trên 50%.");
             GameOption found=null;foreach(GameOption o in j.GameOptions)if(o.Code==code)found=o;
             if(found==null||value<0||value>=(found.Kind==0?2:found.Choices.Length))throw new Exception("settings_value_invalid");
             if(j.SettingsQueue.Count>=128)throw new Exception("settings_queue_full");GameOption command=found.Copy();command.Value=value;j.SettingsQueue.Enqueue(command);

@@ -32,6 +32,19 @@ class GemCombineTests {
    P(r,player+0xc0,99);I(r,d,1);tick();Check(flushes==1,"reject insufficient locked silver");P(r,player+0xc0,1000);
    I(r,items[2]+24,2);I(r,d,1);tick();Check(flushes==1,"reject changed quantity");I(r,items[2]+24,1);
    I(r,d+12,0);I(r,d,1);tick();Check(flushes==1&&Read(r,d)==0,"stop cancels unsent work");
+   // Exercise the worker and native dispatcher together: gathering leaves the game
+   // mode on; only the 16-stone transaction pauses it, until its acknowledgement.
+   NativeBackend.LogDirectory=System.IO.Path.GetFullPath("work/gem-test-logs");
+   var worker=new NativeJob("fixture","gem-worker","",null,true);worker.TrainReady=true;worker.GameSettingsReady=true;worker.GemEnabled=true;
+   var current=Bag(15);var plan=new GemPlan{Player=player,Bag=bag,Canvas=canvas,Weights=weights,Costs=costs,SourceWeight=262144,TargetWeight=4194304,Fee=100,Silver=1000,Items=current.Items};
+   DateTime now=DateTime.UtcNow;int restores=0;long observedSilver=1000;Action restore=delegate{Check(!worker.GemBusy&&Read(r,d+12)==0,"release native pause before enabling game mode");restores++;r.Write(opts+39,new byte[]{0});};
+   r.Write(opts+39,new byte[]{0});NativeBackend.PumpGemCombine(r,d,0,worker,()=>current,b=>plan,()=>observedSilver,restore,now);tick();Check(Read(r,d)==0&&Read(r,d+12)==0&&r.Read(opts+39,1)[0]==0&&restores==0,"gathering does not disable >50%");
+   current=Bag(16);plan.Items=current.Items;NativeBackend.PumpGemCombine(r,d,0,worker,()=>current,b=>plan,()=>observedSilver,restore,now.AddSeconds(2));tick();Check(worker.GemBusy&&flushes==2&&r.Read(opts+39,1)[0]==255,"pause only with full inventory and enough silver");
+   NativeBackend.PumpGemCombine(r,d,0,worker,()=>current,b=>plan,()=>observedSilver,restore,now.AddSeconds(4));Check(restores==0&&worker.GemBusy,"do not restore before server result");
+   current=new InventorySnapshot(new[]{new InventoryItem{TemplateId=11,Quantity=1}},100,true,"",DateTime.UtcNow);observedSilver=900;NativeBackend.PumpGemCombine(r,d,0,worker,()=>current,b=>plan,()=>observedSilver,restore,now.AddSeconds(6));tick();Check(restores==1&&worker.GemCompleted==1&&!worker.GemBusy&&worker.GemEnabled&&r.Read(opts+39,1)[0]==0,"confirmed stone12 restores game mode and continues watching bag");
+   current=Bag(15);plan.Items=current.Items;NativeBackend.PumpGemCombine(r,d,0,worker,()=>current,b=>plan,()=>observedSilver,restore,now.AddSeconds(8));tick();Check(restores==1&&flushes==2&&r.Read(opts+39,1)[0]==0,"next gathering cycle leaves mode on");
+   current=Bag(16);plan.Items=current.Items;plan.Silver=99;NativeBackend.PumpGemCombine(r,d,0,worker,()=>current,b=>plan,()=>observedSilver,restore,now.AddSeconds(10));tick();Check(!worker.GemEnabled&&worker.GemSkipped&&!worker.GemBusy&&flushes==2&&r.Read(opts+39,1)[0]==0,"insufficient locked silver skips and stops, keeps game mode on");
+   plan.Silver=1000;NativeBackend.PumpGemCombine(r,d,0,worker,()=>current,b=>plan,()=>observedSilver,restore,now.AddSeconds(12));tick();Check(flushes==2,"does not retry skipped transaction after silver changes");
    GC.KeepAlive(alloc);GC.KeepAlive(ctor);GC.KeepAlive(write);GC.KeepAlive(flush);
   }
   Console.WriteLine("PASS: stone10 x16 -> stone12 at100%, native packet, reentry, rate/slot/quantity/fee gates and acknowledgement.");return 0;

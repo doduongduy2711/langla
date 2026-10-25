@@ -50,6 +50,7 @@ function Sync-AutoRows([int]$maxRows=0) {
         Update-AccountCharacter $row $j
         if($null -eq $j -or !$j.PSObject.Properties['GameSettingsReady']){continue}
         if($j.State -in @('failed','closed','cancelled') -or $j.CloseRequested){Set-AutoCell $row $false;$script:autoTrainApplied.Remove($key);continue}
+        Sync-GemCombineAccount $row.Tag $j
         Sync-TrainPriority $row.Tag $j
         if($j -is [TGLL.NativeJob]){$selected=@(Get-AccountAutoSkills $row.Tag $j);if(($selected -join ',') -ne ($j.HangingSkillIds -join ',')){$j.HangingSkillIds=[int[]]$selected;$j.HangingSkillCursor=0}}
         if($j -is [TGLL.NativeJob] -and $j.IzanamiMapAutoActive){$script:autoTrainWanted[$key]=$true;$script:autoTrainApplied[$key]=$j.Id;Set-AutoCell $row $true;continue}
