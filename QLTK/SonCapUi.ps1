@@ -54,7 +54,18 @@ $soncapCheck.Add_CheckedChanged({if(!$script:loadingSonCap -and $grid.SelectedRo
 $grid.Add_SelectionChanged({Update-SonCapUi})
 $soncapQueueHint=Ui-Label '' $soncapPage 16 460 635 40
 . (Join-Path $PSScriptRoot 'SonCapQueue.ps1')
-function Sync-SonCapTeams {foreach($b in $script:soncapBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$qjob=Get-SonCapMemberJob $m;if($qjob -is [TGLL.NativeJob]){$qjob.SonCapQueueOnly=$true}};[TGLL.NativeBackend]::ConfigureSonCapTeams([string[]]@($b.members | ForEach-Object {$_.job}))}}}
+function Sync-SonCapTeams {
+ foreach($b in $script:soncapBatches){if($b.state -in @('waiting','done')){continue}
+  foreach($m in $b.members){$null=Get-SonCapMemberJob $m}
+  $members=@($b.members | Where-Object {!(Test-SonCapLowLevelJob ([string]$_.job))})
+  foreach($m in $members){$qjob=Get-SonCapMemberJob $m;if($qjob -is [TGLL.NativeJob]){$qjob.SonCapQueueOnly=$true}}
+  $ids=[string[]]@($members | ForEach-Object {$_.job})
+  if($members.Count -ne $b.members.Count){
+   [TGLL.NativeBackend]::ConfigureIzanamiTeam($ids)
+   if($ids.Count -gt 0){$leader=Get-AccountJob $ids[0];if($leader -is [TGLL.NativeJob] -and !$leader.CloseRequested -and !$leader.CancelRequested -and $leader.MapId -notin @(94,95,97,93,96) -and !$leader.SonCapEntrySubmitted){$leader.IzanamiRequested=$true}}
+  }else{[TGLL.NativeBackend]::ConfigureSonCapTeams($ids)}
+ }
+}
 $soncapMax.Add_ValueChanged({Save-SonCapConfig;Update-SonCapQueueStatus})
 $soncapCloseAfter.Add_CheckedChanged({Save-SonCapConfig;Update-SonCapQueueStatus})
 Apply-SonCapConfig;Update-SonCapUi;Update-SonCapQueueStatus

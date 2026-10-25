@@ -61,6 +61,7 @@ function Reset-SonCapQueue {
     $script:soncapQueuePaused=$true;$script:soncapBatches=@();$script:soncapWaiting=@{}
 }
 function Pump-SonCapQueue {
+    Sync-SonCapMinimumLevel
     if($script:soncapQueuePaused -or !$script:soncapBatches.Count){return}
     $script:soncapAccountIndex=@{};foreach($a in $script:accounts){$script:soncapAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:soncapBatches){
@@ -134,4 +135,32 @@ function Update-SonCapQueueStatus {
     $soncapQueueHint.Text="Đang giữ lượt: $active / $([int]$soncapMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:soncapBatches | Where-Object {$_.error});if($errors.Count){$soncapQueueHint.Text+="`r`n"+$errors[0].error}
     foreach($row in $grid.Rows){if($null -ne (Get-SonCapQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt Sơn Cáp';Update-AccountOpen $row}}
+}
+
+function Test-SonCapLowLevelJob([string]$id){return ($script:soncapLevelCloseJobs -and $script:soncapLevelCloseJobs.ContainsKey($id))}
+function Test-SonCapLevelProcessRunning($j){return ($j.ProcessId -gt 0 -and [TGLL.ManagedGames]::IsRunning($j.ProcessId))}
+function Begin-SonCapLevelClose($j){return [TGLL.NativeBackend]::BeginCloseBatch([string[]]@($j.Id))}
+function Sync-SonCapMinimumLevel {
+ if(!$script:soncapLevelCloseJobs){$script:soncapLevelCloseJobs=@{}}
+ $now=[datetime]::UtcNow
+ foreach($a in $script:accounts){
+  if(!$script:accountJobs.ContainsKey([string]$a.id)){continue};$j=Get-AccountJob $script:accountJobs[[string]$a.id]
+  if(!($j -is [TGLL.NativeJob])){continue}
+  $entry=$script:soncapLevelCloseJobs[$j.Id]
+  if(!$entry){
+   if(!$j.SonCapEnabled -or !$j.TrainReady -or !$j.GameSettingsReady -or $j.CloseRequested -or $j.CancelRequested -or $j.ReconnectRequested -or $j.State -in @('failed','closed','cancelled','reconnecting')){continue}
+   if($j.CharacterLevel -lt 1 -or $j.CharacterLevel -ge 50 -or $j.FarmPositionReadAt -eq [datetime]::MinValue -or ($now-$j.FarmPositionReadAt).TotalSeconds -lt 0 -or ($now-$j.FarmPositionReadAt).TotalSeconds -ge 10 -or $j.FarmPositionMap -ne $j.MapId -or !(Test-SonCapLevelProcessRunning $j)){continue}
+   $entry=[pscustomobject]@{level=$j.CharacterLevel;pid=$j.ProcessId;operation=$null;attemptAt=[datetime]::MinValue;logged=$false};$script:soncapLevelCloseJobs[$j.Id]=$entry
+  }
+  $j.ActivityWatchStatus='Sơn Cáp: cấp '+$entry.level+' < 50, tắt game và chuyển lượt'
+  if(!(Test-SonCapLevelProcessRunning $j) -or $entry.pid -ne $j.ProcessId -or ($entry.operation -and !$entry.operation.Completed) -or ($now-$entry.attemptAt).TotalSeconds -lt 5){continue}
+  $entry.attemptAt=$now
+  try{
+   $entry.operation=Begin-SonCapLevelClose $j
+   if(!$entry.logged -and !$UiTest){
+    $entry.logged=$true;$record=@{time=$now.ToString('o');event='soncap_level_rejected';account_id=[string]$a.id;username=[string]$a.username;job_id=$j.Id;pid=$j.ProcessId;level=$entry.level;minimum_level=50}
+    try{[IO.File]::AppendAllText((Join-Path $PSScriptRoot 'logs\activity-level.jsonl'),((ConvertTo-Json $record -Compress)+[Environment]::NewLine),(New-Object Text.UTF8Encoding($false)))}catch{}
+   }
+  }catch{$j.ActivityWatchStatus='Sơn Cáp: cấp dưới 50; chưa tắt được game, đang thử lại'}
+ }
 }
