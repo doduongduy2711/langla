@@ -28,6 +28,30 @@ try{
  $script:accounts[1].autoBeast=$false;Paste-AccountConfigAll
  if(!$script:accounts[1].autoBeast){throw 'Paste config lost Beast toggle'}
  $serialized=@(($script:accounts | ConvertTo-Json -Depth 20 | ConvertFrom-Json));if(!$serialized[0].autoBeast -or !$serialized[1].autoBeast){throw 'Beast toggle not serializable in saved accounts'}
+ # A finished Beast session must not redirect the next activity's queue back into Beast.
+ $route=$script:accounts[0];$route.autoBeast=$false;$oldJob=$bpFixtures[0];$oldJob.BeastQuestEnabled=$true
+ $routeBlock=(Get-Item Function:\Test-AccountOpenBlocked).ScriptBlock
+ try{
+  $script:bpRouteBlocked=$false
+  function Test-AccountOpenBlocked($a){return $script:bpRouteBlocked}
+  foreach($kind in @('dungeon','quest','izanami','soncap','normal')){
+   foreach($flag in @('receiveKey','dungeonHigh','autoQuest','izanami','soncap')){$route | Add-Member NoteProperty $flag $false -Force}
+   switch($kind){'dungeon'{$route.dungeonHigh=$true} 'quest'{$route.autoQuest=$true} 'izanami'{$route.izanami=$true} 'soncap'{$route.soncap=$true}}
+   foreach($oldState in @('closed','cancelled','failed','opened')){
+    $oldJob.State=$oldState;$oldJob.CloseRequested=$false;$oldJob.CancelRequested=$false
+    if((Get-AccountLaunchMode $route) -ne $kind){throw "Stale Beast $oldState redirected $kind queue"}
+   }
+  }
+  $oldJob.State='opened';$script:bpRouteBlocked=$true
+  if((Get-AccountLaunchMode $route) -ne 'beast'){throw 'Living Beast activity lost routing'}
+  $oldJob.State='closed'
+  if((Get-AccountLaunchMode $route) -ne 'normal'){throw 'Closed Beast overrides even when account blocked elsewhere'}
+  $oldJob.State='opened';$oldJob.CancelRequested=$true
+  if((Get-AccountLaunchMode $route) -ne 'normal'){throw 'Cancelled Beast overrides next activity'}
+  $script:bpRouteBlocked=$false;$route.autoBeast=$true
+  if((Get-AccountLaunchMode $route) -ne 'beast'){throw 'Saved Beast checkbox lost on new session'}
+ }finally{Set-Item Function:\Test-AccountOpenBlocked $routeBlock}
+ Write-Output 'PASS: closed, cancelled, failed and exited Beast sessions cannot redirect Dungeon, Quest, Izanami, SonCap or normal launch; living Beast and saved checkbox retain routing.'
  Write-Output 'PASS: per-account Beast checkbox, offline persistence, direct/bulk capped-queue routing, selection isolation, stop only selected activity without closing games, and config copy/paste.'
 }finally{
  foreach($j in $bpFixtures){$removed=$null;$null=$bpNative.TryRemove($j.Id,[ref]$removed)}

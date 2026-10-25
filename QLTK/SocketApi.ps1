@@ -90,7 +90,7 @@ $script:accountWindowPids=@{}
 function Get-AccountLaunchMode($account) {
     if(Get-Command Get-AutoAllStage -ErrorAction SilentlyContinue){$all=Get-AutoAllStage ([string]$account.id);if($all){return $all}}
     if([bool]$account.autoBeast){return 'beast'}
-    if($script:accountJobs -and $script:accountJobs.ContainsKey([string]$account.id)){$bj=Get-AccountJob $script:accountJobs[[string]$account.id];if($bj -is [TGLL.NativeJob] -and $bj.BeastQuestEnabled){return 'beast'}}
+    if($script:accountJobs -and $script:accountJobs.ContainsKey([string]$account.id)){$bj=Get-AccountJob $script:accountJobs[[string]$account.id];if($bj -is [TGLL.NativeJob] -and $bj.BeastQuestEnabled -and !$bj.CloseRequested -and !$bj.CancelRequested -and $bj.State -notin @('closed','failed','cancelled') -and (Test-AccountOpenBlocked $account)){return 'beast'}}
     if($script:farmUpRequests -and $script:farmUpRequests.ContainsKey([string]$account.id)){return 'farm'}
     if([bool]$account.soncap){return 'soncap'}
     if((Get-Command Sync-DailyPriorityPreferences -ErrorAction SilentlyContinue) -and $script:farmUpRequests.ContainsKey([string]$account.id)){return 'farm'}

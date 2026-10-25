@@ -108,7 +108,7 @@ function Pump-DungeonQueue {
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
     foreach($batch in $script:dungeonBatches){if($batch.state -ne 'launching'){continue}
         $member=@($batch.members | Where-Object {!$_.job -and !(Test-ActivityMemberYielded $_) -and !(Test-ActivityMemberExited $_)}) | Select-Object -First 1
-        if($member){try{Start-DungeonMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Dungeon $batch $member $script:dungeonAccountIndex};break}
+        if($member){try{Start-DungeonMember $member;$batch.error=''}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Dungeon $batch $member $script:dungeonAccountIndex};break}
         if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
     }
