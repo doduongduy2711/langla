@@ -71,6 +71,9 @@ function Sync-ActivityCapacity([string]$kind,$batch,$index){
   }
  }
  if(@($batch.members | Where-Object {!(Test-ActivityMemberExited $_)}).Count -eq 0){$batch.state='done';$batch.error='Game đã thoát; đã trả lượt hoạt động'}
+ # A peer can exit before the remaining reserved members have been submitted.
+ # Resume through the normal capped launcher; never discard those accounts as done.
+ elseif($batch.state -in @('running','blocked') -and (Get-ActivityLaunchMember $batch)){$batch.state='launching';$batch.error='Tiếp tục mở thành viên chưa chạy qua hàng đợi'}
 }
 function Test-ActivityTeamOpen([string]$kind,$batch,[string]$excluded){
  if($kind -notin @('SonCap','Izanami')){return $false}

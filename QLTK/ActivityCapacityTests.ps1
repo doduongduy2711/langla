@@ -1,4 +1,4 @@
-# Exercise every production scheduler with dead launch attempts and a bounded pool.
+﻿# Exercise every production scheduler with dead launch attempts and a bounded pool.
 $capSaved=@{};$capFuncs=@{}
 foreach($name in @('accounts','accountJobs','soncapBatches','izanamiBatches','dungeonBatches','questBatches','soncapQueuePaused','izanamiQueuePaused','dungeonQueuePaused','questQueuePaused')){$capSaved[$name]=Get-Variable -Scope Script -Name $name -ValueOnly}
 foreach($name in @('Get-AccountJob','Test-AccountOpenBlocked','Sync-SonCapTeams','Sync-IzanamiTeams')){$capFuncs[$name]=(Get-Item ('Function:\'+$name)).ScriptBlock}
@@ -33,6 +33,27 @@ try{
   # A failed job whose process is still present must retain its slot.
   $j=$script:capJobs['live-cap-8'];$j.State='failed';$j.ProcessId=999999;$j.CancelRequested=$false
   & ('Pump-'+$kind+'Queue');if($script:capStarts -ne 7 -or $j.CancelRequested){throw "$kind released a still-present failed session"}
+  # A partly submitted team must resume after earlier peers exit (live log: 109-114).
+  $script:capJobs=@{};$script:capOpen=@{};$script:accountJobs=@{};$script:capStarts=0
+  $script:accounts=@($script:accounts[0..5]);$members=@()
+  foreach($a in $script:accounts[0..4]){
+   $job='closed-'+$a.id;$script:capJobs[$job]=[pscustomobject]@{Id=$job;State='closed';ProcessId=0;CloseRequested=$true;CancelRequested=$true;GameSettingsReady=$false}
+   $script:accountJobs[$a.id]=$job;$members+=@([pscustomobject]@{id=$a.id;job=$job})
+  }
+  $last=[pscustomobject]@{id=$script:accounts[5].id;job=''};$members+=@($last)
+  $partial=[pscustomobject]@{state='blocked';members=$members;error='peer exited';closeOperation=$null;limitClose=$false}
+  Set-Variable -Scope Script -Name ($k+'Batches') -Value @($partial)
+  & ('Pump-'+$kind+'Queue')
+  if($script:capStarts -ne 1 -or !$last.job -or $partial.state -eq 'done'){throw "$kind stranded or skipped unsubmitted member after peer exit"}
+  & ('Pump-'+$kind+'Queue');if($script:capStarts -ne 1){throw "$kind duplicated resumed launch"}
+  # Closing and cooling-down reservations must not be resumed by this repair.
+  $last.job='';$partial.state='blocked';$partial.closeOperation=[pscustomobject]@{Completed=$false}
+  $index=@{};foreach($a in $script:accounts){$index[$a.id]=$a}
+  Sync-ActivityCapacity $kind $partial $index
+  if($partial.state -ne 'blocked'){throw "$kind resumed team while closing"}
+  $partial.closeOperation=$null;$last | Add-Member NoteProperty slotYielded $true -Force;$last | Add-Member NoteProperty retryAt ([datetime]::UtcNow.AddMinutes(1)) -Force
+  Sync-ActivityCapacity $kind $partial $index
+  if($partial.state -ne 'blocked'){throw "$kind bypassed retry cooldown"}
   # Synchronous launch failure also yields its reservation immediately.
   $m=[pscustomobject]@{id='cap-absent';job=''};$b=[pscustomobject]@{state='blocked';members=@($m);error='';closeOperation=$null}
   Handle-ActivityLaunchError $kind $b $m @{}
@@ -41,7 +62,7 @@ try{
  # Mixed team: only failed member yields, living peers keep their own reservations.
  $team=[pscustomobject]@{members=@([pscustomobject]@{slotYielded=$true},[pscustomobject]@{queueExited=$true},[pscustomobject]@{job='pending'})}
  if((Get-ActivityReservedCount $team) -ne 1){throw 'Mixed team capacity still counts dead members'}
- Write-Output 'PASS: all four schedulers release failed launches, fill max6 with healthy/pending clients, bound retries, refill one actual exit, retain still-present failed sessions, preserve team peer reservations and yield synchronous errors. No real game action.'
+ Write-Output 'PASS: all four schedulers release failed launches, fill max6 with healthy/pending clients, bound retries, refill one actual exit, retain still-present failed sessions, preserve team peer reservations, resume unsubmitted members after peer exit without duplicates or bypassing close/cooldown gates, and yield synchronous errors. No real game action.'
 }finally{
  foreach($name in $capFuncs.Keys){Set-Item ('Function:\'+$name) $capFuncs[$name]}
  foreach($name in $capSaved.Keys){Set-Variable -Scope Script -Name $name -Value $capSaved[$name]}
