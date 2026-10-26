@@ -1,4 +1,4 @@
-# Confirmed level guard, exact boundary, async close and team removal; no real game action.
+﻿# Confirmed level guard, exact boundary, async close and team removal; no real game action.
 $slAccounts=$script:accounts;$slJobs=$script:accountJobs;$slBatches=$script:soncapBatches;$slCloseJobs=$script:soncapLevelCloseJobs
 $slBegin=(Get-Item Function:\Begin-SonCapLevelClose).ScriptBlock;$slRunning=(Get-Item Function:\Test-SonCapLevelProcessRunning).ScriptBlock
 $slNative=[TGLL.NativeBackend].GetField('jobs',[Reflection.BindingFlags]'NonPublic,Static').GetValue($null);$slCtor=[TGLL.NativeJob].GetConstructors([Reflection.BindingFlags]'NonPublic,Instance')[0]
@@ -31,6 +31,24 @@ try{
  [TGLL.NativeBackend]::ConfigureSonCapTeams([string[]]@($members | ForEach-Object {$_.job}));$slFixtures[1].IzanamiRequested=$false
  Sync-SonCapTeams
  $team=$slTeamField.GetValue($slFixtures[1]);if($team.Count -ne 2 -or $team -contains $low.Id -or $team[0] -ne $slFixtures[1].Id -or !$slFixtures[1].IzanamiRequested){throw 'Low-level leader still blocks eligible SonCap teammates'}
+ # Once an exited peer returned its slot, fresh remaining members must not wait on it.
+ $slIzBatches=$script:izanamiBatches
+ try{
+  foreach($kind in @('SonCap','Izanami')){
+   $left=$slFixtures[1];$right=$slFixtures[8];$left.IzanamiRequested=$false
+   $closed=[pscustomobject]@{id=$right.Id;job=$right.Id;queueExited=$true}
+   $remaining=[pscustomobject]@{id=$left.Id;job=$left.Id}
+   $b=[pscustomobject]@{state='launching';members=@($closed,$remaining)}
+   Set-Variable -Scope Script -Name ($kind.ToLowerInvariant()+'Batches') -Value @($b)
+   & ('Sync-'+$kind+'Teams')
+   $team=$slTeamField.GetValue($left)
+   if($team.Count -ne 1 -or $team[0] -ne $left.Id){throw "$kind retained confirmed-exited leader in remaining team"}
+   # A temporarily yielded peer still owns its place and must stay in the team.
+   $closed.queueExited=$false;$closed | Add-Member NoteProperty slotYielded $true -Force
+   & ('Sync-'+$kind+'Teams');$team=$slTeamField.GetValue($left)
+   if($team.Count -ne 2 -or $team[0] -ne $right.Id){throw "$kind removed retrying peer before confirmed queue exit"}
+  }
+ }finally{$script:izanamiBatches=$slIzBatches}
  Write-Output 'PASS: SonCap closes confirmed level49 only, preserves level50/51 and unknown/stale/unready/inactive sessions, deduplicates async close, retries failures, confirms process exit, avoids timeout recovery and removes rejected leader from eligible team. No game action.'
 }finally{
  foreach($j in $slFixtures){$removed=$null;$null=$slNative.TryRemove($j.Id,[ref]$removed)}

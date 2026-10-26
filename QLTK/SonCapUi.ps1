@@ -57,7 +57,7 @@ $soncapQueueHint=Ui-Label '' $soncapPage 16 460 635 40
 function Sync-SonCapTeams {
  foreach($b in $script:soncapBatches){if($b.state -in @('waiting','done')){continue}
   foreach($m in $b.members){$null=Get-SonCapMemberJob $m}
-  $members=@($b.members | Where-Object {!(Test-SonCapLowLevelJob ([string]$_.job))})
+  $members=@($b.members | Where-Object {!(Test-ActivityMemberExited $_) -and !(Test-SonCapLowLevelJob ([string]$_.job))})
   foreach($m in $members){$qjob=Get-SonCapMemberJob $m;if($qjob -is [TGLL.NativeJob]){$qjob.SonCapQueueOnly=$true}}
   $ids=[string[]]@($members | ForEach-Object {$_.job})
   if($members.Count -ne $b.members.Count){

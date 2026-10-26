@@ -1,5 +1,5 @@
 ﻿function Sync-IzanamiTeams {
-    if($script:izanamiBatches.Count){foreach($b in $script:izanamiBatches | Where-Object {$_.state -notin @('waiting','done','closing')}){foreach($m in $b.members){$null=Get-IzanamiMemberJob $m};[TGLL.NativeBackend]::ConfigureIzanamiTeam([string[]]@($b.members | ForEach-Object {$_.job}))};return}
+    if($script:izanamiBatches.Count){foreach($b in $script:izanamiBatches | Where-Object {$_.state -notin @('waiting','done','closing')}){foreach($m in $b.members){$null=Get-IzanamiMemberJob $m};[TGLL.NativeBackend]::ConfigureIzanamiTeam([string[]]@($b.members | Where-Object {!(Test-ActivityMemberExited $_)} | ForEach-Object {$_.job}))};return}
     $ids=[string[]]@($grid.Rows | ForEach-Object {if($script:accountJobs.ContainsKey([string]$_.Tag.id)){$teamJob=Get-AccountJob $script:accountJobs[[string]$_.Tag.id];if($teamJob -and !$teamJob.SonCapEnabled){$teamJob.Id}else{''}}else{''}})
     [TGLL.NativeBackend]::ConfigureIzanamiTeams($ids)
 }
