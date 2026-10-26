@@ -4,7 +4,10 @@ class ActivityWatchdogTests {
  static void C(bool b,string m){if(!b)throw new Exception(m);}
  static NativeJob J(string kind,int map){var j=new NativeJob("fixture.exe","fixture","unused",null,true);j.ProcessId=123456;j.State="opened";j.ReceiveKeyEnabled=false;j.MapId=map;j.GameSettingsReady=true;j.GameAutoEnabled=true;j.QuestSnapshotAt=t;if(kind=="quest")j.QuestEnabled=true;if(kind=="dungeon")j.DungeonHighEnabled=true;if(kind=="izanami")j.IzanamiEnabled=true;if(kind=="soncap"){j.IzanamiEnabled=true;j.SonCapEnabled=true;}return j;}
  static void Tick(NativeJob j,int sec){var now=t.AddSeconds(sec);j.ZoneReadAt=now;if(j.QuestEnabled)j.QuestSnapshotAt=now;NativeBackend.ObserveActivityWatchdog(j,now,p=>closed++);}
+ static void CloseOption(string kind,bool enabled){switch(kind){case "key":break;case "quest":NativeBackend.QuestCloseAfterEnabled=enabled;break;case "dungeon":NativeBackend.DungeonCloseAfterEnabled=enabled;break;case "izanami":NativeBackend.IzanamiCloseAfterEnabled=enabled;break;case "soncap":NativeBackend.SonCapCloseAfterEnabled=enabled;break;}}
+ static void AllCloseOptions(bool enabled){foreach(string kind in new[]{"quest","dungeon","izanami","soncap"})CloseOption(kind,enabled);}
  static void Main(){
+  AllCloseOptions(true);
   foreach(string kind in new[]{"quest","dungeon","izanami","soncap"}){
    var j=J(kind,59);int before=closed;Tick(j,0);Tick(j,299);C(!j.ActivityRetryPending,"early retry "+kind);Tick(j,300);C(j.ActivityRetryPending,"retry at 5 "+kind);var start=j.ActivityVillageAt;NativeBackend.PrepareActivityRetry(j,t.AddSeconds(300));C(j.ActivityVillageAt==start,"retry extended village deadline");Tick(j,599);C(closed==before,"early close "+kind);Tick(j,600);C(closed==before+1&&j.ActivityTimeoutClosed&&j.CloseRequested,"village close "+kind);
   }
@@ -32,6 +35,23 @@ class ActivityWatchdogTests {
   var snap=J("soncap",94);snap.ZoneReadAt=t;snap.SonCapReadError="team_snapshot_changed";C(NativeBackend.ActivityFaultReason(snap,"soncap",t)=="team_snapshot_changed","missing initial snapshot fault");
   NativeBackend.ObserveSonCap(snap,94,10,false,t);C(snap.SonCapReadError.Length>0,"unloaded snapshot cleared read error");
   NativeBackend.ObserveSonCap(snap,94,10,true,t);C(snap.SonCapReadError.Length==0&&NativeBackend.ActivityFaultReason(snap,"soncap",t)=="","valid snapshot retained stale read fault");
+  // Each activity must use its OWN checkbox, even if every other one is on.
+  foreach(string kind in new[]{"quest","dungeon","izanami","soncap","key"}){
+   AllCloseOptions(true);CloseOption(kind,false);var uncheckedJob=J(kind,59);if(kind=="key"){uncheckedJob.ReceiveKeyEnabled=true;uncheckedJob.CloseAfterKey=false;}
+   int before=closed;Tick(uncheckedJob,0);Tick(uncheckedJob,300);C(uncheckedJob.ActivityRetryPending,"unchecked auto-close disabled 5-minute retry "+kind);Tick(uncheckedJob,600);Tick(uncheckedJob,900);
+   C(closed==before&&!uncheckedJob.CloseRequested&&!uncheckedJob.CancelRequested&&!uncheckedJob.ActivityTimeoutClosed,"unchecked activity timed out and closed "+kind);
+   C(!NativeBackend.ConfirmActivityCloseMap(uncheckedJob,()=>59),"native village read bypassed unchecked option "+kind);
+   CloseOption(kind,true);if(kind=="key")uncheckedJob.CloseAfterKey=true;Tick(uncheckedJob,901);C(closed==before+1&&uncheckedJob.ActivityTimeoutClosed,"checking correct option did not permit expired village close "+kind);
+   CloseOption(kind,false);uncheckedJob.CloseAfterKey=false;Tick(uncheckedJob,910);C(closed==before+1,"failed close retried after unchecking "+kind);
+  }
+  // A checkbox can be cleared while the asynchronous worker reads the real map.
+  AllCloseOptions(true);var race=J("dungeon",59);C(!NativeBackend.ConfirmActivityCloseMap(race,()=>{NativeBackend.DungeonCloseAfterEnabled=false;return 59;}),"uncheck during native map read still closed game");
+  string[] stages={"key","dungeon","izanami","quest","soncap"};for(int stage=1;stage<=5;stage++){
+   AllCloseOptions(true);var daily=J("",59);daily.DailyActive=true;daily.DailyStage=stage;daily.CloseAfterKey=true;C(NativeBackend.ActivityTimeoutCloseEnabled(daily),"daily stage failed to use selected activity option "+stage);
+   CloseOption(stages[stage-1],false);if(stage==1)daily.CloseAfterKey=false;C(!NativeBackend.ActivityTimeoutCloseEnabled(daily),"daily stage bypassed unchecked option "+stage);
+  }
+  AllCloseOptions(false);
+  Console.WriteLine("PASS: timeout closing follows each activity checkbox, preserves 5-minute retry, rejects other activities' options and rechecks unchecking during close/read/retry. Key per-account and daily stages covered.");
   Console.WriteLine("PASS: four activity watchdogs; exact 5/10-minute boundaries; retry preserves deadline/rounds/current dungeon; actual recovery, village departure/switch, manual stop, idle/completed/healthy combat and Up selection. Village-only close, fresh native map check and transient settings recovery. No real game closed.");
  }
 }

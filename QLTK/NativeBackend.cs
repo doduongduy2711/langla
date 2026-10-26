@@ -4168,14 +4168,30 @@ namespace TGLL {
             return kind=="quest"&&j.QuestPhase==6&&j.TrainEnabled&&j.QuestMobId>=0&&j.QuestKind==1&&
                    j.QuestSnapshotAt!=DateTime.MinValue&&(now-j.QuestSnapshotAt).TotalSeconds<5;
         }
+        internal static bool ActivityTimeoutCloseEnabled(NativeJob j){
+            string kind=j.ActivityTimeoutClosed?j.ActivityWatchKind:WatchedActivity(j);
+            if(kind=="daily_wait"){
+                switch(j.DailyStage){case 1:kind="key";break;case 2:kind="dungeon";break;case 3:kind="izanami";break;case 4:kind="quest";break;case 5:kind="soncap";break;default:return false;}
+            }
+            switch(kind){
+                case "key":return j.CloseAfterKey;
+                case "dungeon":return DungeonCloseAfterEnabled;
+                case "izanami":return IzanamiCloseAfterEnabled;
+                case "quest":return QuestCloseAfterEnabled;
+                case "soncap":return SonCapCloseAfterEnabled;
+                default:return false;
+            }
+        }
         internal static bool ConfirmActivityCloseMap(NativeJob j,Func<int> read){
+            if(!ActivityTimeoutCloseEnabled(j))return false;
             if(!j.ActivityTimeoutClosed&&(j.CloseRequested||j.CancelRequested||WatchedActivity(j).Length==0))return false;
-            try{return IsActivityVillage(read());}catch{return false;}
+            try{return IsActivityVillage(read())&&ActivityTimeoutCloseEnabled(j);}catch{return false;}
         }
         public static void PulseActivityWatchdog(){PulseActivityWatchdog(DateTime.UtcNow,null);}
         internal static void PulseActivityWatchdog(DateTime now,Action<NativeJob> close){foreach(NativeJob j in jobs.Values)ObserveActivityWatchdog(j,now,close);}
         internal static void ObserveActivityWatchdog(NativeJob j,DateTime now,Action<NativeJob> close){
             if(j.ActivityTimeoutClosed){
+                if(!ActivityTimeoutCloseEnabled(j)){j.ActivityWatchStatus="Giữ game: hoạt động chưa bật tùy chọn tự tắt";return;}
                 // A failed close holds its queue slot and can be retried, without reopening the game.
                 if(j.ProcessId>0&&(j.ActivityTimeoutCloseOperation==null||j.ActivityTimeoutCloseOperation.Completed)&&
                    (now-j.ActivityCloseAt).TotalSeconds>=5&&(close!=null||ManagedGames.IsRunning(j.ProcessId)))CloseTimedOutActivity(j,now,close);
@@ -4212,6 +4228,10 @@ namespace TGLL {
             double seconds=(now-since).TotalSeconds;
             string cause=j.ActivityVillageAt==since?"village_wait":reason.Length>0?reason:"awaiting_recovery";
             if(seconds>=600){
+                if(!ActivityTimeoutCloseEnabled(j)){
+                    j.ActivityWatchStatus="Auto lỗi/chờ quá 10 phút: giữ game vì chưa tích tự tắt của hoạt động";
+                    return;
+                }
                 if(!FreshActivityVillage(j,now)){
                     j.ActivityWatchStatus="Auto lỗi/chờ quá 10 phút: giữ game, chưa xác nhận ở map làng";
                     return;
@@ -4232,9 +4252,10 @@ namespace TGLL {
             Log(j,"activity_timeout_close",",\"activity\":"+Quote(j.ActivityWatchKind)+",\"reason\":"+Quote(cause)+",\"map\":"+j.MapId+",\"elapsed_seconds\":"+seconds);
         }
         static void CloseTimedOutActivity(NativeJob j,DateTime now,Action<NativeJob> close,string cause="retry_close",int seconds=600){
+            if(!ActivityTimeoutCloseEnabled(j)){j.ActivityWatchStatus="Giữ game: hoạt động chưa bật tùy chọn tự tắt";return;}
             j.ActivityCloseAt=now;
             if(close!=null){
-                if(!FreshActivityVillage(j,now))return;
+                if(!FreshActivityVillage(j,now)||!ActivityTimeoutCloseEnabled(j))return;
                 MarkActivityTimeoutClose(j,cause,seconds);j.CloseRequested=true;j.CancelRequested=true;
                 j.ActivityTimeoutCloseOperation=new CloseBatchOperation{Completed=true};close(j);return;
             }
@@ -4250,6 +4271,7 @@ namespace TGLL {
                     }
                     j.MapId=map;j.ZoneReadAt=DateTime.UtcNow;MarkActivityTimeoutClose(j,cause,seconds);
                 }
+                if(!ActivityTimeoutCloseEnabled(j)){j.ActivityWatchStatus="Giữ game: hoạt động đã bỏ tích tự tắt";return;}
                 op.Failed=CloseGame(j.Id).Failed;
             }catch(ArgumentException){if(!ManagedGames.IsRunning(j.ProcessId)){j.ActivityTimeoutClosed=true;j.CloseRequested=true;j.CancelRequested=true;}else op.Failed++;}
              catch{op.Failed++;j.ActivityWatchStatus="Chưa xác nhận/tắt được game; giữ lượt để thử lại";}
