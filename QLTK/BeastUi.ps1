@@ -16,7 +16,17 @@ $beastAccount=Ui-Label 'Chọn tài khoản trong bảng.' $beastPage 16 43 630 
 function Save-BeastSettings {$script:settings.beastMaxOnline=[int]$beastMax.Value;$script:settings.beastCloseAfter=$beastCloseAfter.Checked;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}}
 $beastMax.Add_ValueChanged({Save-BeastSettings});$beastCloseAfter.Add_CheckedChanged({Save-BeastSettings})
 function Get-BeastQueuedMember($id){foreach($b in $script:beastBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){if($m.id -eq $id){return $m}}}};return $null}
-function Get-BeastMemberJob($m){if($script:accountJobs.ContainsKey($m.id)){$current=[string]$script:accountJobs[$m.id];if($m.PSObject.Properties['retiredJob'] -and $m.retiredJob -eq $current){return $null};$m.job=$current};if($m.job){return Get-AccountJob $m.job};return $null}
+function Get-BeastMemberJob($m){
+ if($script:accountJobs.ContainsKey($m.id)){
+  $current=[string]$script:accountJobs[$m.id]
+  if($m.PSObject.Properties['retiredJob'] -and $m.retiredJob -eq $current){return $null}
+  # An unsubmitted queue member must not inherit the previous activity's session.
+  # A retired retry may adopt a genuinely new pending/live replacement.
+  if(!$m.job -and !$m.PSObject.Properties['retiredJob']){return $null}
+  if($current -and $current -ne $m.job){$next=Get-AccountJob $current;if($next -and !$next.CloseRequested -and !$next.CancelRequested -and $next.State -notin @('closed','failed','cancelled')){$m.job=$current}}
+ }
+ if($m.job){return Get-AccountJob $m.job};return $null
+}
 function Test-BeastMemberRunning($m){$j=Get-BeastMemberJob $m;return ($j -and $j.ProcessId -gt 0 -and [TGLL.ManagedGames]::IsRunning($j.ProcessId))}
 function Start-BeastMember($m){
  $a=$script:beastAccountIndex[$m.id];if(!$a){throw 'Tài khoản trong hàng chờ đã bị xóa.'}
@@ -82,7 +92,7 @@ function Pump-BeastQueue {
  $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and $script:accountJobs.ContainsKey([string]$a.id)){$j=Get-AccountJob $script:accountJobs[[string]$a.id];if($j -and $j.BeastQuestEnabled -and (Test-AccountOpenBlocked $a)){$outside++}}}
  foreach($b in $script:beastBatches){
   if($b.state -ne 'waiting' -or ($b.PSObject.Properties['retryAt'] -and [datetime]::UtcNow -lt $b.retryAt)){continue}
-  $already=0;foreach($m in $b.members){$j=Get-BeastMemberJob $m;$a=$script:beastAccountIndex[$m.id];if($j -and $j.BeastQuestEnabled -and $a -and (Test-AccountOpenBlocked $a)){$already++}}
+  $already=0;foreach($m in $b.members){$j=Get-BeastMemberJob $m;$a=$script:beastAccountIndex[$m.id];if(!$m.job -and $script:accountJobs.ContainsKey([string]$m.id)){$j=Get-AccountJob $script:accountJobs[[string]$m.id]};if($j -and $j.BeastQuestEnabled -and $a -and (Test-AccountOpenBlocked $a)){$already++}}
   if($occupied+$outside+$b.members.Count-$already -gt [int]$beastMax.Value){continue}
   $b.state='launching';$occupied+=$b.members.Count;$outside-=$already
  }

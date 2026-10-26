@@ -76,3 +76,5 @@ try{
  for($i=0;$i -lt 5;$i++){$aaLimits[$i].Value=$aaLimitValues[$i]}
  Refresh-Grid
 }
+
+. (Join-Path $PSScriptRoot 'AutoAllBeastTransitionTests.ps1')
