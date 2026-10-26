@@ -113,10 +113,12 @@ function Get-ActivityLaunchMember($batch){
  return $normal
 }
 function Get-ActivityLaunchBatches($batches){
- foreach($priorityPass in @($true,$false)){foreach($b in $batches){
+ $priority=New-Object 'Collections.Generic.List[object]';$normal=New-Object 'Collections.Generic.List[object]'
+ foreach($b in $batches){
   if($b.state -ne 'launching'){continue};$m=Get-ActivityLaunchMember $b
-  if([bool]($m -and (Test-ActivityRetryPriority $b $m)) -eq $priorityPass){Write-Output $b}
- }}
+  if($m -and (Test-ActivityRetryPriority $b $m)){$priority.Add($b)}else{$normal.Add($b)}
+ }
+ foreach($b in $priority){Write-Output $b};foreach($b in $normal){Write-Output $b}
 }
 function Handle-ActivityLaunchError([string]$kind,$batch,$m,$index){
  $j=& ('Get-'+$kind+'MemberJob') $m;$a=$index[$m.id]

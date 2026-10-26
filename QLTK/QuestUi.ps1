@@ -18,7 +18,7 @@ function Sync-QuestPreferences {
     foreach($a in $script:accounts){$key=[string]$a.id;if(!$script:accountJobs.ContainsKey($key)){continue};$j=Get-AccountJob $script:accountJobs[$key]
         if($null -eq $j -or $j.CloseRequested -or $j.State -in @('closed','cancelled','failed','reconnecting')){continue}
         if($j -is [TGLL.NativeJob] -and ($j.DailyManaged -or $j.BeastQuestEnabled)){continue}
-        $allStage='';if(Get-Command Get-AutoAllStage -ErrorAction SilentlyContinue){$allStage=Get-AutoAllStage $key}
+        $allStage='';if(${function:Get-AutoAllStage}){$allStage=Get-AutoAllStage $key}
         $enabled=if($allStage){$allStage -eq 'quest'}else{!$j.MailQueueOnly -and !$j.CloakQueueOnly -and [bool]$a.autoQuest -and ($j.QuestQueueOnly -or (Get-AccountLaunchMode $a) -eq 'quest')}
         $signature=$j.Id+':'+$enabled
         if($script:questApplied[$key] -ne $signature){try{[TGLL.NativeBackend]::SetAutoQuest($j.Id,$enabled);$script:questApplied[$key]=$signature}catch{$status.Text=$a.username+': '+$_.Exception.Message}}

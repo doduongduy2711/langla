@@ -10,7 +10,7 @@ function Start-DungeonMember($member) {
     if(!$a){throw 'Tài khoản trong hàng chờ đã bị xóa.'}
     if(Test-AccountOpenBlocked $a){
         if(!$script:accountJobs.ContainsKey($member.id)){throw 'Game mở thủ công chưa hỗ trợ tài khoản tự động.'}
-        $member.job=$script:accountJobs[$member.id];$j=Get-AccountJob $member.job;$j.DungeonQueueOnly=$true;$j.QuestQueueOnly=$false;$j.IzanamiQueueOnly=$false;[TGLL.NativeBackend]::SetAutoQuest($member.job,$false);[TGLL.NativeBackend]::SetIzanami($member.job,$false);[TGLL.NativeBackend]::SetCloseAfterKey($member.job,$false);[TGLL.NativeBackend]::SetReceiveKey($member.job,([bool]$a.receiveKey -or ((Get-Command Get-AutoAllStage -ErrorAction SilentlyContinue) -and (Get-AutoAllStage ([string]$a.id)) -eq 'dungeon')));[TGLL.NativeBackend]::SetDungeonHigh($member.job,$true);return
+        $member.job=$script:accountJobs[$member.id];$j=Get-AccountJob $member.job;$j.DungeonQueueOnly=$true;$j.QuestQueueOnly=$false;$j.IzanamiQueueOnly=$false;[TGLL.NativeBackend]::SetAutoQuest($member.job,$false);[TGLL.NativeBackend]::SetIzanami($member.job,$false);[TGLL.NativeBackend]::SetCloseAfterKey($member.job,$false);[TGLL.NativeBackend]::SetReceiveKey($member.job,([bool]$a.receiveKey -or ((${function:Get-AutoAllStage}) -and (Get-AutoAllStage ([string]$a.id)) -eq 'dungeon')));[TGLL.NativeBackend]::SetDungeonHigh($member.job,$true);return
     }
     $script:dungeonLaunchingAccountId=$member.id
     try{Open-Account $a}finally{$script:dungeonLaunchingAccountId=''}
@@ -95,7 +95,7 @@ function Pump-DungeonQueue {
     $active=0;foreach($b in $script:dungeonBatches){if($b.state -notin @('waiting','done')){$active+=(Get-ActivityReservedCount $b)}}
     # Live Dungeon accounts outside this queue also consume slots.
     $included=@{};foreach($b in $script:dungeonBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$included[$m.id]=$true}}}
-    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and ($a.dungeonHigh -or (Get-AccountLaunchMode $a) -eq 'dungeon') -and (Test-AccountOpenBlocked $a)){$outside++}}
+    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and (Test-AccountOpenBlocked $a) -and ($a.dungeonHigh -or (Get-AccountLaunchMode $a) -eq 'dungeon')){$outside++}}
     $limit=[int]$dungeonMax.Value
     $active+=(Restore-ActivityReservations $script:dungeonBatches ($limit-$active-$outside))
     foreach($batch in $script:dungeonBatches){
@@ -107,11 +107,13 @@ function Pump-DungeonQueue {
     }
     # Submit at most one account per timer tick; native login still runs six at a time.
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
+    $submitted=$false
     foreach($batch in $script:dungeonBatches){if($batch.state -ne 'launching'){continue}
         $member=@($batch.members | Where-Object {!$_.job -and !(Test-ActivityMemberYielded $_) -and !(Test-ActivityMemberExited $_)}) | Select-Object -First 1
-        if($member){try{Start-DungeonMember $member;$batch.error=''}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Dungeon $batch $member $script:dungeonAccountIndex};break}
+        if($member){$submitted=$true;try{Start-DungeonMember $member;$batch.error=''}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Dungeon $batch $member $script:dungeonAccountIndex};break}
         if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
+    if(!$submitted){break}
     }
     Update-DungeonQueueStatus
 }

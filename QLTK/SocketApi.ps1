@@ -97,13 +97,12 @@ function Get-ActivityLaunchContext([string]$id){
  return ''
 }
 function Get-AccountLaunchMode($account) {
-    if(Get-Command Get-AutoAllStage -ErrorAction SilentlyContinue){$all=Get-AutoAllStage ([string]$account.id);if($all){return $all}}
+    if(${function:Get-AutoAllStage}){$all=Get-AutoAllStage ([string]$account.id);if($all){return $all}}
     $queueStage=Get-ActivityLaunchContext ([string]$account.id);if($queueStage){return $queueStage}
     if([bool]$account.autoBeast){return 'beast'}
     if($script:accountJobs -and $script:accountJobs.ContainsKey([string]$account.id)){$bj=Get-AccountJob $script:accountJobs[[string]$account.id];if($bj -is [TGLL.NativeJob] -and $bj.BeastQuestEnabled -and !$bj.CloseRequested -and !$bj.CancelRequested -and $bj.State -notin @('closed','failed','cancelled') -and (Test-AccountOpenBlocked $account)){return 'beast'}}
     if($script:farmUpRequests -and $script:farmUpRequests.ContainsKey([string]$account.id)){return 'farm'}
     if([bool]$account.soncap){return 'soncap'}
-    if((Get-Command Sync-DailyPriorityPreferences -ErrorAction SilentlyContinue) -and $script:farmUpRequests.ContainsKey([string]$account.id)){return 'farm'}
     if($account.receiveKey -or $account.dungeonHigh){return 'dungeon'}
     if($account.izanami){return 'izanami'}
     if($account.autoQuest){return 'quest'}
@@ -147,7 +146,7 @@ function Start-ManagedAccount($account,$proxy,[bool]$autoLogin=$false) {
     if ($autoLogin -or $null -ne $proxy) {
         $nativeProxy=$null
         if ($null -ne $proxy) {$nativeProxy=New-Object TGLL.SocksConfig([string]$proxy.host,[int]$proxy.port,[string]$proxy.username,[string]$proxy.password)}
-        $allStage='';if(Get-Command Get-AutoAllStage -ErrorAction SilentlyContinue){$allStage=Get-AutoAllStage ([string]$account.id)}
+        $allStage='';if(${function:Get-AutoAllStage}){$allStage=Get-AutoAllStage ([string]$account.id)}
         $queueStage=Get-ActivityLaunchContext ([string]$account.id);$launchStage=if($allStage){$allStage}else{$queueStage}
         $stageReceive=if($launchStage){$launchStage -eq 'dungeon' -and ([bool]$account.receiveKey -or [bool]$allStage)}else{[bool]$account.receiveKey};$stageDungeon=if($launchStage){$launchStage -eq 'dungeon'}else{[bool]$account.dungeonHigh};$stageIzanami=if($launchStage){$launchStage -eq 'izanami'}else{[bool]$account.izanami}
         $dungeonQueueLaunch=([string]$script:dungeonLaunchingAccountId -eq [string]$account.id)

@@ -106,7 +106,7 @@ $biMaCol=New-Object Windows.Forms.DataGridViewTextBoxColumn;$biMaCol.Name='bima'
 function Test-AccountOpenBlocked($account) {
     if($null -eq $account){return $false}
     $key=[string]$account.id
-    if((Get-Command Get-MailQueuedMember -ErrorAction SilentlyContinue) -and $null -ne (Get-MailQueuedMember $key)){return $true}
+    if((${function:Get-MailQueuedMember}) -and $null -ne (Get-MailQueuedMember $key)){return $true}
     if($script:accountJobs.ContainsKey($key)){
         $j=Get-AccountJob $script:accountJobs[$key]
         if($null -ne $j){
@@ -243,6 +243,7 @@ function Update-VisibleCharacterNames {
         if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
         Update-AccountCharacter $row $j
     }
+    if(${function:Update-ManagerStatusRows}){Update-ManagerStatusRows @(for($n=$first;$n -le $last;$n++){$grid.Rows[$n]})}
 }
 $grid.Add_Scroll({Update-VisibleCharacterNames})
 function Update-UiSummary {

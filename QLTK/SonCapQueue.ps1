@@ -110,7 +110,7 @@ function Pump-SonCapQueue {
     $active=0;foreach($b in $script:soncapBatches){if($b.state -notin @('waiting','done')){$active+=(Get-ActivityReservedCount $b)}}
     # Live SonCap accounts outside this queue also consume slots.
     $included=@{};foreach($b in $script:soncapBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$included[$m.id]=$true}}}
-    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and ($a.soncap -or (Get-AccountLaunchMode $a) -eq 'soncap') -and (Test-AccountOpenBlocked $a)){$outside++}}
+    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and (Test-AccountOpenBlocked $a) -and ($a.soncap -or (Get-AccountLaunchMode $a) -eq 'soncap')){$outside++}}
     $limit=[int]$soncapMax.Value
     $active+=(Restore-ActivityReservations $script:soncapBatches ($limit-$active-$outside))
     $priorityHeld=Get-ActivityPriorityHoldCount $script:soncapBatches
@@ -123,11 +123,13 @@ function Pump-SonCapQueue {
     }
     # Submit at most one account per timer tick; native login still runs six at a time.
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
+    $submitted=$false
     foreach($batch in @(Get-ActivityLaunchBatches $script:soncapBatches)){
         $member=Get-ActivityLaunchMember $batch
-        if($member){try{Start-SonCapMember $member;if(Test-ActivityRetryPriority $batch $member){$null=[TGLL.NativeBackend]::PrioritizeLaunch([string]$member.job)}}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError SonCap $batch $member $script:soncapAccountIndex};Sync-SonCapTeams;break}
+        if($member){$submitted=$true;try{Start-SonCapMember $member;if(Test-ActivityRetryPriority $batch $member){$null=[TGLL.NativeBackend]::PrioritizeLaunch([string]$member.job)}}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError SonCap $batch $member $script:soncapAccountIndex};Sync-SonCapTeams;break}
         if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
+    if(!$submitted){break}
     }
     Update-SonCapQueueStatus
 }

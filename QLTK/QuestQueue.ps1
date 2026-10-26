@@ -94,7 +94,7 @@ function Pump-QuestQueue {
     $active=0;foreach($b in $script:questBatches){if($b.state -notin @('waiting','done')){$active+=(Get-ActivityReservedCount $b)}}
     # Live Quest accounts outside this queue also consume slots.
     $included=@{};foreach($b in $script:questBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$included[$m.id]=$true}}}
-    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and ($a.autoQuest -or (Get-AccountLaunchMode $a) -eq 'quest') -and (Test-AccountOpenBlocked $a)){$outside++}}
+    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and (Test-AccountOpenBlocked $a) -and ($a.autoQuest -or (Get-AccountLaunchMode $a) -eq 'quest')){$outside++}}
     $limit=[int]$questMax.Value
     $active+=(Restore-ActivityReservations $script:questBatches ($limit-$active-$outside))
     foreach($batch in $script:questBatches){
@@ -106,11 +106,13 @@ function Pump-QuestQueue {
     }
     # Submit at most one account per timer tick; native login still runs six at a time.
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
+    $submitted=$false
     foreach($batch in $script:questBatches){if($batch.state -ne 'launching'){continue}
         $member=@($batch.members | Where-Object {!$_.job -and !(Test-ActivityMemberYielded $_) -and !(Test-ActivityMemberExited $_)}) | Select-Object -First 1
-        if($member){try{Start-QuestMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Quest $batch $member $script:questAccountIndex};break}
+        if($member){$submitted=$true;try{Start-QuestMember $member}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Quest $batch $member $script:questAccountIndex};break}
         if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
+    if(!$submitted){break}
     }
     Update-QuestQueueStatus
 }

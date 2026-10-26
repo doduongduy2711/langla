@@ -42,3 +42,5 @@ try {
 . (Join-Path $PSScriptRoot 'ActivityDrainTests.ps1')
 
 . (Join-Path $PSScriptRoot 'TeamRetryPriorityTests.ps1')
+
+. (Join-Path $PSScriptRoot 'QueueRefreshCostTests.ps1')

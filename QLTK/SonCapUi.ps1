@@ -25,7 +25,7 @@ function Apply-SonCapConfig {[TGLL.NativeBackend]::SonCapCloseAfterEnabled=$sonc
 function Save-SonCapConfig {Apply-SonCapConfig;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}}
 function Sync-SonCapPreferences {
     $ids=@()
-    foreach($row in $grid.Rows){$a=$row.Tag;if(!$a){continue};$key=[string]$a.id;$wanted=[bool]$a.soncap;if(Get-Command Get-AutoAllStage -ErrorAction SilentlyContinue){$all=Get-AutoAllStage $key;if($all){$wanted=$all -eq 'soncap'}};$j=$null;if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
+    foreach($row in $grid.Rows){$a=$row.Tag;if(!$a){continue};$key=[string]$a.id;$wanted=[bool]$a.soncap;if(${function:Get-AutoAllStage}){$all=Get-AutoAllStage $key;if($all){$wanted=$all -eq 'soncap'}};$j=$null;if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
         if($j -is [TGLL.NativeJob] -and $j.DailyManaged){continue}
         if($j -is [TGLL.NativeJob] -and $j.BeastQuestEnabled){continue}
         if($wanted){$ids+=@($(if($j){$j.Id}else{''}))}

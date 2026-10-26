@@ -107,7 +107,7 @@ function Pump-IzanamiQueue {
     $active=0;foreach($b in $script:izanamiBatches){if($b.state -notin @('waiting','done')){$active+=(Get-ActivityReservedCount $b)}}
     # Live Izanami accounts outside this queue also consume slots.
     $included=@{};foreach($b in $script:izanamiBatches){if($b.state -notin @('waiting','done')){foreach($m in $b.members){$included[$m.id]=$true}}}
-    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and ($a.izanami -or (Get-AccountLaunchMode $a) -eq 'izanami') -and (Test-AccountOpenBlocked $a)){$outside++}}
+    $outside=0;foreach($a in $script:accounts){if(!$included.ContainsKey([string]$a.id) -and (Test-AccountOpenBlocked $a) -and ($a.izanami -or (Get-AccountLaunchMode $a) -eq 'izanami')){$outside++}}
     $limit=[int]$izanamiMax.Value
     $active+=(Restore-ActivityReservations $script:izanamiBatches ($limit-$active-$outside))
     $priorityHeld=Get-ActivityPriorityHoldCount $script:izanamiBatches
@@ -120,11 +120,13 @@ function Pump-IzanamiQueue {
     }
     # Submit at most one account per timer tick; native login still runs six at a time.
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
+    $submitted=$false
     foreach($batch in @(Get-ActivityLaunchBatches $script:izanamiBatches)){
         $member=Get-ActivityLaunchMember $batch
-        if($member){try{Start-IzanamiMember $member;if(Test-ActivityRetryPriority $batch $member){$null=[TGLL.NativeBackend]::PrioritizeLaunch([string]$member.job)}}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Izanami $batch $member $script:izanamiAccountIndex};Sync-IzanamiTeams;break}
+        if($member){$submitted=$true;try{Start-IzanamiMember $member;if(Test-ActivityRetryPriority $batch $member){$null=[TGLL.NativeBackend]::PrioritizeLaunch([string]$member.job)}}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Izanami $batch $member $script:izanamiAccountIndex};Sync-IzanamiTeams;break}
         if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
+    if(!$submitted){break}
     }
     Update-IzanamiQueueStatus
 }
