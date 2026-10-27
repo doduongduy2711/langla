@@ -134,7 +134,7 @@ function Sync-MailCollection {
     if($member.state -eq 'launching'){
         if(!$j.GameSettingsReady -or [string]::IsNullOrWhiteSpace($j.CharacterName)){return}
         if($j.CharacterName -eq $script:mailRun.recipient){$member.state='done';$member.status='Bỏ qua: trùng nhân vật nhận';return}
-        try{[TGLL.NativeBackend]::ConfigureMail($j.Id,$script:mailRun.recipient,[int[]]@($script:mailRun.items | ForEach-Object {$_.id}),[int[]]@($script:mailRun.items | ForEach-Object {$_.quantity}),($script:mailRun.seconds*1000));$member.state='running';$member.started=$true;$member.status='Đang gom đồ'}catch{$member.state='blocked';$member.status=[string]$_.Exception.Message}
+        try{[TGLL.NativeBackend]::ConfigureMail($j.Id,$script:mailRun.recipient,[int[]]@($script:mailRun.items | ForEach-Object {$_.id}),[int[]]@($script:mailRun.items | ForEach-Object {$_.quantity}),($script:mailRun.seconds*1000),$(if($script:mailRun.receiverId){[string]$script:accountJobs[$script:mailRun.receiverId]}else{''}));$member.state='running';$member.started=$true;$member.status='Đang gom đồ'}catch{$member.state='blocked';$member.status=[string]$_.Exception.Message}
         return
     }
     if($member.state -eq 'running'){

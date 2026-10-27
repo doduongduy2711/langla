@@ -562,6 +562,11 @@ namespace TGLL {
             a.Emit(0x48,0x8b,0x73,32,0x48,0x85,0xf6);a.J(0x84,"done");
             Slot(a,game+0x16ef960,"done",game+0x1dd900);a.Emit(0x48,0x39,0x06);a.J(0x85,"done");
             a.Emit(0x8b,0x46,16,0x3b,0x43,16);a.J(0x85,"done");
+            Slot(a,game+0x16ee888,"done",game+0x1dd900);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");
+            a.Emit(0x48,0x8b,0x40,16,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x80,0xf0,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");
+            a.Emit(0x48,0x8b,0x40,16,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x44,0x8b,0x48,24,0x41,0x83,0xf9,0);a.J(0x8e,"done");a.Emit(0x41,0x81,0xf9,0,16,0,0);a.J(0x8f,"done");
+            a.Emit(0x4c,0x8b,0x40,16,0x4d,0x85,0xc0);a.J(0x84,"done");a.Emit(0x45,0x3b,0x48,24);a.J(0x8f,"done");a.Emit(0x45,0x33,0xd2);
+            a.Label("memberLoop");a.Emit(0x4b,0x3b,0x74,0xd0,32);a.J(0x84,"memberFound");a.Emit(0x41,0xff,0xc2,0x45,0x3b,0xd1);a.J(0x82,"memberLoop");a.Jump("done");a.Label("memberFound");
             a.Emit(0x83,0x7b,4,2);a.J(0x84,"claim");
             a.Emit(0x83,0x7b,4,4);a.J(0x84,"read");
             a.Emit(0x83,0x7b,4,3);a.J(0x85,"done");
@@ -1150,6 +1155,7 @@ namespace TGLL {
         public volatile bool InboxEnabled,InboxBusy,InboxSupported;public volatile string InboxStatus="Tắt nhận thư";public volatile int InboxReceived,InboxDeleted;public DateTime InboxObservedAt=DateTime.MinValue;public volatile int InboxPendingAttachments=-1;
         internal InboxLetter[] InboxLoaded,InboxBatch=new InboxLetter[0];internal int[] InboxDeleteIds=new int[0];internal Dictionary<int,long> InboxBatchTotals=new Dictionary<int,long>();internal int InboxPhase,InboxCommand,InboxListBefore;internal bool InboxNeedsRefresh;internal InboxLetter InboxTarget;internal DateTime InboxPollAt=DateTime.MinValue;internal DateTime InboxNext=DateTime.MinValue,InboxAt=DateTime.MinValue;
         internal readonly object MailGate=new object();public volatile bool MailEnabled,MailBusy,MailDone;public volatile int MailLetters;public long MailQuantity;public volatile string MailStatus="Tắt",MailRecipient="";internal bool MailWireLogged;internal string MailPopupBefore="";
+        internal string MailReceiverJobId="";internal bool MailReceiverAwaiting;internal int MailReceiverReceivedBefore,MailReceiverDeletedBefore;
         internal int[] MailIds=new int[0],MailQuantities=new int[0];internal int MailIntervalMs=5000,MailIndex,MailSlot,MailExpected,MailAmount,MailCommand,MailAckBefore,MailChanges;internal long MailRemaining=-1,MailBeforeTotal,MailBeforeSilver;
         internal DateTime MailAt,MailNext,MailPollAt;internal Dictionary<int,int> MailBeforeSlots=new Dictionary<int,int>();
         public volatile bool InventoryScanning;internal int InventoryRequested;
@@ -1302,6 +1308,10 @@ namespace TGLL {
         }
         internal static bool InboxCanDelete(InboxLetter m){return m!=null&&m.Read&&!m.HasAttachment;}
         static void HoldInbox(NativeJob j,string reason){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus=reason;Log(j,"inbox_stopped",",\"reason\":"+Quote(reason));}
+        internal static void ResyncInboxDelete(NativeJob j,DateTime now){
+            j.InboxBusy=false;j.InboxPhase=j.InboxPhase==3||j.InboxPhase==5?3:0;j.InboxLoaded=null;j.InboxObservedAt=DateTime.MinValue;j.InboxPendingAttachments=-1;j.InboxNeedsRefresh=true;j.InboxNext=now.AddSeconds(1);j.InboxStatus="Đọc lại hộp thư; chỉ xóa thư đã đọc và không còn đồ";
+            Log(j,"inbox_delete_resync","");
+        }
         static void QueueInbox(Remote r,long data,NativeJob j,int command,InboxLetter letter){
             j.InboxCommand=command;j.InboxPollAt=DateTime.MinValue;j.InboxBusy=true;j.InboxAt=DateTime.UtcNow;j.InboxListBefore=BitConverter.ToInt32(r.Read(data+24,4),0);
             r.Write(data+4,BitConverter.GetBytes(command));r.Write(data+8,new byte[4]);r.Write(data+12,BitConverter.GetBytes(1));
@@ -1321,8 +1331,8 @@ namespace TGLL {
                 if(j.InboxBusy){
                     int state=BitConverter.ToInt32(r.Read(data,4),0),result=BitConverter.ToInt32(r.Read(data+8,4),0);
                     if(state!=0){if((now-j.InboxAt).TotalSeconds>15)HoldInbox(j,"Dừng: game chưa xử lý nhận thư");return;}
-                    if(result!=2){HoldInbox(j,"Dừng: thao tác thư chưa thực hiện; chưa tự gửi lại");return;}
-                    if(j.InboxCommand!=1){j.InboxBusy=false;if(j.InboxCommand==5)j.InboxPhase=2;else if(j.InboxCommand==6)j.InboxPhase=4;else if(j.InboxCommand==4)j.InboxPhase=5;j.InboxNeedsRefresh=true;j.InboxNext=now.AddMilliseconds(350);return;}
+                    if(result!=2){if(j.InboxCommand==3||j.InboxCommand==4||j.InboxCommand==1&&(j.InboxPhase==4||j.InboxPhase==5)){ResyncInboxDelete(j,now);return;}HoldInbox(j,"Dừng: thao tác thư chưa thực hiện; chưa tự gửi lại");return;}
+                    if(j.InboxCommand!=1){j.InboxBusy=false;if(j.InboxCommand==5)j.InboxPhase=2;else if(j.InboxCommand==6||j.InboxCommand==3)j.InboxPhase=4;else if(j.InboxCommand==4)j.InboxPhase=5;j.InboxNeedsRefresh=true;j.InboxNext=now.AddMilliseconds(350);return;}
                     if(now<j.InboxPollAt)return;j.InboxPollAt=now.AddMilliseconds(250);
                     bool ack=BitConverter.ToInt32(r.Read(data+24,4),0)!=j.InboxListBefore;if(!ack&&(now-j.InboxAt).TotalMilliseconds<250)return;
                     InboxLetter[] letters=ReadInbox(r,game);
@@ -1331,12 +1341,12 @@ namespace TGLL {
                         if(received.Length==0||(received.Length<j.InboxBatch.Length&&(now-j.InboxAt).TotalSeconds<2)){if((now-j.InboxAt).TotalSeconds>=30)HoldInbox(j,"Dừng: chưa xác nhận Nhận tất cả; giữ thư còn đồ");return;}
                         j.InboxReceived+=received.Length;j.InboxBatch=received;j.InboxPhase=3;Log(j,"inbox_receive_all_confirmed",",\"letters\":"+received.Length);
                     }else if(j.InboxPhase==4){
-                        if(!InboxDeletionConfirmed(j.InboxDeleteIds,letters)){if((now-j.InboxAt).TotalSeconds>=30)HoldInbox(j,"Dừng: chưa xác nhận Xóa đã đọc; chưa tự xóa lại");return;}
+                        if(!InboxDeletionConfirmed(j.InboxDeleteIds,letters)){if((now-j.InboxAt).TotalSeconds>=5)ResyncInboxDelete(j,now);return;}
                         int reused=Array.FindAll(letters,x=>x.HasAttachment&&Array.IndexOf(j.InboxDeleteIds,x.Id)>=0).Length;if(reused>0)Log(j,"inbox_deleted_ids_reused",",\"new_attached_letters\":"+reused);
                         j.InboxDeleted+=j.InboxDeleteIds.Length;Log(j,"inbox_delete_read_confirmed",",\"letters\":"+j.InboxDeleteIds.Length);j.InboxPhase=0;j.InboxBatch=new InboxLetter[0];
                     }else if(j.InboxPhase==5){
                         InboxLetter marked=Array.Find(letters,delegate(InboxLetter x){return j.InboxTarget!=null&&x.Id==j.InboxTarget.Id;});
-                        if(marked==null||marked.HasAttachment||!marked.Read){if((now-j.InboxAt).TotalSeconds>=30)HoldInbox(j,"Dừng: thư chưa đọc / còn đồ; giữ nguyên thư");return;}j.InboxPhase=3;
+                        if(marked==null||marked.HasAttachment||!marked.Read){if((now-j.InboxAt).TotalSeconds>=5)ResyncInboxDelete(j,now);return;}j.InboxPhase=3;
                     }
                     j.InboxObservedAt=now;j.InboxPendingAttachments=Array.FindAll(letters,x=>x.HasAttachment).Length;j.InboxLoaded=letters;j.InboxBusy=false;j.InboxNext=now.AddMilliseconds(200);Log(j,"inbox_list_observed",",\"count\":"+letters.Length+",\"phase\":"+j.InboxPhase+",\"callback_changed\":"+(ack?"true":"false"));return;
                 }
@@ -1356,11 +1366,12 @@ namespace TGLL {
                     }
                 }
                 InboxLetter[] read=Array.FindAll(snapshot,delegate(InboxLetter m){return InboxCanDelete(m);});
-                if(read.Length>0){List<int> ids=new List<int>();foreach(InboxLetter m in read)ids.Add(m.Id);j.InboxDeleteIds=ids.ToArray();QueueInbox(r,data,j,6,null);j.InboxStatus="Đang Xóa đã đọc • "+read.Length+" thư rỗng";return;}
+                if(read.Length>0){j.InboxDeleteIds=new[]{read[0].Id};QueueInbox(r,data,j,3,read[0]);j.InboxStatus="Đang xóa thư rỗng đã đọc • ID "+read[0].Id;return;}
                 j.InboxPhase=0;j.InboxNext=now.AddSeconds(3);j.InboxNeedsRefresh=true;j.InboxStatus="Đợi thư mới • Nhận tất cả / Xóa đã đọc";
             }
         }
-        public static void ConfigureMail(string id,string recipient,int[] ids,int[] quantities,int intervalMs){
+        public static void ConfigureMail(string id,string recipient,int[] ids,int[] quantities,int intervalMs){ConfigureMail(id,recipient,ids,quantities,intervalMs,"");}
+        public static void ConfigureMail(string id,string recipient,int[] ids,int[] quantities,int intervalMs,string receiverJobId){
             recipient=(recipient??"").Trim();
             if(recipient.Length==0||recipient.Length>50||recipient.IndexOfAny(new[]{'\r','\n','\0'})>=0)throw new ArgumentException("Tên nhân vật nhận thư không hợp lệ.");
             if(ids==null||quantities==null||ids.Length==0||ids.Length!=quantities.Length||ids.Length>1000||intervalMs<1000||intervalMs>3600000)throw new ArgumentException("Danh sách hoặc thời gian gửi thư không hợp lệ.");
@@ -1369,9 +1380,30 @@ namespace TGLL {
             lock(j.MailGate){
                 if(j.MailBusy||j.MailEnabled)throw new Exception("Dừng lượt gom đồ hiện tại trước khi bắt đầu lượt mới.");
                 if(String.Equals(recipient,j.CharacterName,StringComparison.OrdinalIgnoreCase))throw new Exception("Không gửi đồ cho chính nhân vật đang mở.");
+                j.MailReceiverJobId=receiverJobId??"";j.MailReceiverAwaiting=false;
                 j.MailRecipient=recipient;j.MailIds=(int[])ids.Clone();j.MailQuantities=(int[])quantities.Clone();j.MailIntervalMs=intervalMs;j.MailIndex=0;j.MailRemaining=-1;j.MailLetters=0;j.MailQuantity=0;j.MailChanges=0;j.MailPollAt=DateTime.MinValue;j.MailNext=DateTime.MinValue;j.MailDone=false;j.MailEnabled=true;j.MailStatus="Đợi game sẵn sàng";
                 Log(j,"mail_collection_started",",\"recipient\":"+Quote(recipient)+",\"id_count\":"+ids.Length+",\"interval_ms\":"+intervalMs);
             }
+        }
+        internal static string MailReceiverBlockReason(NativeJob sender,NativeJob receiver,DateTime now,bool running){
+            if(String.IsNullOrEmpty(sender.MailReceiverJobId))return "";
+            if(receiver==null||receiver.Id!=sender.MailReceiverJobId||!running||!receiver.GameSettingsReady||receiver.CloseRequested||receiver.CancelRequested||receiver.ReconnectRequested||receiver.State=="failed"||receiver.State=="closed"||receiver.State=="cancelled"||receiver.State=="reconnecting"||receiver.CharacterName!=sender.MailRecipient)return "Chờ acc nhận online đúng nhân vật";
+            if(!receiver.InboxSupported||!receiver.InboxEnabled)return "Chờ bật lại nhận thư ở acc nhận • "+receiver.InboxStatus;
+            if(receiver.InboxObservedAt==DateTime.MinValue||(now-receiver.InboxObservedAt).TotalSeconds<0||(now-receiver.InboxObservedAt).TotalSeconds>5||receiver.InboxLoaded==null)return "Chờ đọc lại hộp thư acc nhận";
+            if(sender.MailReceiverAwaiting&&(receiver.InboxReceived<=sender.MailReceiverReceivedBefore||receiver.InboxDeleted<=sender.MailReceiverDeletedBefore))return "Chờ acc nhận nhận đồ và xóa thư vừa gửi";
+            if(receiver.InboxBusy||receiver.InboxPhase!=0||receiver.InboxLoaded.Length!=0||receiver.InboxPendingAttachments!=0)return "Chờ acc nhận dọn xong hộp thư • "+receiver.InboxStatus;
+            sender.MailReceiverAwaiting=false;return "";
+        }
+        static bool MailReceiverReady(NativeJob sender,bool arm){
+            if(String.IsNullOrEmpty(sender.MailReceiverJobId))return true;
+            NativeJob receiver=Get(sender.MailReceiverJobId);string reason;
+            if(receiver==null)reason="Chờ đúng phiên acc nhận; chưa gửi thêm thư";
+            else lock(receiver.MailGate){
+                reason=MailReceiverBlockReason(sender,receiver,DateTime.UtcNow,receiver.ProcessId>0&&ManagedGames.IsRunning(receiver.ProcessId));
+                if(reason.Length==0&&arm){sender.MailReceiverReceivedBefore=receiver.InboxReceived;sender.MailReceiverDeletedBefore=receiver.InboxDeleted;sender.MailReceiverAwaiting=true;}
+            }
+            if(reason.Length==0)return true;
+            sender.MailStatus=reason;sender.MailNext=DateTime.UtcNow.AddMilliseconds(500);return false;
         }
         public static void StopMail(string id){NativeJob j=Get(id);if(j==null)return;lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Đã dừng; đợi xác nhận thư đang gửi":"Đã dừng";}}
         static void HoldMail(NativeJob j,string reason){j.MailEnabled=false;j.MailBusy=false;j.MailStatus=reason;Log(j,"mail_collection_stopped",",\"reason\":"+Quote(reason));}
@@ -1437,6 +1469,7 @@ namespace TGLL {
             try{string alphabet=ReadLabel(r,r.Ptr(r.Ptr(ResolvedClass(r,game+0x16ee880)+0xb8)+0x48));
                 expected=ExpectedMailWire(alphabet,"Vat pham ID "+item.TemplateId,"Gom do",j.MailRecipient,item.Slot,command,amount);
             }catch(Exception e){HoldMail(j,"Dừng: không kiểm tra được dữ liệu thư • "+e.Message);return;}
+            if(command==1&&!MailReceiverReady(j,true)){j.MailBusy=false;return;}
             j.MailBeforeSilver=ReadMailSilver(r,game);j.MailPopupBefore=ReadKeyNotice(r,game);
             r.Write(data+36,new byte[8]);r.Write(data+44,BitConverter.GetBytes(expected.Length));r.Write(data+2560,expected);
             r.Write(data+4,BitConverter.GetBytes(command));r.Write(data+8,new byte[4]);r.Write(data+16,BitConverter.GetBytes(item.TemplateId));r.Write(data+20,BitConverter.GetBytes(item.Slot));r.Write(data+24,BitConverter.GetBytes(item.Quantity));r.Write(data+32,BitConverter.GetBytes(amount));
@@ -1474,6 +1507,7 @@ namespace TGLL {
                     return;
                 }
                 if(stopping||j.MailDone)return;
+                if(!MailReceiverReady(j,false))return;
                 if(String.Equals(j.CharacterName,j.MailRecipient,StringComparison.OrdinalIgnoreCase)){HoldMail(j,"Dừng: người nhận trùng chính nhân vật gửi");return;}
                 if(now<j.MailNext||now<j.MailPollAt)return;
                 if(!j.GameSettingsReady||AuxiliaryActionBlocked(j)||j.ZoneSyncActive||j.GiftWaiting||j.GiftResultWaiting){j.MailStatus="Đợi game / thao tác NPC hoàn tất";return;}

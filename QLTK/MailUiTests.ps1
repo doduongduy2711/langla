@@ -32,6 +32,7 @@ try {
     foreach($row in $grid.Rows){$row.Cells['pick'].Value=$true}
     Start-MailCollection;Sync-MailCollection
     if($script:mailTestOpen.Count -ne 1 -or !$mailTestSender.MailEnabled -or $mailLater.MailEnabled -or $mailTestReceiver.MailEnabled){throw 'Queue must configure only first sender, never receiver'}
+    $receiverBinding=[TGLL.NativeJob].GetField('MailReceiverJobId',[Reflection.BindingFlags]'NonPublic,Instance');if($receiverBinding.GetValue($mailTestSender) -ne $mailTestReceiver.Id){throw 'Local sender did not bind native receiver backpressure'}
     if($mailStart.Enabled -or $mailItems.Enabled){throw 'Queue input not frozen'}
     if($null -eq (Get-MailQueuedMember 'mail-three') -or $null -ne (Get-MailQueuedMember 'mail-two')){throw 'Waiting membership incorrect'}
     $mailIndex=[TGLL.NativeJob].GetField('MailIndex',[Reflection.BindingFlags]'NonPublic,Instance');$mailIndex.SetValue($mailTestSender,1);Sync-MailCollection;if($mailIndex.GetValue($mailTestSender) -ne 1){throw 'Polling rearmed mail'}
@@ -64,6 +65,7 @@ try {
     if(!$script:mailRun.namedRecipient -or $script:mailRun.receiverId -or $script:mailRun.recipient -ne 'ExternalReceiver' -or $script:mailRun.senders.Count -ne 2 -or $script:mailRun.senders[0].id -ne 'mail-one' -or $script:mailRun.senders[1].id -ne 'mail-three'){throw 'Named receiver / selected sender snapshot incorrect'}
     if($mailTestReceiver.MailRecipient -ne 'ExternalReceiver' -or !$mailTestReceiver.MailEnabled -or $mailNamedCheck.Enabled -or $mailNamedRecipient.Enabled -or $script:inboxWanted){throw 'Named sender config/frozen inputs/local inbox failed'}
     if(!(& $mailFunctions['Test-MailReceiverReady'])){throw 'External receiver incorrectly requires local account online'}
+    if($receiverBinding.GetValue($mailTestReceiver) -ne ''){throw 'External named recipient inherited local receiver binding'}
     $grid.Rows[1].Cells['pick'].Value=$true;Sync-MailCollection;if($script:mailRun.senders.Count -ne 2){throw 'Selection change changed running named queue'}
     Copy-AccountConfig;$namedCopy=$script:copiedAccountConfig | ConvertFrom-Json;if(!$namedCopy.mailNamedEnabled -or $namedCopy.mailNamedRecipient.Trim() -ne 'ExternalReceiver'){throw 'Named mail config copy missing'}
     Stop-MailCollection;$mailNamedCheck.Checked=$false;$mailNamedRecipient.Text='';$script:mailRun=$null;Update-MailUi
