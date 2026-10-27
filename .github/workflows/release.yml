@@ -74,6 +74,14 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Watchdog test compilation failed'}
           ./ActivityWatchdogTests.exe
           if($LASTEXITCODE -ne 0){throw 'Watchdog tests failed'}
+      - name: Failed startup cleanup recovery checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:FailedLaunchCleanupTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/FailedLaunchCleanupTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Failed startup cleanup test compilation failed'}
+          ./FailedLaunchCleanupTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Failed startup cleanup tests failed'}
       - name: Build program-only update and portable bundles
         shell: powershell
         run: ./scripts/Build-Release.ps1 -Version ([int]$env:QLTK_VERSION) -Repository $env:GITHUB_REPOSITORY

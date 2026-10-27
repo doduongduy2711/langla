@@ -7,6 +7,9 @@ function Retry-FailedAccounts {
     foreach($a in $script:accounts){
         $key=[string]$a.id;if(!$script:accountJobs.ContainsKey($key)){continue}
         $j=Get-AccountJob $script:accountJobs[$key]
+        if($j -is [TGLL.NativeJob] -and $j.State -eq 'failed' -and $j.Error -eq 'native_cleanup_failed'){
+            [TGLL.NativeBackend]::RecoverFailedLaunch([string]$j.Id)
+        }
         if($null -ne $j -and !$j.CloseRequested -and !$j.CancelRequested -and $j.State -in @('manual_entry','startup_unavailable','npc_unavailable')){
             [TGLL.NativeBackend]::RecoverStalledSession([string]$j.Id)
         }

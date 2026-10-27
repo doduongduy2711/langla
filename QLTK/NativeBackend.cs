@@ -1153,7 +1153,7 @@ namespace TGLL {
         internal int[] MailIds=new int[0],MailQuantities=new int[0];internal int MailIntervalMs=5000,MailIndex,MailSlot,MailExpected,MailAmount,MailCommand,MailAckBefore,MailChanges;internal long MailRemaining=-1,MailBeforeTotal,MailBeforeSilver;
         internal DateTime MailAt,MailNext,MailPollAt;internal Dictionary<int,int> MailBeforeSlots=new Dictionary<int,int>();
         public volatile bool InventoryScanning;internal int InventoryRequested;
-        internal ProcessStartInfo ManualLaunch;public volatile int StartAttempts;
+        internal ProcessStartInfo ManualLaunch;public volatile int StartAttempts;internal bool FailedCleanupBusy;internal DateTime FailedCleanupAt=DateTime.MinValue;
         public readonly string Id=Guid.NewGuid().ToString();public readonly string Username;public readonly DateTime Created=DateTime.UtcNow;
         public volatile string State="queued",Error="",NpcDetails="",Stage="",CapturedNpcName="",DynamicMenuJson="",LogError="";
         public volatile int ProcessId,ReadyPhase,NpcCount,NpcId=-1,NpcTemplateId=-1,CapturedNpcId=-1,CapturedTemplateId=-1,MenuTag,MenuSelectedIndex=-1;
@@ -2668,6 +2668,36 @@ namespace TGLL {
             }
             BeginSessionRecovery(j,j.Error);
         }
+        internal static bool FailedLaunchCleanupCandidate(NativeJob j){
+            return j!=null&&j.State=="failed"&&j.Error=="native_cleanup_failed"&&j.ProcessId>0&&!j.CloseRequested&&!j.CancelRequested&&!j.ReconnectRequested;
+        }
+        internal static bool TryBeginFailedLaunchCleanup(NativeJob j,DateTime now,Action<NativeJob,int> schedule){
+            if(j==null)return false;
+            lock(j){
+                if(!FailedLaunchCleanupCandidate(j)||j.FailedCleanupBusy||(now-j.FailedCleanupAt).TotalSeconds<10)return false;
+                j.FailedCleanupBusy=true;j.FailedCleanupAt=now;
+                try{schedule(j,j.ProcessId);}catch{j.FailedCleanupBusy=false;throw;}
+                return true;
+            }
+        }
+        internal static void CleanFailedLaunch(NativeJob j,int pid,Func<int,bool> running,Func<int,CloseGamesResult> close){
+            try{
+                if(!FailedLaunchCleanupCandidate(j)||j.ProcessId!=pid)return;
+                if(running(pid))close(pid);
+                // Never turn cleanup into a manual cancellation or submit a new login here.
+                // The existing activity scheduler releases/retries only after verified exit.
+                Log(j,"startup_cleanup_retry",",\"pid\":"+pid+",\"exited\":"+(!running(pid)?"true":"false"));
+            }catch{Log(j,"startup_cleanup_retry_failed",",\"pid\":"+pid);}
+            finally{lock(j)j.FailedCleanupBusy=false;}
+        }
+        public static void RecoverFailedLaunch(string id){
+            NativeJob j=Get(id);
+            if(!FailedLaunchCleanupCandidate(j)||!ManagedGames.IsRunning(j.ProcessId))return;
+            TryBeginFailedLaunchCleanup(j,DateTime.UtcNow,delegate(NativeJob item,int pid){
+                Thread worker=new Thread(delegate(){CleanFailedLaunch(item,pid,ManagedGames.IsRunning,ManagedGames.CloseOne);});
+                worker.IsBackground=true;worker.Start();
+            });
+        }
         internal static bool RetryStartup(string stage,Exception e){
             if(stage=="character"&&e.Message=="character_screen_not_ready"||stage=="popup"&&e.Message=="startup_popup_not_ready"||(stage=="character"||stage=="popup")&&e.Message=="game_exited")return true;
             if(e.Message=="native_login_not_ready"||e.Message=="native_wrong_process"||e.Message=="native_operation_failed")return true;
@@ -2860,10 +2890,10 @@ namespace TGLL {
                         else if(npcTimer.ElapsedMilliseconds>60000){j.ReceiveFlowActive=false;j.Error=state==8?(j.NpcAction==2?"onoki_not_found":"npc_not_found"):state==13||state==14||state==15||state==17?"startup_popup_not_ready":(j.NpcAction==2?"npc_izanami_menu_not_ready":j.NpcAction==1?"npc_dungeon_menu_not_ready":"npc_key_menu_not_ready");j.State=j.NpcAction==2?"izanami_unavailable":"npc_unavailable";keep.Write(data,BitConverter.GetBytes(12));npcTimer.Stop();}}
                     }
                 }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.GemEnabled=false;j.GemBusy=false;j.GemItemPause=false;j.GemStatus="Game đã thoát";j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
-            }catch{
+            }catch(Exception startupError){
                 bool stopped=true;
                 if(p!=null){try{if(!p.HasExited){p.Kill();stopped=p.WaitForExit(3000);}}catch{stopped=false;}finally{p.Dispose();}}
-                if(!stopped)throw new Exception("native_cleanup_failed");
+                if(!stopped){Log(j,"startup_cleanup_failed",",\"pid\":"+j.ProcessId+",\"username\":"+Quote(j.Username)+",\"original_error\":"+Quote(FailureCode(startupError)));throw new Exception("native_cleanup_failed",startupError);}
                 throw;
             }
             finally{
