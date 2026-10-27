@@ -73,7 +73,7 @@ function Pump-SonCapQueue {
             $faultCount=0;$allFaultClosed=$true
             foreach($m in $batch.members){$faultJob=Get-SonCapMemberJob $m
                 if($faultJob -is [TGLL.NativeJob] -and $faultJob.ActivityTimeoutClosed){$faultCount++}
-                else{$allFaultClosed=$false}
+                else{$allFaultClosed=$false;break}
                 if(!$faultJob -or (Test-SonCapMemberRunning $m)){$allFaultClosed=$false}
                 $faultAccount=$script:soncapAccountIndex[$m.id]
                 if($faultAccount -and (Test-AccountOpenBlocked $faultAccount)){$allFaultClosed=$false}
@@ -141,7 +141,7 @@ function Update-SonCapQueueStatus {
     if($held -gt 0){ $soncapQueueHint.Text+="`r`nƯu tiên mở lại tổ đang chạy: $held acc (đã giữ chỗ)" }
     $errors=@($script:soncapBatches | Where-Object {$_.error});if($errors.Count){$soncapQueueHint.Text+="`r`n"+$errors[0].error}
     if(!$script:soncapWaiting.Count){return}
-    foreach($row in $grid.Rows){if($null -ne (Get-SonCapQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt Sơn Cáp';Update-AccountOpen $row}}
+    foreach($row in $grid.Rows){if($script:soncapWaiting.ContainsKey([string]$row.Tag.id)){if($row.Cells['status'].Value -ne 'Chờ lượt Sơn Cáp'){$row.Cells['status'].Value='Chờ lượt Sơn Cáp'};if(!$row.Cells['open'].Tag){Update-AccountOpen $row}}}
 }
 
 function Test-SonCapLowLevelJob([string]$id){return ($script:soncapLevelCloseJobs -and $script:soncapLevelCloseJobs.ContainsKey($id))}

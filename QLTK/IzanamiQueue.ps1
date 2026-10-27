@@ -67,7 +67,7 @@ function Pump-IzanamiQueue {
             $faultCount=0;$allFaultClosed=$true
             foreach($m in $batch.members){$faultJob=Get-IzanamiMemberJob $m
                 if($faultJob -is [TGLL.NativeJob] -and $faultJob.ActivityTimeoutClosed){$faultCount++}
-                else{$allFaultClosed=$false}
+                else{$allFaultClosed=$false;break}
                 if(!$faultJob -or (Test-IzanamiMemberRunning $m)){$allFaultClosed=$false}
                 $faultAccount=$script:izanamiAccountIndex[$m.id]
                 if($faultAccount -and (Test-AccountOpenBlocked $faultAccount)){$allFaultClosed=$false}
@@ -138,7 +138,7 @@ function Update-IzanamiQueueStatus {
     if($held -gt 0){ $izanamiQueueHint.Text+="`r`nƯu tiên mở lại tổ đang chạy: $held acc (đã giữ chỗ)" }
     $errors=@($script:izanamiBatches | Where-Object {$_.error});if($errors.Count){$izanamiQueueHint.Text+="`r`n"+$errors[0].error}
     if(!$script:izanamiWaiting.Count){return}
-    foreach($row in $grid.Rows){if($null -ne (Get-IzanamiQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt cấm thuật';Update-AccountOpen $row}}
+    foreach($row in $grid.Rows){if($script:izanamiWaiting.ContainsKey([string]$row.Tag.id)){if($row.Cells['status'].Value -ne 'Chờ lượt cấm thuật'){$row.Cells['status'].Value='Chờ lượt cấm thuật'};if(!$row.Cells['open'].Tag){Update-AccountOpen $row}}}
 }
 
 function Test-IzanamiCompletedClose($job,[datetime]$now) {

@@ -59,7 +59,7 @@ function Pump-DungeonQueue {
             $faultCount=0;$allFaultClosed=$true
             foreach($m in $batch.members){$faultJob=Get-DungeonMemberJob $m
                 if($faultJob -is [TGLL.NativeJob] -and $faultJob.ActivityTimeoutClosed){$faultCount++}
-                else{$allFaultClosed=$false}
+                else{$allFaultClosed=$false;break}
                 if(!$faultJob -or (Test-DungeonMemberRunning $m)){$allFaultClosed=$false}
                 $faultAccount=$script:dungeonAccountIndex[$m.id]
                 if($faultAccount -and (Test-AccountOpenBlocked $faultAccount)){$allFaultClosed=$false}
@@ -123,5 +123,5 @@ function Update-DungeonQueueStatus {
     $dungeonQueueHint.Text="Đang giữ lượt: $active / $([int]$dungeonMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:dungeonBatches | Where-Object {$_.error});if($errors.Count){$dungeonQueueHint.Text+="`r`n"+$errors[0].error}
     if(!$script:dungeonWaiting.Count){return}
-    foreach($row in $grid.Rows){if($null -ne (Get-DungeonQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt địa cung';Update-AccountOpen $row}}
+    foreach($row in $grid.Rows){if($script:dungeonWaiting.ContainsKey([string]$row.Tag.id)){if($row.Cells['status'].Value -ne 'Chờ lượt địa cung'){$row.Cells['status'].Value='Chờ lượt địa cung'};if(!$row.Cells['open'].Tag){Update-AccountOpen $row}}}
 }

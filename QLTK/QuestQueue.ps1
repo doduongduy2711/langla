@@ -58,7 +58,7 @@ function Pump-QuestQueue {
             $faultCount=0;$allFaultClosed=$true
             foreach($m in $batch.members){$faultJob=Get-QuestMemberJob $m
                 if($faultJob -is [TGLL.NativeJob] -and $faultJob.ActivityTimeoutClosed){$faultCount++}
-                else{$allFaultClosed=$false}
+                else{$allFaultClosed=$false;break}
                 if(!$faultJob -or (Test-QuestMemberRunning $m)){$allFaultClosed=$false}
                 $faultAccount=$script:questAccountIndex[$m.id]
                 if($faultAccount -and (Test-AccountOpenBlocked $faultAccount)){$allFaultClosed=$false}
@@ -122,5 +122,5 @@ function Update-QuestQueueStatus {
     $questQueueHint.Text="Đang giữ lượt: $active / $([int]$questMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
     $errors=@($script:questBatches | Where-Object {$_.error});if($errors.Count){$questQueueHint.Text+="`r`n"+$errors[0].error}
     if(!$script:questWaiting.Count){return}
-    foreach($row in $grid.Rows){if($null -ne (Get-QuestQueuedMember ([string]$row.Tag.id))){$row.Cells['status'].Value='Chờ lượt nhiệm vụ';Update-AccountOpen $row}}
+    foreach($row in $grid.Rows){if($script:questWaiting.ContainsKey([string]$row.Tag.id)){if($row.Cells['status'].Value -ne 'Chờ lượt nhiệm vụ'){$row.Cells['status'].Value='Chờ lượt nhiệm vụ'};if(!$row.Cells['open'].Tag){Update-AccountOpen $row}}}
 }
