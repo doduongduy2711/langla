@@ -1166,7 +1166,7 @@ namespace TGLL {
         public volatile string[] MenuOptions=new string[0];public volatile bool CancelRequested,CloseRequested,ReplayRequested;public volatile bool ReceiveKeyEnabled=true,ReceiveKeyRequested;
         public volatile bool MailQueueOnly;public volatile bool IzanamiQueueOnly;public volatile bool IzanamiEnabled,IzanamiRequested;public volatile int IzanamiStage;internal HashSet<string> IzanamiStageSeen=new HashSet<string>();public volatile bool IzanamiMapAutoActive;internal DateTime IzanamiMapSeenAt,IzanamiMapPollAt;public volatile bool IzanamiNoAttempts;public volatile string IzanamiLimitNotice="";internal bool IzanamiLimitArmed;internal string IzanamiPopupBefore="";internal HashSet<string> IzanamiNoticeSeen=new HashSet<string>();internal DateTime IzanamiNoticePollAt,IzanamiNoticeAt;public volatile int IzanamiEntries,IzanamiRoundsCompleted,IzanamiRoundsTarget=1;public bool IzanamiRunFinished{get{return IzanamiNoAttempts||IzanamiRoundComplete&&IzanamiRoundsCompleted>=IzanamiRoundsTarget;}}public volatile bool IzanamiRoundEntered,IzanamiRoundComplete;internal DateTime IzanamiReturnAt=DateTime.MinValue;public volatile bool DungeonHighEnabled;public volatile bool PartyReady;public volatile int PartyMembers,PartyCreateAttempts;internal int NpcAction;internal DateTime DungeonStartAt=DateTime.MinValue;
         internal CloseBatchOperation DungeonAutoCloseOperation;public volatile int DungeonKeyCount,DungeonEntries;public volatile bool DungeonStopped,DungeonFinished,DungeonQueueOnly,DungeonReturnConfirmed;
-        internal bool DungeonProbeRefused;internal string DungeonProbePopupBefore="";internal HashSet<string> DungeonProbeNotices=new HashSet<string>();internal bool DungeonResumeProbe,DungeonResumeChecked;internal bool DungeonKeyChecked,DungeonCycleWaiting,DungeonLeftOrigin,DungeonRepeatRequested;
+        internal bool DungeonProbeRefused,DungeonNoKeyProbeConfirmed;internal string DungeonProbePopupBefore="";internal HashSet<string> DungeonProbeNotices=new HashSet<string>();internal bool DungeonResumeProbe,DungeonResumeChecked;internal bool DungeonKeyChecked,DungeonCycleWaiting,DungeonLeftOrigin,DungeonRepeatRequested;
         internal int DungeonEntryRetries;internal int DungeonOriginMap=-1;internal DateTime DungeonCycleAt,DungeonReturnAt,DungeonPollAt=DateTime.MinValue;
         internal CloseBatchOperation SonCapLimitCloseOperation;public volatile bool SonCapQueueOnly,SonCapNoAttempts;internal DateTime SonCapReturnAt=DateTime.MinValue;public volatile bool SonCapEnabled,SonCapFinished,SonCapMoving,SonCapEntrySubmitted;public volatile int SonCapStage=-1,SonCapAlive=-1;public volatile string SonCapStatus="",SonCapFailure="";internal bool SonCapRegroupAfterReturn;internal int SonCapPendingMap=-1;internal int SonCapPortalWatchX=Int32.MinValue,SonCapPortalWatchY=Int32.MinValue;internal DateTime SonCapPortalStillAt;internal int SonCapRouteRetries,SonCapRouteLastX=Int32.MinValue,SonCapRouteLastY=Int32.MinValue;internal DateTime SonCapRouteRetryAt,SonCapRouteStillAt;
         internal PortalRightOperation SonCapRightOperation;internal int SonCapRightAttempts;internal DateTime SonCapRightAt,SonCapArrivalAt;internal string SonCapRightError="";
@@ -1993,26 +1993,30 @@ namespace TGLL {
             // fc.fhe: map ID from the server's map-load packet (readShort).
             int map=BitConverter.ToInt16(r.Read(fc+0x134,2),0);if(map<0)throw new Exception("dungeon_map_unavailable");return map;
         }
+        internal static bool DungeonExhaustionConfirmed(NativeJob j){return !j.DungeonCycleWaiting&&(j.DungeonEntries==0||j.DungeonReturnConfirmed||j.DungeonProbeRefused||j.DungeonNoKeyProbeConfirmed);}
         static void StopDungeon(Remote r,long data,NativeJob j,Stopwatch timer,string error){
-            j.DungeonFinished=error=="dungeon_no_keys"&&!j.DungeonCycleWaiting&&(j.DungeonEntries==0||j.DungeonReturnConfirmed||j.DungeonProbeRefused);j.DungeonStopped=true;j.DungeonCycleWaiting=false;j.DungeonRepeatRequested=false;j.DungeonKeyChecked=false;j.ReceiveKeyRequested=false;j.ReceiveFlowActive=false;
+            j.DungeonFinished=error=="dungeon_no_keys"&&DungeonExhaustionConfirmed(j);j.DungeonStopped=true;j.DungeonCycleWaiting=false;j.DungeonRepeatRequested=false;j.DungeonKeyChecked=false;j.ReceiveKeyRequested=false;j.ReceiveFlowActive=false;
             j.DungeonStartAt=DateTime.MinValue;j.Error=error;j.State=error=="dungeon_no_keys"?"dungeon_no_keys":"dungeon_stopped";j.Stage="dungeon_stopped";
             r.Write(data+3292,new byte[4]);r.Write(data,BitConverter.GetBytes(12));timer.Stop();Log(j,"dungeon_stopped",",\"reason\":"+Quote(error)+",\"keys\":"+j.DungeonKeyCount);
         }
         static bool CheckDungeonKeys(Remote r,long data,NativeJob j,Stopwatch timer,long game,Func<InventorySnapshot> reader){
             try{
+                int probeMap=-1;if(j.DungeonResumeProbe&&j.DungeonResumeChecked&&j.DungeonEntries>0&&!j.DungeonLeftOrigin&&r!=null&&game!=0){try{probeMap=ReadDungeonMap(r,game);}catch{}}
                 InventorySnapshot snapshot=reader==null?ReadInventorySnapshot(r,game):reader();j.Inventory=snapshot;j.DungeonKeyCount=CountHighDungeonKeys(snapshot);Log(j,"dungeon_keys_checked",",\"keys\":"+j.DungeonKeyCount);
                 if(j.DungeonKeyCount==0){
                     if(j.DungeonEntries==0&&!j.DungeonResumeChecked){j.DungeonResumeProbe=true;j.DungeonKeyChecked=true;return true;}
+                    if(probeMap>=0){try{if(ConfirmEmptyDungeonProbe(j,probeMap,ReadDungeonMap(r,game),snapshot))Log(j,"dungeon_empty_probe_confirmed",",\"keys\":0,\"map\":"+probeMap);}catch{}}
                     StopDungeon(r,data,j,timer,"dungeon_no_keys");return false;
                 }
-                j.DungeonKeyChecked=true;return true;
+                j.DungeonResumeProbe=false;j.DungeonKeyChecked=true;return true;
             }catch(Exception e){Log(j,"dungeon_inventory_error",",\"detail\":"+Quote(e.Message));StopDungeon(r,data,j,timer,"dungeon_inventory_unavailable");return false;}
         }
         internal static void ObserveDungeonCycle(Remote r,long data,NativeJob j,Stopwatch timer,int map,DateTime now){
             if(!j.DungeonCycleWaiting||!j.DungeonHighEnabled||j.DungeonStopped)return;
-            if(map!=j.DungeonOriginMap){j.DungeonResumeProbe=false;j.DungeonReturnConfirmed=false;j.DungeonFinished=false;j.DungeonEntryRetries=0;ObserveEntryAuto(j,map,now);j.DungeonLeftOrigin=true;j.DungeonReturnAt=DateTime.MinValue;j.State="dungeon_running";j.Stage="dungeon_wait_return";return;}
+            if(map!=j.DungeonOriginMap){j.DungeonNoKeyProbeConfirmed=false;j.DungeonResumeProbe=false;j.DungeonReturnConfirmed=false;j.DungeonFinished=false;j.DungeonEntryRetries=0;ObserveEntryAuto(j,map,now);j.DungeonLeftOrigin=true;j.DungeonReturnAt=DateTime.MinValue;j.State="dungeon_running";j.Stage="dungeon_wait_return";return;}
             if(!j.DungeonLeftOrigin){
                 double elapsed=(now-j.DungeonCycleAt).TotalSeconds;if(elapsed<30)return;
+                if(j.DungeonResumeProbe&&elapsed<45){j.State="dungeon_retry_wait";return;}
                 if(j.DungeonResumeProbe||j.DungeonEntryRetries>=2){StopDungeon(r,data,j,timer,"dungeon_entry_not_confirmed");return;}
                 j.State="dungeon_retry_wait";j.TrainEnabled=false;
                 if(elapsed<45)return;
@@ -2033,7 +2037,7 @@ namespace TGLL {
             j.DungeonKeyCount=0;j.DungeonProbeRefused=true;j.DungeonCycleWaiting=false;Log(j,"dungeon_last_run_refused",",\"notice\":"+Quote(text));return true;
         }
         internal static void TrackDungeonEntrySubmission(NativeJob j,DateTime now){
-            j.State="dungeon_submitted";j.DungeonResumeChecked=true;j.DungeonEntries++;j.DungeonFinished=false;j.DungeonCycleWaiting=true;j.DungeonLeftOrigin=false;j.DungeonReturnAt=DateTime.MinValue;j.DungeonCycleAt=now;j.DungeonPollAt=DateTime.MinValue;j.Stage="dungeon_wait_enter";
+            j.State="dungeon_submitted";j.DungeonNoKeyProbeConfirmed=false;j.DungeonResumeChecked=true;j.DungeonEntries++;j.DungeonFinished=false;j.DungeonCycleWaiting=true;j.DungeonLeftOrigin=false;j.DungeonReturnAt=DateTime.MinValue;j.DungeonCycleAt=now;j.DungeonPollAt=DateTime.MinValue;j.Stage="dungeon_wait_enter";
         }
         // A new NPC submission is not proof of entering another round. Keep the prior
         // confirmed return until a real map transition, then refresh keys before timeout.
@@ -2042,6 +2046,14 @@ namespace TGLL {
             try{InventorySnapshot snapshot=reader();int count=CountHighDungeonKeys(snapshot);int before=j.DungeonKeyCount;j.Inventory=snapshot;j.DungeonKeyCount=count;
                 Log(j,"dungeon_entry_keys_rechecked",",\"before\":"+before+",\"keys\":"+count);return count==0;
             }catch(Exception e){Log(j,"dungeon_entry_keys_unavailable",",\"detail\":"+Quote(e.Message));return false;}
+        }
+        internal static bool ConfirmEmptyDungeonProbe(NativeJob j,int beforeMap,int afterMap,InventorySnapshot snapshot){
+            // Only a probe submitted with zero keys can finish without an observed round.
+            // A normal entry may have consumed its key while the map packet is delayed.
+            if(!j.DungeonHighEnabled||!j.DungeonResumeProbe||!j.DungeonResumeChecked||j.DungeonEntries<1||j.DungeonLeftOrigin||j.DungeonKeyCount!=0||beforeMap!=j.DungeonOriginMap||afterMap!=j.DungeonOriginMap)return false;
+            int keys=CountHighDungeonKeys(snapshot);j.Inventory=snapshot;j.DungeonKeyCount=keys;
+            if(keys>0){j.DungeonResumeProbe=false;return false;}
+            j.DungeonNoKeyProbeConfirmed=true;return true;
         }
         static void PumpDungeonCycle(Remote r,long data,long game,NativeJob j,Stopwatch timer){
             if(j.QuestEnabled)return;
@@ -2054,6 +2066,12 @@ namespace TGLL {
                     string popup=ReadKeyNotice(r,game);bool refused=popup!=j.DungeonProbePopupBefore&&ObserveDungeonProbeRefusal(j,map,popup);
                     if(!refused)foreach(var notice in ReadKeyNotifications(r,game))if(j.DungeonProbeNotices.Add(notice.Key)&&ObserveDungeonProbeRefusal(j,map,notice.Value)){refused=true;break;}
                     if(refused){StopDungeon(r,data,j,timer,"dungeon_no_keys");return;}
+                }
+                if((now-j.DungeonCycleAt).TotalSeconds>=45&&j.DungeonResumeProbe){
+                    try{InventorySnapshot snapshot=ReadInventorySnapshot(r,game);int afterMap=ReadDungeonMap(r,game);
+                        if(ConfirmEmptyDungeonProbe(j,map,afterMap,snapshot)){j.DungeonCycleWaiting=false;Log(j,"dungeon_empty_probe_confirmed",",\"keys\":0,\"map\":"+afterMap);StopDungeon(r,data,j,timer,"dungeon_no_keys");return;}
+                        map=afterMap;
+                    }catch(Exception e){Log(j,"dungeon_empty_probe_unavailable",",\"detail\":"+Quote(e.Message));}
                 }
                 if((now-j.DungeonCycleAt).TotalSeconds>=30&&RecheckReturnedDungeonKeys(j,map,delegate{return ReadInventorySnapshot(r,game);})){
                     // The map can change while reading the bag. Never close on the origin snapshot alone.
@@ -2324,7 +2342,7 @@ namespace TGLL {
             if(j.SonCapEnabled&&!j.SonCapApplying)return;
             if(j.DailyManaged&&!j.DailyApplying){j.DailyPlan[1]=enabled;return;}
             if((j.MailQueueOnly||j.CloakQueueOnly)||j.IzanamiQueueOnly||j.QuestQueueOnly)enabled=false;
-            if(enabled&&!j.DungeonHighEnabled){j.DungeonProbeRefused=false;j.DungeonResumeProbe=false;j.DungeonResumeChecked=false;j.DungeonReturnConfirmed=false;j.DungeonEntryRetries=0;j.DungeonFinished=false;j.DungeonStopped=false;j.DungeonKeyChecked=false;j.DungeonCycleWaiting=false;j.DungeonRepeatRequested=false;if(!j.ReceiveFlowActive){j.PartyReady=false;j.ReceiveKeyRequested=true;}}
+            if(enabled&&!j.DungeonHighEnabled){j.DungeonNoKeyProbeConfirmed=false;j.DungeonProbeRefused=false;j.DungeonResumeProbe=false;j.DungeonResumeChecked=false;j.DungeonReturnConfirmed=false;j.DungeonEntryRetries=0;j.DungeonFinished=false;j.DungeonStopped=false;j.DungeonKeyChecked=false;j.DungeonCycleWaiting=false;j.DungeonRepeatRequested=false;if(!j.ReceiveFlowActive){j.PartyReady=false;j.ReceiveKeyRequested=true;}}
             j.DungeonHighEnabled=enabled;if(!enabled){j.DungeonCycleWaiting=false;j.DungeonRepeatRequested=false;j.DungeonStopped=false;}
             if(enabled&&j.QuestEnabled)SetAutoQuest(id,false);
             if(!enabled&&!j.ReceiveKeyEnabled)j.ReceiveKeyRequested=false;
