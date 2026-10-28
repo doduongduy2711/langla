@@ -55,6 +55,10 @@ class PortalTests(unittest.TestCase):
         self.request('/api/label', {'name': 'sample.bmp', 'code': 'xy34'})
         self.assertEqual(self.image.with_suffix('.label.txt').read_text().strip(), 'XY34')
         self.assertEqual(self.request('/api/items')['verified'], 1)
+        reviewed = self.request('/api/item?name=sample.bmp')
+        self.assertEqual(reviewed['display_code'], 'XY34')
+        self.assertEqual(reviewed['code'], 'AB12')  # Original prediction stays available for comparison.
+        self.assertEqual(self.request('/api/items')['items'][0]['display_code'], 'XY34')
 
     def test_new_images_queue_and_predictions_persist(self):
         self.store.scan_one()
