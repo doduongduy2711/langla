@@ -1870,9 +1870,9 @@ namespace TGLL {
         // iu là quái thường; 0x16f0198 là gd và không khớp quái trong map.
         internal const long TrainingMobSlotRva=0x16ee310;
         internal static SkillInfo HangingLevelOne(NativeJob j){
-            if(j.CuongThiEnabled&&!CuongThiWantsAuto(j,DateTime.UtcNow))return null;
+            if(CuongThiControlsAuto(j)&&!CuongThiWantsAuto(j,DateTime.UtcNow))return null;
             if(j.ThiQuyCombatActive||j.CurseActive||j.FarmEnabled&&!j.FarmArrived||j.SonCapEnabled&&(!j.SonCapMapAutoActive||j.SonCapMoving||j.SonCapStopPending||j.SonCapFinished))return null;
-            if(!j.GameAutoEnabled||!(j.GameAutoWanted||j.FarmEnabled&&j.FarmArrived||j.IzanamiMapAutoActive&&j.IzanamiEnabled)||!j.GameSettingsReady||j.ReceiveFlowActive||j.ReceiveKeyRequested||j.ReplayRequested||j.CloseRequested||j.CancelRequested||j.ReconnectRequested||j.QuestPauseAuto||j.CloakEnabled||j.MailEnabled||j.MailBusy||j.MailQueueOnly||j.CloakQueueOnly||DungeonEntryBlocked(j)||AuxiliaryActionBlocked(j)||j.ZoneSyncActive||j.FollowActive&&(j.FollowDistance<0||j.FollowDistance>48))return null;
+            if(!j.GameAutoEnabled||!(j.GameAutoWanted||j.FarmEnabled&&j.FarmArrived||j.IzanamiMapAutoActive&&j.IzanamiEnabled||CuongThiWantsAuto(j,DateTime.UtcNow))||!j.GameSettingsReady||j.ReceiveFlowActive||j.ReceiveKeyRequested||j.ReplayRequested||j.CloseRequested||j.CancelRequested||j.ReconnectRequested||j.QuestPauseAuto||j.CloakEnabled||j.MailEnabled||j.MailBusy||j.MailQueueOnly||j.CloakQueueOnly||DungeonEntryBlocked(j)||AuxiliaryActionBlocked(j)||j.ZoneSyncActive||j.FollowActive&&(j.FollowDistance<0||j.FollowDistance>48))return null;
             // Treo mặc định xử lý chiêu còn lại; chỉ bổ sung chiêu cấp 1 đã chọn.
             int[] ids=j.HangingSkillIds;var extra=new List<SkillInfo>();
             SkillInfo basic=j.Skills.Where(x=>x.Level==1&&x.Usable&&Array.IndexOf(ids,x.Id)>=0).OrderBy(x=>x.Id).FirstOrDefault();if(basic!=null)extra.Add(basic);
@@ -1945,7 +1945,7 @@ namespace TGLL {
         }
         static void PumpTraining(Remote r,long data,NativeJob j){
             if(data==0)return;
-            if(j.HangingAwaiting&&(!j.GameAutoEnabled||j.CuongThiEnabled&&!CuongThiWantsAuto(j,DateTime.UtcNow)))r.Write(data+12,new byte[4]);
+            if(j.HangingAwaiting&&(!j.GameAutoEnabled||CuongThiControlsAuto(j)&&!CuongThiWantsAuto(j,DateTime.UtcNow)))r.Write(data+12,new byte[4]);
             bool focus=j.ThiQuyCombatActive&&ThiQuyPriorityAllowed(j);SkillInfo hanging=HangingLevelOne(j);bool overlay=hanging!=null;
             if(!focus&&!overlay&&!j.TrainEnabled&&!j.SkillScanRequested&&j.TrainIdleApplied)return;
             if(focus||j.TrainEnabled||j.SkillScanRequested)j.TrainIdleApplied=false;
