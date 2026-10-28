@@ -17,7 +17,7 @@ function Copy-AccountConfig {
     $itemPreference=Get-AutoItemPreference $a
     $chestPreference=Get-StoneChestPreference $a;$cloakPreference=Get-CloakPreference $a;$cloakClose=(!$a.PSObject.Properties['cloakEquipClose']) -or [bool]$a.cloakEquipClose
     Apply-SonCapConfig
-    $payload=[pscustomobject]@{gemCombineEnabled=[bool]$a.gemCombineEnabled;autoBeast=[bool]$a.autoBeast;beastMaxOnline=[int]$beastMax.Value;beastCloseAfter=$beastCloseAfter.Checked;marketConfig=(Get-MarketPreference $a);izanamiRounds=[int]$izanamiRounds.Value;soncapMaxOnline=[int]$soncapMax.Value;soncapCloseAfter=$soncapCloseAfter.Checked;soncap=[bool]$a.soncap;soncapGroupSize=[int]$soncapGroupSize.Value;soncapPortals=@($script:settings.soncapPortals);cloakMaxOnline=[int]$cloakMax.Value;stoneChestQuantity=$chestPreference.quantity;stoneChestOpenAfter=$chestPreference.openAfter;cloakId=$cloakPreference.id;cloakQuantity=$cloakPreference.quantity;cloakEquipClose=$cloakClose;mailNamedEnabled=$mailNamedCheck.Checked;mailNamedRecipient=$mailNamedRecipient.Text;mailItems=$mailItems.Text;mailSeconds=[int]$mailDelay.Value;launchConcurrency=[int]$launchConcurrency.Value;launchDelaySeconds=[double]$launchDelay.Value;dungeonMaxOnline=[int]$dungeonMax.Value;dungeonCloseAfter=$dungeonCloseAfter.Checked;questMaxOnline=[int]$questMax.Value;questCloseAfter=$questCloseAfter.Checked;izanamiMaxOnline=[int]$izanamiMax.Value;izanamiCloseAfter=$izanamiCloseAfter.Checked;closeAfterKey=[bool]$a.closeAfterKey;autoQuest=[bool]$a.autoQuest;giftEnabled=[bool]$a.giftEnabled;giftCodes=@($a.giftCodes);autoItemEnabled=$itemPreference.enabled;autoItemId=$itemPreference.id;autoItemIds=@($itemPreference.ids);autoItemOnceIds=@($itemPreference.once);autoItemSeconds=$itemPreference.seconds;receiveKey=[bool]$a.receiveKey;dungeonHigh=[bool]$a.dungeonHigh;izanami=[bool]$a.izanami;trainSkills=@($choices);trainPriorityThiQuy=[bool]$a.trainPriorityThiQuy;gameSettings=@($schema);gameOverrides=@($values.Keys | Sort-Object | ForEach-Object {[pscustomobject]@{code=[int]$_;value=$values[$_]}})}
+    $payload=[pscustomobject]@{cuongThiEnabled=[bool]$a.cuongThiEnabled;cuongThiConfig=$a.cuongThiConfig;gemCombineEnabled=[bool]$a.gemCombineEnabled;autoBeast=[bool]$a.autoBeast;beastMaxOnline=[int]$beastMax.Value;beastCloseAfter=$beastCloseAfter.Checked;marketConfig=(Get-MarketPreference $a);izanamiRounds=[int]$izanamiRounds.Value;soncapMaxOnline=[int]$soncapMax.Value;soncapCloseAfter=$soncapCloseAfter.Checked;soncap=[bool]$a.soncap;soncapGroupSize=[int]$soncapGroupSize.Value;soncapPortals=@($script:settings.soncapPortals);cloakMaxOnline=[int]$cloakMax.Value;stoneChestQuantity=$chestPreference.quantity;stoneChestOpenAfter=$chestPreference.openAfter;cloakId=$cloakPreference.id;cloakQuantity=$cloakPreference.quantity;cloakEquipClose=$cloakClose;mailNamedEnabled=$mailNamedCheck.Checked;mailNamedRecipient=$mailNamedRecipient.Text;mailItems=$mailItems.Text;mailSeconds=[int]$mailDelay.Value;launchConcurrency=[int]$launchConcurrency.Value;launchDelaySeconds=[double]$launchDelay.Value;dungeonMaxOnline=[int]$dungeonMax.Value;dungeonCloseAfter=$dungeonCloseAfter.Checked;questMaxOnline=[int]$questMax.Value;questCloseAfter=$questCloseAfter.Checked;izanamiMaxOnline=[int]$izanamiMax.Value;izanamiCloseAfter=$izanamiCloseAfter.Checked;closeAfterKey=[bool]$a.closeAfterKey;autoQuest=[bool]$a.autoQuest;giftEnabled=[bool]$a.giftEnabled;giftCodes=@($a.giftCodes);autoItemEnabled=$itemPreference.enabled;autoItemId=$itemPreference.id;autoItemIds=@($itemPreference.ids);autoItemOnceIds=@($itemPreference.once);autoItemSeconds=$itemPreference.seconds;receiveKey=[bool]$a.receiveKey;dungeonHigh=[bool]$a.dungeonHigh;izanami=[bool]$a.izanami;trainSkills=@($choices);trainPriorityThiQuy=[bool]$a.trainPriorityThiQuy;gameSettings=@($schema);gameOverrides=@($values.Keys | Sort-Object | ForEach-Object {[pscustomobject]@{code=[int]$_;value=$values[$_]}})}
     $script:copiedAccountConfig=$payload | ConvertTo-Json -Depth 12 -Compress
     $pasteConfigButton.Enabled=$true
     $status.Text='Đã copy config của '+$a.username+' • '+$values.Count+' tùy chọn game và cấu hình auto, gồm áo choàng/rương tinh thạch.'
@@ -30,7 +30,7 @@ function Paste-AccountConfigAll {
     $backup=@();$prepared=@()
     foreach($a in $script:accounts){
         $old=@{}
-        foreach($field in @('gemCombineEnabled','closeAfterKey','receiveKey','dungeonHigh','izanami','trainSkills','trainPriorityThiQuy','gameSettings','gameOverrides','autoItemEnabled','autoItemId','autoItemIds','autoItemOnceIds','autoItemSeconds','autoQuest','autoBeast','giftEnabled','giftCodes','stoneChestQuantity','stoneChestOpenAfter','cloakId','cloakQuantity','cloakEquipClose','soncap','marketConfig','marketConfig','marketConfig','marketConfig','marketConfig')){
+        foreach($field in @('cuongThiEnabled','cuongThiConfig','gemCombineEnabled','closeAfterKey','receiveKey','dungeonHigh','izanami','trainSkills','trainPriorityThiQuy','gameSettings','gameOverrides','autoItemEnabled','autoItemId','autoItemIds','autoItemOnceIds','autoItemSeconds','autoQuest','autoBeast','giftEnabled','giftCodes','stoneChestQuantity','stoneChestOpenAfter','cloakId','cloakQuantity','cloakEquipClose','soncap','marketConfig','marketConfig','marketConfig','marketConfig','marketConfig')){
             $prop=$a.PSObject.Properties[$field];$old[$field]=[pscustomobject]@{exists=($null -ne $prop);value=$(if($null -ne $prop){$prop.Value}else{$null})}
         }
         $backup+=@([pscustomobject]@{account=$a;fields=$old})
@@ -38,7 +38,7 @@ function Paste-AccountConfigAll {
         $prepared+=@([pscustomobject]@{account=$a;config=($script:copiedAccountConfig | ConvertFrom-Json)})
     }
     try {
-        foreach($item in $prepared){foreach($field in @('gemCombineEnabled','closeAfterKey','receiveKey','dungeonHigh','izanami','trainSkills','trainPriorityThiQuy','gameSettings','gameOverrides','autoItemEnabled','autoItemId','autoItemIds','autoItemOnceIds','autoItemSeconds','autoQuest','autoBeast','giftEnabled','giftCodes','stoneChestQuantity','stoneChestOpenAfter','cloakId','cloakQuantity','cloakEquipClose','soncap','marketConfig','marketConfig','marketConfig','marketConfig','marketConfig')){if($item.config.PSObject.Properties[$field]){$item.account | Add-Member NoteProperty $field $item.config.$field -Force}}}
+        foreach($item in $prepared){foreach($field in @('cuongThiEnabled','cuongThiConfig','gemCombineEnabled','closeAfterKey','receiveKey','dungeonHigh','izanami','trainSkills','trainPriorityThiQuy','gameSettings','gameOverrides','autoItemEnabled','autoItemId','autoItemIds','autoItemOnceIds','autoItemSeconds','autoQuest','autoBeast','giftEnabled','giftCodes','stoneChestQuantity','stoneChestOpenAfter','cloakId','cloakQuantity','cloakEquipClose','soncap','marketConfig','marketConfig','marketConfig','marketConfig','marketConfig')){if($item.config.PSObject.Properties[$field]){$item.account | Add-Member NoteProperty $field $item.config.$field -Force}}}
         if(!$UiTest){Save-Accounts}
     }catch{
         foreach($item in $backup){foreach($field in $item.fields.Keys){if($item.fields[$field].exists){$item.account | Add-Member NoteProperty $field $item.fields[$field].value -Force}else{$item.account.PSObject.Properties.Remove($field)}}}
@@ -69,7 +69,7 @@ function Paste-AccountConfigAll {
     if($copiedQueue.PSObject.Properties['launchDelaySeconds']){$launchDelay.Value=[Math]::Max([decimal]0,[Math]::Min([decimal]3600,[decimal]$copiedQueue.launchDelaySeconds))}
     $pending=0
     foreach($item in $prepared){
-        $a=$item.account;$id=[string]$a.id;$script:trainSelections[$id]=@($a.trainSkills);$script:gameSettingsApplied.Remove($id)
+        $a=$item.account;$id=[string]$a.id;if($a.cuongThiEnabled -and $a.cuongThiConfig -and $a.cuongThiConfig.Move){Clear-CuongThiUpPreference $a $null};$script:trainSelections[$id]=@($a.trainSkills);$script:gameSettingsApplied.Remove($id)
         if(!$script:accountJobs.ContainsKey($id)){continue}
         $j=Get-AccountJob $script:accountJobs[$id]
         if($null -eq $j -or $j.CloseRequested -or $j.State -in @('failed','closed','cancelled')){continue}
@@ -80,6 +80,7 @@ function Paste-AccountConfigAll {
             if($settingsFailed){$pending++}
         }
         try {
+            Sync-CuongThiAccount $a $j
             Sync-TrainPriority $a $j
             [TGLL.NativeBackend]::SetCloseAfterKey($j.Id,[bool]$a.closeAfterKey)
             [TGLL.NativeBackend]::SetReceiveKey($j.Id,[bool]$a.receiveKey)
@@ -92,7 +93,7 @@ function Paste-AccountConfigAll {
         }catch{$pending++}
     }
     $script:skillViewKey='';$script:gameSettingKey=''
-    Update-TrainUi;Update-DungeonUi;Update-GameSettingsUi;Update-IzanamiUi;Sync-AutoItemPreferences;Update-AutoItemUi;Sync-QuestPreferences;Update-QuestUi;Update-StoneChestUi;Update-CloakUi;Sync-SonCapPreferences;Update-SonCapUi;Sync-BeastPreferences;Update-BeastUi
+    Update-TrainUi;Update-DungeonUi;Update-GameSettingsUi;Update-IzanamiUi;Sync-AutoItemPreferences;Update-AutoItemUi;Sync-QuestPreferences;Update-QuestUi;Update-StoneChestUi;Update-CloakUi;Sync-SonCapPreferences;Update-SonCapUi;Sync-BeastPreferences;Update-BeastUi;$script:cuongThiShownAccount='';Update-CuongThiUi
     $status.Text='Đã paste và lưu config cho '+$prepared.Count+' tài khoản. Game đang mở áp dụng khi sẵn sàng; tài khoản chưa mở áp dụng lần mở tới.'
     if($pending){$status.Text+=' '+$pending+' lượt áp dụng chưa hoàn tất; kiểm tra tùy chọn và chiêu đã học trong game.'}
 }

@@ -28,3 +28,26 @@ try{
  $script:farmUpRequests.Remove('cuong-two');$script:autoTrainWanted.Remove('cuong-one');$script:autoTrainApplied.Remove('cuong-one');$cuongThiMove.Checked=$false
 }finally{$script:accountJobs=$oldJobs;foreach($n in $oldFns.Keys){Set-Item ('Function:\'+$n) $oldFns[$n]};Update-CuongThiUi}
 Write-Output 'PASS: Cuong Thi tab, per-account persistence, readiness gate, single start, reconnect resume and selected stop isolation.'
+
+$ctSavedAccounts=$script:accounts;$ctSavedJobs=$script:accountJobs;$ctSavedClip=$script:copiedAccountConfig;$ctSaveFn=(Get-Item Function:Save-Accounts).ScriptBlock;$ctUiTest=$UiTest
+try{
+ $script:accountJobs=@{};$ctSource=[pscustomobject]@{id='ct-copy-1';username='ct-source';cuongThiEnabled=$true;cuongThiConfig=[pscustomobject]@{Move=$true;MapId=69;MapName='Làng Mây';X=700;Y=400;Zone=14}}
+ $ctDest=[pscustomobject]@{id='ct-copy-2';username='ct-dest';secret='keep';proxy='keep';cuongThiEnabled=$false;cuongThiConfig=[pscustomobject]@{Move=$false;MapId=59;X=111;Y=222;Zone=-1}}
+ $script:accounts=@($ctSource,$ctDest);Refresh-Grid;$grid.ClearSelection();$grid.Rows[0].Selected=$true;Copy-AccountConfig
+ $ctCopy=$script:copiedAccountConfig | ConvertFrom-Json;if(!$ctCopy.cuongThiEnabled -or $ctCopy.cuongThiConfig.Zone -ne 14){throw 'Cuong Thi clipboard fields missing'}
+ $ctSource.cuongThiConfig.X=900;Paste-AccountConfigAll
+ if(!$ctDest.cuongThiEnabled -or !$ctDest.cuongThiConfig.Move -or $ctDest.cuongThiConfig.MapId -ne 69 -or $ctDest.cuongThiConfig.X -ne 700 -or $ctDest.cuongThiConfig.Y -ne 400 -or $ctDest.cuongThiConfig.Zone -ne 14){throw 'Cuong Thi destination paste failed'}
+ $ctSource.cuongThiConfig.Zone=2;if($ctDest.cuongThiConfig.Zone -ne 14){throw 'Pasted boss configs share object'}
+ $grid.ClearSelection();$grid.Rows[1].Selected=$true;Update-CuongThiUi
+ if(!$cuongThiMove.Checked -or $cuongThiX.Value -ne 700 -or $cuongThiZone.Value -ne 14 -or !$cuongThiCheck.Checked){throw 'Pasted boss config not displayed'}
+ if($ctDest.secret -ne 'keep' -or $ctDest.proxy -ne 'keep'){throw 'Boss config paste changed credentials'}
+ $ctCopy.PSObject.Properties.Remove('cuongThiEnabled');$ctCopy.PSObject.Properties.Remove('cuongThiConfig');$script:copiedAccountConfig=$ctCopy | ConvertTo-Json -Depth 12;Paste-AccountConfigAll
+ if(!$ctDest.cuongThiEnabled -or $ctDest.cuongThiConfig.Zone -ne 14){throw 'Legacy clipboard cleared boss preferences'}
+ $script:copiedAccountConfig='{"cuongThiEnabled":false,"cuongThiConfig":{"Move":false,"MapId":59,"X":1,"Y":2,"Zone":3}}'
+ function Save-Accounts {throw 'synthetic_save_failure'}
+ $UiTest=$false;$ctFailed=$false;try{Paste-AccountConfigAll}catch{$ctFailed=$true}finally{$UiTest=$ctUiTest}
+ if(!$ctFailed -or !$ctDest.cuongThiEnabled -or $ctDest.cuongThiConfig.Zone -ne 14){throw 'Boss clipboard rollback failed'}
+ Write-Output 'PASS: Cuong Thi clipboard includes enable/map/XY/zone/movement, frozen independent snapshots, tab refresh, legacy preservation, private fields and save rollback.'
+}finally{
+ $UiTest=$ctUiTest;Set-Item Function:Save-Accounts $ctSaveFn;$script:accounts=$ctSavedAccounts;$script:accountJobs=$ctSavedJobs;$script:copiedAccountConfig=$ctSavedClip;$script:cuongThiShownAccount='';Refresh-Grid;Update-CuongThiUi
+}
