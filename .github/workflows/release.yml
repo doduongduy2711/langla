@@ -108,6 +108,14 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Cuong Thi test compilation failed'}
           ./CuongThiTests.exe
           if($LASTEXITCODE -ne 0){throw 'Cuong Thi tests failed'}
+      - name: Cuong Thi independent navigation checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:CuongThiMovementTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/CuongThiMovementTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Cuong Thi movement compilation failed'}
+          ./CuongThiMovementTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Cuong Thi movement tests failed'}
       - name: Native captcha input guards
         shell: powershell
         run: |

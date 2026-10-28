@@ -65,6 +65,7 @@ function Set-UpCell($row,[bool]$enabled) {
     try{if($row.Cells['up'].Value -ne $enabled){$row.Cells['up'].Value=$enabled}}finally{$script:updatingUp=$previous}
 }
 function Start-AccountFarm($row,$config) {
+    Disable-CuongThiForUp $row
     $key=[string]$row.Tag.id
     if($config.ReferenceId -and $key -eq $config.ReferenceId){throw 'Acc dòng 1 đang làm tham chiếu; chọn Up ở acc khác'}
     if(!$script:accountJobs.ContainsKey($key)){throw 'Mở tài khoản và chờ vào game trước khi tích Up'}
@@ -82,6 +83,7 @@ function Start-AccountFarm($row,$config) {
 }
 # Giữ lựa chọn Up cả khi acc chưa mở; chỉ khởi động một lần khi game sẵn sàng.
 function Request-AccountFarm($row,$config) {
+    Disable-CuongThiForUp $row
     $key=[string]$row.Tag.id;if($config.ReferenceId -and $key -eq $config.ReferenceId){return}
     if(!$script:farmUpRequests.ContainsKey($key)){$script:farmUpRequests[$key]=[pscustomobject]@{Config=$config;StartedJob='';BlockedJob='';RetryAt=[datetime]::MinValue}}
     else{$script:farmUpRequests[$key].Config=$config;$script:farmUpRequests[$key].BlockedJob=''}
