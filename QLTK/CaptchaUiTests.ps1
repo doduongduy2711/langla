@@ -5,6 +5,7 @@ try{
  if($script:settings.captchaAutoEnabled){throw 'Captcha disable preference did not persist'}
  $captchaAuto.Checked=$true;Save-CaptchaPreference
  if(!$script:settings.captchaAutoEnabled){throw 'Captcha enable preference did not persist'}
+ if($captchaPortalButton.Text -ne 'Mở portal kiểm tra OCR' -or !(Test-UpdateFileName 'CaptchaOcr.py')){throw 'Local portal button/update file missing'};Open-OcrPortal;if($script:ocrPortalProcess){throw 'UI fixture started a real portal'}
  if($captchaSamplesButton.Text -ne 'Mở thư mục ảnh mẫu'){throw 'Captcha samples button missing'};Open-CaptchaSamples;Start-CaptchaInstall;Sync-CaptchaRuntime
  if($script:captchaInstallProcess){throw 'UI fixture unexpectedly installed OCR runtime'}
  if(!(Test-UpdateFileName 'CaptchaOcr.py') -or (Test-UpdateFileName 'unknown.py')){throw 'OCR updater filename allowlist failed'}

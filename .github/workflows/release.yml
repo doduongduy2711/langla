@@ -135,6 +135,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Local OCR review portal checks
+        shell: powershell
+        run: |
+          python QLTK/OcrPortalTests.py
+          if($LASTEXITCODE -ne 0){throw 'OCR portal tests failed'}
       - name: Build portable OCR runtime
         shell: powershell
         run: |

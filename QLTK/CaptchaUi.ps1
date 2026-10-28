@@ -7,6 +7,7 @@ $captchaRuntimeHint=Ui-Label '' $captchaPage 205 100 430 45
 $captchaAccountHint=Ui-Label 'Chọn acc để xem trạng thái giải mã.' $captchaPage 16 160 635 65
 $null=Ui-Label 'Máy chưa có bộ đọc: QLTK tự tải ở lần dùng đầu, hoặc bấm Cài ngay. Chỉ xác nhận một lần cho mỗi ảnh mã; ảnh đổi sẽ được đọc lại.' $captchaPage 16 455 635 50
 $captchaSamplesButton=Ui-NewButton 'Mở thư mục ảnh mẫu' {Open-CaptchaSamples};Ui-Place $captchaSamplesButton $captchaPage 16 515 190 28
+$captchaPortalButton=Ui-NewButton 'Mở portal kiểm tra OCR' {Open-OcrPortal};Ui-Place $captchaPortalButton $captchaPage 220 515 250 28
 $null=Ui-Label 'Mỗi ảnh mã mới được lưu trong Data\OCR\samples. Ảnh trùng chỉ lưu một bản; cần gán mã đúng trước khi train.' $captchaPage 16 555 635 45
 $captchaManualGroup=New-Object Windows.Forms.GroupBox;$captchaManualGroup.Text='Nhập kết quả khi OCR chưa đọc được';$captchaManualGroup.SetBounds(16,230,625,220);$captchaPage.Controls.Add($captchaManualGroup)
 $captchaPreview=New-Object Windows.Forms.PictureBox;$captchaPreview.SetBounds(12,25,340,100);$captchaPreview.SizeMode='Zoom';$captchaPreview.BorderStyle='FixedSingle';$captchaManualGroup.Controls.Add($captchaPreview)
@@ -108,3 +109,25 @@ function Update-CaptchaUi {
 }
 $captchaAuto.Add_CheckedChanged({Save-CaptchaPreference})
 Apply-CaptchaOptions;Update-CaptchaUi
+
+$script:ocrPortalProcess=$null;$script:ocrPortalOpening=$false
+$ocrPortalTimer=New-Object Windows.Forms.Timer;$ocrPortalTimer.Interval=500
+function Get-OcrPortalHealth {try{return Invoke-RestMethod -Uri 'http://127.0.0.1:47662/health' -TimeoutSec 1 -ErrorAction Stop}catch{return $null}}
+function Open-OcrPortal {
+ if($UiTest -or $script:ocrPortalOpening){return}
+ try{
+  if(!(Test-Path -LiteralPath $script:captchaPython -PathType Leaf)){Start-CaptchaInstall;$captchaRuntimeHint.Text='Cài xong bộ đọc, bấm Mở portal kiểm tra OCR.';return}
+  $samples=[IO.Path]::GetFullPath((Join-Path $script:dataDir 'OCR\samples'));$health=Get-OcrPortalHealth
+  if($health){if($health.app -ne 'qltk-ocr-portal' -or $health.samples -ne $samples){throw 'Cổng 47662 đang dùng bởi phiên khác.'};Start-Process 'http://127.0.0.1:47662';return}
+  $info=New-Object Diagnostics.ProcessStartInfo;$info.FileName=$script:captchaPython;$info.Arguments='-I "'+(Join-Path $PSScriptRoot 'CaptchaOcr.py')+'" --portal --samples "'+$samples+'"';$info.UseShellExecute=$false;$info.CreateNoWindow=$true;$info.RedirectStandardError=$true;$info.EnvironmentVariables['OMP_NUM_THREADS']='1'
+  $script:ocrPortalProcess=[Diagnostics.Process]::Start($info);$script:ocrPortalOpening=$true;$script:ocrPortalStartAt=[DateTime]::UtcNow;$captchaRuntimeHint.Text='Đang mở portal OCR trên máy này...';$ocrPortalTimer.Start()
+ }catch{$captchaRuntimeHint.Text='Chưa mở được portal: '+$_.Exception.GetBaseException().Message}
+}
+$ocrPortalTimer.Add_Tick({
+ try{
+  $health=Get-OcrPortalHealth
+  if($health -and $health.app -eq 'qltk-ocr-portal' -and $health.samples -eq [IO.Path]::GetFullPath((Join-Path $script:dataDir 'OCR\samples'))){$ocrPortalTimer.Stop();$script:ocrPortalOpening=$false;Start-Process 'http://127.0.0.1:47662';$captchaRuntimeHint.Text='Portal OCR đang chạy tại 127.0.0.1:47662.'}
+  elseif(($script:ocrPortalProcess -and $script:ocrPortalProcess.HasExited) -or ([DateTime]::UtcNow-$script:ocrPortalStartAt).TotalSeconds -gt 20){$ocrPortalTimer.Stop();$script:ocrPortalOpening=$false;$captchaRuntimeHint.Text='Portal chưa khởi động được. Kiểm tra bộ đọc hoặc cổng 47662.'}
+ }catch{$ocrPortalTimer.Stop();$script:ocrPortalOpening=$false;$captchaRuntimeHint.Text=$_.Exception.Message}
+})
+$form.Add_Disposed({$ocrPortalTimer.Stop();$ocrPortalTimer.Dispose();if($script:ocrPortalProcess){try{if(!$script:ocrPortalProcess.HasExited){$script:ocrPortalProcess.Kill()};$script:ocrPortalProcess.Dispose()}catch{}}})
