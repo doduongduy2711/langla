@@ -37,8 +37,9 @@ function Set-AccountAuto($row,[bool]$enabled,[bool]$preserveCuongThi=$false) {
     }
     $row.Cells['auto'].ToolTipText=$(if($enabled){'Bật treo + train bằng bộ chiêu riêng; đợi game sẵn sàng nếu cần.'}else{'Tắt treo và train.'})
 }
-function Sync-AutoRows([int]$maxRows=0) {
+function Sync-AutoRows([int]$maxRows=0,[bool]$scheduledPaint=$false) {
     $autoRows=$grid.Rows
+    $publishStatus=$scheduledPaint -and !$script:uiDragging -and ![TGLL.UiPerformance]::IsScrolling -and $form.WindowState -ne [Windows.Forms.FormWindowState]::Minimized
     if($maxRows -gt 0 -and $grid.Rows.Count -gt $maxRows){
         if($script:autoSyncCursor -ge $grid.Rows.Count){$script:autoSyncCursor=0}
         $autoRows=@(for($n=0;$n -lt $maxRows;$n++){$grid.Rows[(($script:autoSyncCursor+$n)%$grid.Rows.Count)]})
@@ -48,7 +49,8 @@ function Sync-AutoRows([int]$maxRows=0) {
         $key=[string]$row.Tag.id
         if(!$script:accountJobs.ContainsKey($key)){continue}
         $j=Get-AccountJob $script:accountJobs[$key]
-        Update-AccountCharacter $row $j
+        if(!$scheduledPaint -or (Test-ScheduledUiRefresh ('identity:'+$key))){Update-AccountCharacter $row $j}
+        if($publishStatus -and (Test-ManagerStatusChanged $row $j)){Update-ManagerStatusRows @($row)}
         if($null -eq $j -or !$j.PSObject.Properties['GameSettingsReady']){continue}
         if($j.State -in @('failed','closed','cancelled') -or $j.CloseRequested){Set-AutoCell $row $false;$script:autoTrainApplied.Remove($key);continue}
         Sync-GemCombineAccount $row.Tag $j
@@ -76,7 +78,7 @@ function Sync-AutoRows([int]$maxRows=0) {
         Sync-AccountAutoTrain $row $j
     }
     if(Get-Command Sync-FarmUpRow -ErrorAction SilentlyContinue){foreach($farmRow in $autoRows){Sync-FarmUpRow $farmRow}}
-    if($maxRows -eq 0 -or $script:autoSyncCursor -lt $maxRows){Update-DungeonUi;Update-IzanamiUi;Update-GameSettingsUi $true}
+    if(($maxRows -eq 0 -or $script:autoSyncCursor -lt $maxRows) -and (!$scheduledPaint -or (Test-ScheduledUiRefresh 'auto-controls'))){Update-DungeonUi;Update-IzanamiUi;Update-GameSettingsUi $true}
 }
 $grid.Add_CellValueChanged({param($sender,$e)
     if($script:updatingAuto -or $e.RowIndex -lt 0 -or $e.ColumnIndex -lt 0 -or $grid.Columns[$e.ColumnIndex].Name -ne 'auto'){return}

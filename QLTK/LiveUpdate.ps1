@@ -4,7 +4,7 @@ function Get-LiveUpdateHash([string]$path) {
     return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
 }
 function Get-LiveUpdateBinaryHash([string]$path) {
-    if([IO.Path]::GetFileName($path) -ceq 'CaptchaOcr.py' -and ![IO.File]::Exists($path)){return ''}
+    if([IO.Path]::GetFileName($path) -cin @('CaptchaOcr.py','ManagerStatusCache.cs') -and ![IO.File]::Exists($path)){return ''}
     return Get-LiveUpdateHash $path
 }
 function Test-LiveUpdateNamedParser {
@@ -36,7 +36,7 @@ function Initialize-LiveUpdate {
         if($path -and [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($path)) -eq $root -and $path -notlike '*Tests.ps1'){$paths+=$path}
     }
     foreach($path in @($paths | Select-Object -Unique)){$script:liveUpdateSources[$path]=Read-LiveUpdateSource $path}
-    foreach($name in @('NativeBackend.cs','AutoLogin.cs','SocketServer.cs','StoredJson.cs','UiPerformance.cs','MapCatalog.json','CaptchaOcr.py')){
+    foreach($name in @('NativeBackend.cs','AutoLogin.cs','SocketServer.cs','StoredJson.cs','UiPerformance.cs','ManagerStatusCache.cs','MapCatalog.json','CaptchaOcr.py')){
         $path=Join-Path $root $name;$script:liveUpdateBinaries[$path]=Get-LiveUpdateBinaryHash $path
     }
 }

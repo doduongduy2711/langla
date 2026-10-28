@@ -13,7 +13,7 @@ try {
  $script:largeRefreshPhase=0;$script:uiDragging=$false;$script:uiTicks=0
  [Threading.Thread]::Sleep(300)
  for($i=0;$i -lt 24;$i++){Invoke-ManagerTick}
- foreach($n in $script:largeRefreshTasks){if($script:lrCalls[$n] -ne 2){throw ('Large refresh phase missing/duplicated: '+$n)}}
+ foreach($n in $script:largeRefreshTasks){$expected=if($n -like 'Update-*'){1}else{2};if($script:lrCalls[$n] -ne $expected){throw ('Large refresh phase missing/duplicated: '+$n)}}
  if($script:lrCalls['Poll-SocketRequests'] -ne 24 -or $script:lrCalls['Sync-AutoRows'] -ne 24 -or $script:lrCalls['Pump-DungeonQueue'] -ne 4){throw 'Large refresh changed socket/queue cadence'}
  $script:largeRefreshPhase=0;$script:uiDragging=$true
  foreach($n in $script:lrCalls.Keys.Clone()){$script:lrCalls[$n]=0}

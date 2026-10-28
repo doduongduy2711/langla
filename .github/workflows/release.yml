@@ -18,6 +18,14 @@ jobs:
       - name: Windows Forms regression checks
         shell: powershell
         run: powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File QLTK/AccountManager.ps1 -UiTest
+      - name: Manager status change checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /out:ManagerStatusCacheTests.exe (Join-Path $pwd 'QLTK/ManagerStatusCache.cs') (Join-Path $pwd 'QLTK/ManagerStatusCacheTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Manager status cache compilation failed'}
+          ./ManagerStatusCacheTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Manager status cache tests failed'}
       - name: Native combat target checks
         shell: powershell
         run: |

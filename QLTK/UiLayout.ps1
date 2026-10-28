@@ -234,7 +234,7 @@ function Update-AccountCharacter($row,$j) {
     $newCharacter=if($j){[string]$j.CharacterName}else{''}
     if($row.Cells['character'].Value -ne $newCharacter){$row.Cells['character'].Value=$newCharacter}
 }
-function Update-VisibleCharacterNames {
+function Update-VisibleCharacterNames([bool]$changesOnly=$false) {
     if($script:uiDragging -or $form.WindowState -eq [Windows.Forms.FormWindowState]::Minimized -or $grid.Rows.Count -eq 0){return}
     $first=$grid.FirstDisplayedScrollingRowIndex;if($first -lt 0){return}
     $last=[Math]::Min($grid.Rows.Count-1,$first+$grid.DisplayedRowCount($false))
@@ -243,7 +243,7 @@ function Update-VisibleCharacterNames {
         if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
         Update-AccountCharacter $row $j
     }
-    if(${function:Update-ManagerStatusRows}){Update-ManagerStatusRows @(for($n=$first;$n -le $last;$n++){$grid.Rows[$n]})}
+    if(${function:Update-ManagerStatusRows}){Update-ManagerStatusRows @(for($n=$first;$n -le $last;$n++){$grid.Rows[$n]}) $changesOnly}
 }
 $grid.Add_Scroll({Update-VisibleCharacterNames})
 function Update-UiSummary {

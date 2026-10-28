@@ -504,7 +504,7 @@ function Invoke-ManagerTick {
     Initialize-GitHubUpdate
     Sync-CaptchaRuntime
     Invoke-AutoHideAfterLogin
-    Update-VisibleCharacterNames
+    if(Test-ScheduledUiRefresh 'visible-identities'){Update-VisibleCharacterNames $true}
     $script:uiTicks++
     if(($script:uiTicks % 10) -eq 0){Retry-FailedAccounts}
     Invoke-ActivityQueuePhase
@@ -513,19 +513,21 @@ function Invoke-ManagerTick {
     # Native combat and queue checks above keep running; coalesce UI-wide preference/paint passes during wheel/scrollbar input.
     if([TGLL.UiPerformance]::IsScrolling){$script:uiRefreshPending=$true;return}
     $script:uiRefreshPending=$false
-    Sync-IzanamiTeams;Sync-DailyPriorityPreferences;Sync-SonCapPreferences;Sync-CloakQueue;Sync-AutoRows;Sync-AutoItemPreferences;Sync-QuestPreferences;Sync-GiftPreferences;Sync-MailCollection;Sync-Distribution
+    Sync-IzanamiTeams;Sync-DailyPriorityPreferences;Sync-SonCapPreferences;Sync-CloakQueue;Sync-AutoRows 0 $true;Sync-AutoItemPreferences;Sync-QuestPreferences;Sync-GiftPreferences;Sync-MailCollection;Sync-Distribution
     # Keep queue/preference work above running while moving/minimized; defer only rendering.
     if($script:uiDragging -or $form.WindowState -eq [Windows.Forms.FormWindowState]::Minimized){return}
+    if(!(Test-ScheduledUiRefresh 'small-manager-paint')){return}
     Update-ActiveTabUi;Update-UiSummary
-    Update-ManagerStatus
+    Update-ManagerStatus $true
 }
-function Update-ManagerStatusRows($rows) {
+function Update-ManagerStatusRows($rows,[bool]$changesOnly=$false) {
     if(!$script:managerStatusLabels){$script:managerStatusLabels=@{reconnecting='Mất kết nối: chuẩn bị đăng nhập lại';queued='Đang chờ';retrying='Chờ mở lại';starting='Đang mở';typing='Đang truyền';submitted='Đã gửi đăng nhập';selecting_character='Đang chọn NV 1';character_submitted='Đã gửi chọn NV 1';waiting_map='Đợi bản đồ';waiting_popup='Đợi 5 giây';confirming_popup='Đang xác nhận';finding_onoki='Đang tìm Onoki';choosing_izanami='Đang chọn Izanami';izanami_submitted='Đã gửi vào cấm thuật';izanami_running='Cấm thuật: chờ thông báo ải';izanami_unavailable='Chưa vào cấm thuật';using_travel_item='Đang dùng phù';choosing_village='Đang chọn Làng';choosing_sand_village='Đang chọn Làng Cát';waiting_sand_village='Đợi đến Làng Cát';finding_npc='Đang tìm Raikage';choosing_key='Đang nhận chìa khóa';waiting_key_baseline='Đợi đọc số chìa trước khi nhận';waiting_key_receipt='Đợi xác nhận nhận chìa';key_submitted='Đã gửi nhận chìa khóa';creating_party='Đang tạo/đợi nhóm';waiting_dungeon='Chuẩn bị vào địa cung';choosing_dungeon='Đang chọn địa cung cao cấp';checking_dungeon_keys='Kiểm tra chìa cao cấp';dungeon_no_keys='Dừng: hết chìa cao cấp';dungeon_stopped='Địa cung đã dừng';dungeon_running='Địa cung: đợi quay lại';dungeon_submitted='Đã gửi vào địa cung cao cấp';startup_unavailable='Cần kiểm tra sau đăng nhập';npc_unavailable='Chưa nhận chìa khóa';manual_entry='Cần kiểm tra game';opened='Đã mở';failed='Lỗi';cancelled='Đã hủy';closed='Đã tắt'}}
     $states=$script:managerStatusLabels
     foreach($row in $rows) {
         if ($script:accountJobs.ContainsKey([string]$row.Tag.id)) {
             $rowJob=(Get-AccountJob $script:accountJobs[[string]$row.Tag.id])
             if ($null -ne $rowJob) {
+                if($changesOnly -and !(Test-ManagerStatusChanged $row $rowJob)){continue}
                 $text=$states[$rowJob.State]
                 if($rowJob -is [TGLL.NativeJob] -and $rowJob.State -eq 'izanami_running'){$text=[TGLL.NativeBackend]::IzanamiStageStatus($rowJob)}
                 if($rowJob.IzanamiEnabled -and $rowJob.IzanamiRequested -and $rowJob.TeamStatus){$text+=' • '+$rowJob.TeamStatus}
@@ -547,14 +549,14 @@ function Update-ManagerStatusRows($rows) {
         }
     }
  }
-function Update-ManagerStatus {
+function Update-ManagerStatus([bool]$changesOnly=$false) {
     $rows=$grid.Rows
     if($grid.Rows.Count -gt 32 -and $grid.FirstDisplayedScrollingRowIndex -ge 0){
         $first=$grid.FirstDisplayedScrollingRowIndex;$last=[Math]::Min($grid.Rows.Count-1,$first+$grid.DisplayedRowCount($false))
         $rows=@(for($n=$first;$n -le $last;$n++){$grid.Rows[$n]})
         if($grid.SelectedRows.Count -and $rows -notcontains $grid.SelectedRows[0]){$rows+=,$grid.SelectedRows[0]}
     }
-    Update-ManagerStatusRows $rows
+    Update-ManagerStatusRows $rows $changesOnly
     Update-SonCapQueueStatus;Update-IzanamiQueueStatus;Update-QuestQueueStatus
     if ($script:lastLoginJob) {
         $job=(Get-AccountJob $script:lastLoginJob)

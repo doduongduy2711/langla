@@ -26,7 +26,7 @@ $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 $reference=& (Join-Path $PSScriptRoot 'Get-Net48References.ps1')
 $references=@('mscorlib.dll','System.dll','System.Core.dll','System.Drawing.dll','System.Windows.Forms.dll','System.Web.Extensions.dll') | ForEach-Object {'/r:'+(Join-Path $reference $_)}
 $references+=('/r:'+([Management.Automation.PowerShell].Assembly.Location))
-foreach($name in @('NativeBackend','AutoLogin','SocketServer','StoredJson','UiPerformance')){
+foreach($name in @('NativeBackend','AutoLogin','SocketServer','StoredJson','UiPerformance','ManagerStatusCache')){
  & $compiler /nologo /noconfig /nostdlib+ /target:library /platform:x64 ('/out:'+(Join-Path $check ($name+'.dll'))) $references (Join-Path $root ('QLTK/'+$name+'.cs'))
  if($LASTEXITCODE -ne 0){throw ('Component does not compile against NET 4.8: '+$name)}
 }
@@ -46,4 +46,4 @@ Invoke-LauncherCheck '--runtime-check' 'runtime-check.log'
 $source=Join-Path $check 'QLTK';$null=[IO.Directory]::CreateDirectory($source)
 Get-ChildItem -LiteralPath (Join-Path $root 'QLTK') -File | Where-Object {$_.Extension -in @('.ps1','.cs','.json','.py')} | ForEach-Object {Copy-Item -LiteralPath $_.FullName -Destination $source}
 Invoke-LauncherCheck '--ui-test' 'host-ui-test.log'
-Write-Output 'PASS: NET Framework 4.8 assembly target, CLR configuration, x64 launcher, launcher-only archive, all five dynamic components using 4.8 reference APIs and WinForms checks through the actual EXE. No real game opened.'
+Write-Output 'PASS: NET Framework 4.8 assembly target, CLR configuration, x64 launcher, launcher-only archive, all dynamic components using 4.8 reference APIs and WinForms checks through the actual EXE. No real game opened.'

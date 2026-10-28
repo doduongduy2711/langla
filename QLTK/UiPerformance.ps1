@@ -4,6 +4,24 @@ foreach($panel in @($top,$bottom,$tabs,$detailsGroup)){[TGLL.UiPerformance]::Buf
 [TGLL.UiPerformance]::Buffer($inventoryGrid);[TGLL.UiPerformance]::Buffer($marketResultsGrid)
 $form.Add_ResizeBegin({$script:uiDragging=$true})
 $form.Add_ResizeEnd({$script:uiDragging=$false})
+function Test-ManagerStatusChanged($row,$job) {
+    if(!('TGLL.ManagerStatusCache' -as [type])){
+        $cacheSource=Join-Path $PSScriptRoot 'ManagerStatusCache.cs';if(!(Test-Path -LiteralPath $cacheSource)){return $true}
+        Add-Type -Path $cacheSource -ReferencedAssemblies System.dll,System.Core.dll
+        if($script:liveUpdateBinaries){$script:liveUpdateBinaries[$cacheSource]=Get-LiveUpdateHash $cacheSource}
+    }
+    $key=[string]$row.Tag.id;$extra=''
+    if($script:farmUpRequests.ContainsKey($key) -and $job -and $script:farmUpRequests[$key].BlockedJob -eq $job.Id){$extra=[string]$row.Cells['up'].ToolTipText}
+    return [TGLL.ManagerStatusCache]::Changed($key,$job,$row,$extra)
+}
+function Test-ScheduledUiRefresh([string]$key) {
+    # 30 manager ticks = about 3 seconds. Manual refreshes bypass this gate.
+    if(!$script:uiNextPaintTicks -or $script:uiTicks -lt $script:uiPaintClock){$script:uiNextPaintTicks=@{}}
+    $script:uiPaintClock=$script:uiTicks
+    if($script:uiNextPaintTicks.ContainsKey($key) -and $script:uiTicks -lt $script:uiNextPaintTicks[$key]){return $false}
+    $script:uiNextPaintTicks[$key]=$script:uiTicks+30
+    return $true
+}
 function Update-ActiveTabUi {
     if([TGLL.UiPerformance]::IsScrolling -or $script:uiDragging -or $form.WindowState -eq [Windows.Forms.FormWindowState]::Minimized){return}
     $selected=$tabs.SelectedTab
@@ -62,9 +80,11 @@ function Invoke-UiTimedStep([string]$stepName){
 }
 function Invoke-LargeManagerRefresh {
     # All account Auto/Up intentions are checked in bounded batches, independently of rendering.
-    Sync-AutoRows 8
+    Sync-AutoRows 8 $true
     $task=$script:largeRefreshTasks[$script:largeRefreshPhase]
     $script:largeRefreshPhase=($script:largeRefreshPhase+1)%$script:largeRefreshTasks.Count
     if($task -like 'Update-*' -and ([TGLL.UiPerformance]::IsScrolling -or $script:uiDragging -or $form.WindowState -eq [Windows.Forms.FormWindowState]::Minimized)){return}
+    if($task -like 'Update-*' -and !(Test-ScheduledUiRefresh $task)){return}
+    if($task -eq 'Update-ManagerStatus'){Update-ManagerStatus $true;return}
     Invoke-UiTimedStep $task
 }
