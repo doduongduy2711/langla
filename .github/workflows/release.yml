@@ -92,6 +92,14 @@ jobs:
             & (Join-Path $pwd ($name+'.exe'))
             if($LASTEXITCODE -ne 0){throw ($name+' failed')}
           }
+      - name: Farm villages and explicit zone checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:FarmDestinationTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/FarmDestinationTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Farm destination test compilation failed'}
+          ./FarmDestinationTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Farm destination tests failed'}
       - name: Cuong Thi real HP and hanging threshold checks
         shell: powershell
         run: |

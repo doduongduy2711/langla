@@ -42,7 +42,8 @@ $manualChoices=[TGLL.NativeJob].GetField('FarmChoices',[Reflection.BindingFlags]
 if(!$fixture.FarmEnabled -or $manualChoices.Count -ne 1 -or $manualChoices[0].MapId -ne 74 -or $manualChoices[0].X -ne 1490 -or $manualChoices[0].Y -ne 565 -or $manualChoices[0].Level -ne 54){throw 'Manual coordinates were not passed directly'}
 $null=$click.Invoke($stopFarm,[object[]]@([EventArgs]::Empty))
 $null=$click.Invoke($saveManualFarm,[object[]]@([EventArgs]::Empty));$null=$click.Invoke($saveManualFarm,[object[]]@([EventArgs]::Empty));if($script:farmSpots.Count -ne 1){throw 'Manual save duplicated'}
-$farmManualMap.Value=59;$rejected=$false;try{$null=Get-ManualFarmSpot}catch{$rejected=$true};if(!$rejected){throw 'Manual village accepted'}
+$farmManualMap.Value=59;$village=Get-ManualFarmSpot;if($village.MapId -ne 59){throw 'Manual village rejected'}
+$farmManualMap.Value=89;$rejected=$false;try{$null=Get-ManualFarmSpot}catch{$rejected=$true};if(!$rejected){throw 'Manual instance accepted'}
 $farmManualMap.Value=74
 if($grid.Columns['up'].DisplayIndex -ne 3 -or $grid.Columns['up'].Width -ne 41 -or $grid.Columns['up'].ReadOnly){throw 'Up column order/width/editability invalid'}
 $grid.Rows[0].Cells['pick'].Value=$false;$grid.Rows[1].Cells['pick'].Value=$true

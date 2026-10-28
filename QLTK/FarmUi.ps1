@@ -6,6 +6,7 @@ $farmLevel=New-Object Windows.Forms.NumericUpDown;$farmLevel.Minimum=1;$farmLeve
 $script:farmMapCatalogue=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'MapCatalog.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $farmMaps=New-Object Windows.Forms.ComboBox;$farmMaps.DropDownStyle='DropDownList';$farmMaps.SetBounds(326,38,315,26);foreach($m in $script:farmMapCatalogue){$null=$farmMaps.Items.Add(('{0} • {1}' -f $m.Id,$(if($m.Name){$m.Name}else{'(game không có tên)'})))};$farmMaps.SelectedIndex=59;$farmPage.Controls.Add($farmMaps)
 # Tọa độ nhập tay dùng trực tiếp khi Bắt đầu; không cần acc tham chiếu.
+$null=Ui-Label 'Chọn map / làng' $farmPage 326 16 315 20
 $null=Ui-Label 'Level quái' $farmPage 245 16 80 20
 $null=Ui-Label 'ID map' $farmPage 16 132 64 20
 $farmManualMap=New-Object Windows.Forms.NumericUpDown;$farmManualMap.Minimum=0;$farmManualMap.Maximum=106;$farmManualMap.Value=74;$farmManualMap.SetBounds(16,156,80,26);$farmPage.Controls.Add($farmManualMap)
@@ -17,25 +18,27 @@ $null=Ui-Label 'Tên quái (tùy chọn)' $farmPage 328 132 180 20
 $farmManualName=New-Object Windows.Forms.TextBox;$farmManualName.Text='Dị cây';$farmManualName.SetBounds(328,156,170,26);$farmPage.Controls.Add($farmManualName)
 function Get-ManualFarmSpot {
     $map=@($script:farmMapCatalogue | Where-Object {$_.Id -eq [int]$farmManualMap.Value})
-    if($map.Count -ne 1 -or ![TGLL.NativeBackend]::IsOrdinaryFarmMap([int]$map[0].Id,[int]$map[0].Type,[string]$map[0].Name)){throw 'ID map phải là bãi quái thường, không phải làng hoặc phụ bản'}
-    $o=New-Object TGLL.FarmSpot;$o.MapId=[int]$map[0].Id;$o.MapName=[string]$map[0].Name;$o.MobId=-1;$o.MobName=$farmManualName.Text.Trim();if(!$o.MobName){$o.MobName='Bãi nhập tay'};$o.Level=[int]$farmLevel.Value;$o.X=[int]$farmManualX.Value;$o.Y=[int]$farmManualY.Value;return $o
+    if($map.Count -ne 1 -or ![TGLL.NativeBackend]::IsFarmDestinationMap([int]$map[0].Id,[int]$map[0].Type,[string]$map[0].Name)){throw 'Chọn map bãi quái hoặc làng; không dùng map phụ bản'}
+    $o=New-Object TGLL.FarmSpot;$o.MapId=[int]$map[0].Id;$o.MapName=[string]$map[0].Name;$o.MobId=-1;$o.MobName=$farmManualName.Text.Trim();if(!$o.MobName){$o.MobName='Bãi nhập tay'};$o.Level=[int]$farmLevel.Value;$o.X=[int]$farmManualX.Value;$o.Y=[int]$farmManualY.Value;$o.Zone=[int]$farmZone.Value;return $o
 }
-$saveManualFarm=Ui-NewButton 'Lưu bãi nhập' {try{$o=Get-ManualFarmSpot;$script:farmSpots=@($script:farmSpots | Where-Object {!($_.MapId -eq $o.MapId -and $_.MobId -eq -1 -and $_.Level -eq $o.Level -and $_.X -eq $o.X -and $_.Y -eq $o.Y)})+@($o);Save-FarmSpots;$farmHint.Text='Đã lưu bãi nhập: '+$o}catch{Show-Error $_.Exception.Message}};Ui-Place $saveManualFarm $farmPage 514 155 127 27
+$saveManualFarm=Ui-NewButton 'Lưu bãi nhập' {try{$o=Get-ManualFarmSpot;$script:farmSpots=@($script:farmSpots | Where-Object {!($_.MapId -eq $o.MapId -and $_.MobId -eq -1 -and $_.Level -eq $o.Level -and $_.X -eq $o.X -and $_.Y -eq $o.Y -and (Get-FarmSpotZone $_) -eq $o.Zone)})+@($o);Save-FarmSpots;$farmHint.Text='Đã lưu bãi nhập: '+$o}catch{Show-Error $_.Exception.Message}};Ui-Place $saveManualFarm $farmPage 514 155 127 27
 $script:farmStore=Join-Path $script:dataDir 'farm-spots.json';$script:farmSpots=@();if(Test-Path -LiteralPath $script:farmStore){try{$loadedFarm=Read-JsonData $script:farmStore;$script:farmSpots=@($loadedFarm)}catch{}}
 $farmGrid=New-Object Windows.Forms.DataGridView;$farmGrid.SetBounds(16,232,625,140);$farmGrid.AllowUserToAddRows=$false;$farmGrid.AllowUserToDeleteRows=$false;$farmGrid.AllowUserToResizeColumns=$false;$farmGrid.AllowUserToResizeRows=$false;$farmGrid.RowHeadersVisible=$false;$farmGrid.ReadOnly=$true;$farmGrid.SelectionMode='FullRowSelect';$farmGrid.MultiSelect=$false;$farmGrid.ScrollBars='Both';$farmGrid.Anchor='Top,Left,Right';$farmPage.Controls.Add($farmGrid)
-foreach($spec in @(@('map','ID map',52),@('name','Tên map',175),@('mob','Quái',165),@('level','Level',55),@('x','X',60),@('y','Y',60))){$c=New-Object Windows.Forms.DataGridViewTextBoxColumn;$c.Name=$spec[0];$c.HeaderText=$spec[1];$c.Width=[int]$spec[2];$c.SortMode='NotSortable';$null=$farmGrid.Columns.Add($c)}
-function Show-FarmSpots {$farmGrid.Rows.Clear();foreach($s in $script:farmSpots){$i=$farmGrid.Rows.Add([object[]]@($s.MapId,$s.MapName,$s.MobName,$s.Level,$s.X,$s.Y));$farmGrid.Rows[$i].Tag=$s}}
+foreach($spec in @(@('map','ID map',52),@('name','Tên map',175),@('mob','Quái',165),@('level','Level',55),@('x','X',60),@('y','Y',60),@('zone','Khu',55))){$c=New-Object Windows.Forms.DataGridViewTextBoxColumn;$c.Name=$spec[0];$c.HeaderText=$spec[1];$c.Width=[int]$spec[2];$c.SortMode='NotSortable';$null=$farmGrid.Columns.Add($c)}
+function Show-FarmSpots {$farmGrid.Rows.Clear();foreach($s in $script:farmSpots){$i=$farmGrid.Rows.Add([object[]]@($s.MapId,$s.MapName,$s.MobName,$s.Level,$s.X,$s.Y,$(if((Get-FarmSpotZone $s) -ge 0){Get-FarmSpotZone $s}else{'Tự chọn'})));$farmGrid.Rows[$i].Tag=$s}}
 function Save-FarmSpots {if(!$UiTest){if(!(Test-Path -LiteralPath $script:dataDir)){$null=New-Item -ItemType Directory -Path $script:dataDir};ConvertTo-Json -InputObject @($script:farmSpots) -Depth 5 | Set-Content -LiteralPath $script:farmStore -Encoding UTF8};Show-FarmSpots}
 $readFarm=Ui-NewButton 'Lưu bãi các acc đang mở' {
     try {$added=0;foreach($id in @($script:accountJobs.Values)){$j=Get-AccountJob $id;if($null -eq $j -or !$j.PSObject.Properties['FarmObserved']){continue};foreach($s in $j.FarmObserved){$script:farmSpots=@($script:farmSpots | Where-Object {!($_.MapId -eq $s.MapId -and $_.MobId -eq $s.MobId -and $_.Level -eq $s.Level)})+@($s);$added++}}
         Save-FarmSpots;$farmHint.Text=$(if($added){'Đã lưu '+$added+' bãi quái. Có thể chọn hai chế độ level để chạy.'}else{'Chưa có bãi thường: cho một acc ra bãi quái, đợi 5 giây rồi lưu lại.'})
     }catch{Show-Error $_.Exception.Message}
 };Ui-Place $readFarm $farmPage 16 71 220 27
+function Get-FarmSpotZone($spot){if($spot -and $spot.PSObject.Properties['Zone'] -and $null -ne $spot.Zone){return [int]$spot.Zone};return -1}
 function Get-FarmRunConfig {
-$spots=New-Object 'System.Collections.Generic.List[TGLL.FarmSpot]';foreach($s in $script:farmSpots){$o=New-Object TGLL.FarmSpot;$o.MapId=[int]$s.MapId;$o.MapName=[string]$s.MapName;$o.MobId=[int]$s.MobId;$o.MobName=[string]$s.MobName;$o.Level=[int]$s.Level;$o.X=[int]$s.X;$o.Y=[int]$s.Y;$spots.Add($o)}
+$spots=New-Object 'System.Collections.Generic.List[TGLL.FarmSpot]';foreach($s in $script:farmSpots){$o=New-Object TGLL.FarmSpot;$o.MapId=[int]$s.MapId;$o.MapName=[string]$s.MapName;$o.MobId=[int]$s.MobId;$o.MobName=[string]$s.MobName;$o.Level=[int]$s.Level;$o.X=[int]$s.X;$o.Y=[int]$s.Y;$o.Zone=Get-FarmSpotZone $s;$spots.Add($o)}
         $referenceId=$null;if($farmMode.SelectedIndex -eq 2){if(!$grid.Rows.Count){throw 'Không có tài khoản dòng 1'};$referenceId=[string]$grid.Rows[0].Tag.id;if(!$script:accountJobs.ContainsKey($referenceId)){throw 'Mở acc dòng 1 tại bãi muốn up trước'};$referenceSpot=[TGLL.NativeBackend]::GetReferenceFarmSpot($script:accountJobs[$referenceId]);$spots.Clear();$spots.Add($referenceSpot)}
         if($farmMode.SelectedIndex -eq 3){$spots.Clear();$spots.Add((Get-ManualFarmSpot))}
-    return [pscustomobject]@{Spots=$spots.ToArray();ReferenceId=$referenceId;CharacterMode=($farmMode.SelectedIndex -eq 0);Level=$(if($farmMode.SelectedIndex -eq 2){[int]$referenceSpot.Level}else{[int]$farmLevel.Value});Quiet=$farmQuiet.Checked}
+    if($farmZone.Value -ge 0){foreach($spot in $spots){$spot.Zone=[int]$farmZone.Value}}
+    return [pscustomobject]@{Spots=$spots.ToArray();ReferenceId=$referenceId;CharacterMode=($farmMode.SelectedIndex -eq 0);Level=$(if($farmMode.SelectedIndex -eq 2){[int]$referenceSpot.Level}else{[int]$farmLevel.Value});Quiet=($farmQuiet.Checked -and $farmZone.Value -lt 0)}
 }
 function Save-UpPreference($row,[bool]$enabled,$config=$null) {
     $row.Tag | Add-Member NoteProperty upEnabled $enabled -Force
@@ -47,7 +50,7 @@ function Restore-UpRequests {
         $key=[string]$a.id;if(!$a.upEnabled -or $script:farmUpRequests.ContainsKey($key)){continue}
         if(!$a.upConfig){$script:farmUpRequests[$key]=[pscustomobject]@{Config=$null;StartedJob='';BlockedJob='';RetryAt=[datetime]::MinValue};continue}
         try{
-            $c=$a.upConfig;$spots=@();foreach($s in $c.Spots){$o=New-Object TGLL.FarmSpot;foreach($f in @('MapId','MapName','MobId','MobName','Level','X','Y')){$o.$f=$s.$f};$spots+=,$o}
+            $c=$a.upConfig;$spots=@();foreach($s in $c.Spots){$o=New-Object TGLL.FarmSpot;foreach($f in @('MapId','MapName','MobId','MobName','Level','X','Y')){$o.$f=$s.$f};$o.Zone=Get-FarmSpotZone $s;$spots+=,$o}
             $config=[pscustomobject]@{Spots=[TGLL.FarmSpot[]]$spots;ReferenceId=$c.ReferenceId;CharacterMode=[bool]$c.CharacterMode;Level=[int]$c.Level;Quiet=[bool]$c.Quiet}
             $script:farmUpRequests[$key]=[pscustomobject]@{Config=$config;StartedJob='';BlockedJob='';RetryAt=[datetime]::MinValue}
         }catch{}
@@ -169,8 +172,22 @@ $startFarm=Ui-NewButton 'Bắt đầu đã chọn' {
     };$farmHint.Text='Đã bật '+$ok+' tài khoản.'+$(if($err.Count){"`r`n"+($err -join '; ')}else{''})}catch{Show-Error $_.Exception.Message}
 };Ui-Place $startFarm $farmPage 245 71 160 27
 $stopFarm=Ui-NewButton 'Dừng đã chọn' {foreach($row in @(Get-LaunchRows)){$script:farmUpRequests.Remove([string]$row.Tag.id);Save-UpPreference $row $false;if($script:accountJobs.ContainsKey($row.Tag.id)){[TGLL.NativeBackend]::StopMapFarm($script:accountJobs[$row.Tag.id])};Set-UpCell $row $false;Set-AccountAuto $row $false};$farmHint.Text='Đã dừng chạy bãi và tắt treo.'};Ui-Place $stopFarm $farmPage 415 71 125 27
-$deleteFarm=Ui-NewButton 'Xóa bãi' {if($farmGrid.SelectedRows.Count){$s=$farmGrid.SelectedRows[0].Tag;$script:farmSpots=@($script:farmSpots | Where-Object {!($_.MapId -eq $s.MapId -and $_.MobId -eq $s.MobId -and $_.Level -eq $s.Level -and $_.X -eq $s.X -and $_.Y -eq $s.Y)});Save-FarmSpots}};Ui-Place $deleteFarm $farmPage 548 71 93 27
+$deleteFarm=Ui-NewButton 'Xóa bãi' {if($farmGrid.SelectedRows.Count){$s=$farmGrid.SelectedRows[0].Tag;$script:farmSpots=@($script:farmSpots | Where-Object {!($_.MapId -eq $s.MapId -and $_.MobId -eq $s.MobId -and $_.Level -eq $s.Level -and $_.X -eq $s.X -and $_.Y -eq $s.Y -and (Get-FarmSpotZone $_) -eq (Get-FarmSpotZone $s))});Save-FarmSpots}};Ui-Place $deleteFarm $farmPage 548 71 93 27
 $farmQuiet=New-Object Windows.Forms.CheckBox;$farmQuiet.Text='Chọn khu ít người khi tới bãi và mỗi 5 phút';$farmQuiet.Checked=$true;$farmQuiet.SetBounds(16,102,420,25);$farmPage.Controls.Add($farmQuiet)
+$null=Ui-Label 'Khu' $farmPage 441 104 36 22
+$farmZone=New-Object Windows.Forms.NumericUpDown;$farmZone.Minimum=-1;$farmZone.Maximum=255;$farmZone.Value=-1;$farmZone.SetBounds(479,102,65,26);$farmPage.Controls.Add($farmZone)
+$null=Ui-Label '-1: theo bãi' $farmPage 549 105 95 22
+$farmZone.Add_ValueChanged({$farmQuiet.Enabled=$farmZone.Value -lt 0})
+$script:farmMapBinding=$false
+$farmMaps.Add_SelectedIndexChanged({
+ if($script:farmMapBinding -or $farmMaps.SelectedIndex -lt 0){return}
+ $script:farmMapBinding=$true;try{$farmManualMap.Value=[int]$script:farmMapCatalogue[$farmMaps.SelectedIndex].Id;$farmMode.SelectedIndex=3}finally{$script:farmMapBinding=$false}
+})
+$farmManualMap.Add_ValueChanged({
+ if($script:farmMapBinding){return};$script:farmMapBinding=$true
+ try{for($n=0;$n -lt $script:farmMapCatalogue.Count;$n++){if([int]$script:farmMapCatalogue[$n].Id -eq [int]$farmManualMap.Value){$farmMaps.SelectedIndex=$n;break}}}finally{$script:farmMapBinding=$false}
+})
+$script:farmMapBinding=$true;try{for($n=0;$n -lt $script:farmMapCatalogue.Count;$n++){if([int]$script:farmMapCatalogue[$n].Id -eq [int]$farmManualMap.Value){$farmMaps.SelectedIndex=$n;break}}}finally{$script:farmMapBinding=$false}
 $dailyPriority=New-Object Windows.Forms.CheckBox;$dailyPriority.Text='Lặp lại sau 00:00: nhận chìa → địa cung → cấm thuật → nhiệm vụ → Sơn Cáp → Up';$dailyPriority.SetBounds(16,188,625,27);$dailyPriority.Checked=if($script:settings.ContainsKey('dailyPriority')){[bool]$script:settings.dailyPriority}else{$true};$farmPage.Controls.Add($dailyPriority)
 function Sync-DailyPriorityPreferences {
     if($script:autoAllRun -and $script:autoAllRun.active){return}
@@ -180,7 +197,7 @@ function Sync-DailyPriorityPreferences {
     [TGLL.NativeBackend]::PulseDailyPriority([datetime]::UtcNow)
 }
 $dailyPriority.Add_CheckedChanged({$script:settings.dailyPriority=$dailyPriority.Checked;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings};Sync-DailyPriorityPreferences})
-$farmHint=Ui-Label 'Nhập map, X/Y và level quái rồi Bắt đầu đã chọn. Có thể Lưu bãi nhập để dùng lại.' $farmPage 16 378 625 50
+$farmHint=Ui-Label 'Chọn map/làng, X/Y và khu rồi Bắt đầu đã chọn. Khu -1 dùng khu của bãi đã lưu hoặc chọn khu ít người; khu từ 0 trở lên là khu cố định.' $farmPage 16 378 625 50
 function Update-FarmUi {if(!$grid.SelectedRows.Count){return};$a=$grid.SelectedRows[0].Tag;if($null -eq $a -or !$a.id){return};if(!$script:accountJobs.ContainsKey($a.id)){return};$j=Get-AccountJob $script:accountJobs[$a.id];if($j -and $j.PSObject.Properties['FarmStatus']){$farmHint.Text=$a.username+' • Level nhân vật '+$j.CharacterLevel+"`r`n"+$j.FarmStatus}}
 Show-FarmSpots
 $grid.Add_SelectionChanged({Update-FarmUi})

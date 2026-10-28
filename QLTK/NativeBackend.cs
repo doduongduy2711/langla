@@ -2278,6 +2278,7 @@ namespace TGLL {
         static void PumpZones(Remote r,long game,long data,NativeJob j){
             if(j.BeastQuestEnabled){PumpBeastCombatZones(r,game,data,j);return;}
             if(j.SonCapEnabled&&j.SonCapStage>=0){j.ZoneSyncActive=false;return;}
+            if(j.FarmEnabled&&j.FarmTarget!=null&&j.FarmTarget.Zone>=0){if(j.FarmZoneWaiting)PumpFarmZones(r,game,data,j);return;}
             if(j.FarmEnabled&&j.FarmQuietZone&&j.FarmZoneWaiting){PumpFarmZones(r,game,data,j);return;}
             if(j.QuestEnabled){j.ZoneSyncActive=false;return;}
             try{if(PumpLeaderZoneSync(r,data,j,DateTime.UtcNow))return;}catch(Exception e){j.ZoneSyncActive=true;j.ZoneStatus="Chưa đồng bộ khu trưởng nhóm: "+e.Message;return;}
@@ -2973,13 +2974,22 @@ namespace TGLL {
 
 namespace TGLL {
     public sealed class FarmSpot {
+        public int Zone {get;set;} public FarmSpot(){Zone=-1;}
         public int MapId {get;set;} public string MapName {get;set;} public int MobId {get;set;} public string MobName {get;set;} public int Level {get;set;} public int X {get;set;} public int Y {get;set;}
-        public override string ToString(){return MapId+" • "+MapName+" • "+MobName+" cấp "+Level;}
+        public override string ToString(){return MapId+" • "+MapName+(Zone>=0?" • khu "+Zone:"")+" • "+MobName+" cấp "+Level;}
     }
     public static partial class NativeBackend {
         // Chỉ bãi thường được dùng; loại trừ làng, phụ bản và map không có tên.
         internal static bool OrdinaryFarmMap(int id,int kind,string name){return kind==0&&!String.IsNullOrWhiteSpace(name)&&((id>=61&&id<=66)||(id>=70&&id<=83)||(id>=86&&id<=88)||(id>=103&&id<=106));}
         public static bool IsOrdinaryFarmMap(int id,int kind,string name){return OrdinaryFarmMap(id,kind,name);}
+        public static bool IsFarmDestinationMap(int id,int kind,string name){return OrdinaryFarmMap(id,kind,name)||IsActivityVillage(id)&&(kind==0||kind==2)&&!String.IsNullOrWhiteSpace(name);}
+        internal static bool ValidFarmDestination(FarmSpot s){return s!=null&&IsFarmDestinationMap(s.MapId,0,s.MapName)&&s.X>=0&&s.Y>=0&&s.X<=32767&&s.Y<=32767&&s.Level>=1&&s.Level<=500&&s.Zone>=-1&&s.Zone<=255;}
+        static string FarmVillageName(int id){switch(id){case 59:return "Làng Cát";case 60:return "Làng Sương Mù";case 68:return "Làng Cỏ";case 69:return "Làng Mây";case 75:return "Làng Lá";case 85:return "Làng Đá";case 102:return "Làng Mưa";default:return "";}}
+        internal static bool FarmNeedsZone(FarmSpot s,bool quiet){return quiet||s!=null&&s.Zone>=0;}
+        internal static bool FarmZoneReady(NativeJob j,FarmSpot target,int map,DateTime now){return target!=null&&j.ZonePrepared&&j.ZonePlanMap==map&&j.MapId==map&&j.ZoneId==j.PlannedZone&&(target.Zone<0||j.ZoneId==target.Zone)&&j.ZoneReadAt!=DateTime.MinValue&&(now-j.ZoneReadAt).TotalSeconds>=0&&(now-j.ZoneReadAt).TotalSeconds<=4;}
+        internal static int SelectFarmZone(int[] ids,int[] counts,int current,int requested){if(requested<-1||requested>255||ids==null||counts==null||ids.Length!=counts.Length)return -1;return requested>=0?(Array.IndexOf(ids,requested)>=0?requested:-1):ChooseQuietZone(ids,counts,current);}
+        internal static bool ConfirmFixedFarmZone(NativeJob j,DateTime now){FarmSpot target=j.FarmTarget;if(target==null||target.Zone<0||j.MapId!=target.MapId||j.ZoneId!=target.Zone||j.ZoneReadAt==DateTime.MinValue||(now-j.ZoneReadAt).TotalSeconds<0||(now-j.ZoneReadAt).TotalSeconds>4)return false;j.ZonePlanMap=j.MapId;j.PlannedZone=target.Zone;j.ZonePrepared=true;j.ZoneSyncActive=false;j.ZoneStatus="Đã tới khu chỉ định: "+target.Zone;return true;}
+        internal static bool BeginFixedFarmZoneRecheck(NativeJob j,DateTime now){if(!j.FarmEnabled||!j.FarmArrived||j.FarmZoneWaiting||j.FarmTarget==null||j.FarmTarget.Zone<0||j.MapId!=j.FarmTarget.MapId||j.ZoneId<0||j.ZoneId==j.FarmTarget.Zone||(now-j.ZoneReadAt).TotalSeconds<0||(now-j.ZoneReadAt).TotalSeconds>4||j.CloseRequested||j.CancelRequested||j.CurseActive)return false;j.FarmZoneWaiting=true;j.FarmRouteAt=now;j.ZonePrepared=false;j.ZonePlanMap=-1;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;j.ZonePollAt=DateTime.MinValue;j.FarmStatus="Quay lại khu chỉ định "+j.FarmTarget.Zone;return true;}
         internal static FarmSpot SelectFarmSpot(FarmSpot[] spots,int level,bool characterMode){
             FarmSpot best=null;foreach(FarmSpot s in spots??new FarmSpot[0]){if(s==null||s.Level<1||s.Level>500||s.MapId<0||s.X<0||s.Y<0)continue;if(characterMode&&s.Level>level)continue;
                 int score=characterMode?-s.Level:Math.Abs(s.Level-level),prev=best==null?Int32.MaxValue:characterMode?-best.Level:Math.Abs(best.Level-level);
@@ -2990,8 +3000,8 @@ namespace TGLL {
         public static void StartMapFarm(string id,bool characterMode,int level,FarmSpot[] spots,bool quietZone=false){
             NativeJob j=Get(id);if(j==null||!j.TrainReady||j.CloseRequested||j.CancelRequested)throw new Exception("Mở tài khoản và chờ nhân vật vào game trước.");
             if(FarmConflict(j))throw new Exception("Tắt auto nhận chìa, địa cung, cấm thuật, nhiệm vụ và gom đồ trước khi chạy bãi.");
-            if(level<1||level>500)throw new Exception("Level phải từ 1 đến 500.");FarmSpot[] copied=(spots??new FarmSpot[0]).Where(delegate(FarmSpot s){return s!=null;}).Select(delegate(FarmSpot s){return new FarmSpot{MapId=s.MapId,MapName=s.MapName,MobId=s.MobId,MobName=s.MobName,Level=s.Level,X=s.X,Y=s.Y};}).ToArray();
-            if(copied.Any(delegate(FarmSpot s){return !OrdinaryFarmMap(s.MapId,0,s.MapName)||s.X<0||s.Y<0||s.X>32767||s.Y>32767||s.Level<1||s.Level>500;}))throw new Exception("Bãi không hợp lệ; chỉ dùng map quái thường và tọa độ hợp lệ.");
+            if(level<1||level>500)throw new Exception("Level phải từ 1 đến 500.");FarmSpot[] copied=(spots??new FarmSpot[0]).Where(delegate(FarmSpot s){return s!=null;}).Select(delegate(FarmSpot s){return new FarmSpot{MapId=s.MapId,MapName=s.MapName,MobId=s.MobId,MobName=s.MobName,Level=s.Level,X=s.X,Y=s.Y,Zone=s.Zone};}).ToArray();
+            if(copied.Any(delegate(FarmSpot s){return !ValidFarmDestination(s);}))throw new Exception("Chọn map bãi quái hoặc làng, tọa độ hợp lệ và khu từ -1 đến 255.");
             if(SelectFarmSpot(copied,characterMode?j.CharacterLevel:level,characterMode)==null)throw new Exception("Chưa có bãi phù hợp. Đọc và lưu bãi quái thường trước.");
             if(j.FarmEnabled)throw new Exception("Đang chạy bãi; dừng trước khi đổi cấu hình.");j.FarmQuietZone=quietZone;j.FarmZoneWaiting=false;j.ZonePrepared=false;j.ZonePlanMap=-1;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;j.FarmChoices=copied;j.FarmCharacterMode=characterMode;j.FarmLevel=level;j.FarmTarget=null;j.FarmZoneCheckAt=DateTime.MinValue;j.FarmRouteSent=false;j.FarmArrived=false;j.FarmStableAt=DateTime.MinValue;j.FarmStopPending=false;j.GameAutoManaged=true;j.GameAutoWanted=true;j.TrainEnabled=false;j.FarmStatus="Đang chọn bãi";j.FarmEnabled=true;j.UpRequested=true;Log(j,"farm_start",",\"character_mode\":"+(characterMode?"true":"false")+",\"level\":"+level);
         }
@@ -3000,16 +3010,17 @@ namespace TGLL {
             NativeJob j=Get(id);if(j==null||!j.TrainReady||j.CloseRequested||j.CancelRequested)throw new Exception("Mở acc dòng 1 và chờ vào bãi quái trước.");
             DateTime at=j.FarmPositionReadAt;int map=j.FarmPositionMap,x=j.FarmPositionX,y=j.FarmPositionY;
             if(at==DateTime.MinValue||(DateTime.UtcNow-at).TotalSeconds>10)throw new Exception("Chờ cập nhật tọa độ acc dòng 1 rồi thử lại.");
+            if(IsActivityVillage(map)){if(at!=j.FarmPositionReadAt)throw new Exception("Vị trí acc dòng 1 đang cập nhật; thử lại.");return new FarmSpot{MapId=map,MapName=FarmVillageName(map),MobId=-1,MobName="Vị trí trong làng",Level=Math.Max(1,Math.Min(500,j.CharacterLevel)),X=x,Y=y,Zone=j.MapId==map&&j.ZoneId>=0&&(DateTime.UtcNow-j.ZoneReadAt).TotalSeconds<=4?j.ZoneId:-1};}
             FarmSpot nearest=(j.FarmObserved??new FarmSpot[0]).Where(delegate(FarmSpot f){return f.MapId==map&&OrdinaryFarmMap(f.MapId,0,f.MapName);}).OrderBy(delegate(FarmSpot f){return Math.Abs(f.X-x)+Math.Abs(f.Y-y);}).FirstOrDefault();
             if(nearest==null)throw new Exception("Acc dòng 1 chưa ở bãi quái thường; không lấy tọa độ làng hoặc phụ bản.");
             if(at!=j.FarmPositionReadAt)throw new Exception("Vị trí acc dòng 1 đang cập nhật; thử lại.");
-            return new FarmSpot{MapId=map,MapName=nearest.MapName,MobId=nearest.MobId,MobName=nearest.MobName,Level=nearest.Level,X=x,Y=y};
+            return new FarmSpot{MapId=map,MapName=nearest.MapName,MobId=nearest.MobId,MobName=nearest.MobName,Level=nearest.Level,X=x,Y=y,Zone=j.MapId==map&&j.ZoneId>=0&&(DateTime.UtcNow-j.ZoneReadAt).TotalSeconds<=4?j.ZoneId:-1};
         }
         public static void StopMapFarm(string id){NativeJob j=Get(id);if(j!=null){j.UpRequested=false;if(j.DailyManaged)CancelDailyPriority(j);StopFarm(j);}}
         static void StopFarm(NativeJob j){j.TrainEnabled=false;j.FarmZoneWaiting=false;j.FarmEnabled=false;j.FarmArrived=false;j.FarmStopPending=true;j.GameAutoWanted=false;j.FarmStatus="Đã dừng chạy bãi";}
         // Đọc lại số người mỗi 5 phút; giữ treo cả khi đọc và chuyển khu trên cùng bãi.
         internal static bool BeginFarmZoneRecheck(NativeJob j,DateTime now){
-            if(!j.FarmEnabled||!j.FarmArrived||!j.FarmQuietZone||j.FarmZoneWaiting||j.CloseRequested||j.CancelRequested||CurseDisplayStatus(j).Length>0)return false;
+            if(!j.FarmEnabled||!j.FarmArrived||!j.FarmQuietZone||j.FarmTarget!=null&&j.FarmTarget.Zone>=0||j.FarmZoneWaiting||j.CloseRequested||j.CancelRequested||CurseDisplayStatus(j).Length>0)return false;
             if(j.FarmZoneCheckAt==DateTime.MinValue){j.FarmZoneCheckAt=now;return false;}
             if((now-j.FarmZoneCheckAt).TotalMinutes<5)return false;
             j.FarmZoneCheckAt=now;j.FarmZoneWaiting=true;j.FarmRouteAt=now;j.ZonePrepared=false;j.ZonePlanMap=-1;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;j.ZonePollAt=DateTime.MinValue;j.FarmStatus="Kiểm tra khu ít người (mỗi 5 phút)";
@@ -3019,6 +3030,7 @@ namespace TGLL {
             DateTime now=DateTime.UtcNow;if((now-j.ZonePollAt).TotalMilliseconds<750)return;j.ZonePollAt=now;
             try {
                 if(j.FarmTarget==null||j.MapId!=j.FarmTarget.MapId||j.ZoneId<0||(now-j.ZoneReadAt).TotalSeconds>4){j.ZoneSyncActive=true;j.ZoneStatus="Chờ dữ liệu khu của bãi";return;}
+                if(ConfirmFixedFarmZone(j,now))return;
                 int state=FarmI(r,data);if(state==1||state==2||state==3){j.ZoneSyncActive=true;return;}
                 if(j.ZonePlanMap!=j.MapId){j.ZonePlanMap=j.MapId;j.ZonePrepared=false;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;}
                 if(j.PlannedZone<0){
@@ -3027,18 +3039,18 @@ namespace TGLL {
                         long array=r.Ptr(popup+0xe8);int length=array==0?0:FarmI(r,array+24);if(length<1||length>256)throw new Exception("zone_list_invalid");int[] ids=new int[length],counts=new int[length];
                         for(int n=0;n<length;n++){long item=r.Ptr(array+32+n*8);if(item==0)throw new Exception("zone_list_changed");ids[n]=n;counts[n]=FarmI(r,item+16);}
                         if(r.Ptr(popup+0xe8)!=array||ZonePopup(r,game)!=popup)throw new Exception("zone_list_changed");
-                        j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new Exception("zone_list_invalid");j.ZoneListWaiting=false;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;Log(j,"farm_quiet_zone",",\"map\":"+j.MapId+",\"zone\":"+j.PlannedZone);
+                        j.PlannedZone=SelectFarmZone(ids,counts,j.ZoneId,j.FarmTarget.Zone);if(j.PlannedZone<0)throw new Exception("farm_zone_unavailable");j.ZoneListWaiting=false;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;Log(j,j.FarmTarget.Zone>=0?"farm_fixed_zone":"farm_quiet_zone",",\"map\":"+j.MapId+",\"zone\":"+j.PlannedZone);
                     }else if((now-j.ZoneActionAt).TotalSeconds<10)return;else j.ZoneListWaiting=false;}
                     if(j.PlannedZone<0){if(j.ZoneAttempts>=3){j.ZoneStatus="Không đọc được danh sách khu sau 3 lần";return;}QueueZone(r,data,j,1,-1);j.ZoneListWaiting=true;return;}
                 }
-                if(j.ZoneId==j.PlannedZone&&(j.ZonePrepared||state==4&&j.ZoneAttempts>0)){j.ZonePrepared=true;j.ZoneSyncActive=false;j.ZoneStatus="Đã chọn khu ít người: "+j.ZoneId;return;}
+                if(j.ZoneId==j.PlannedZone&&(j.ZonePrepared||state==4&&j.ZoneAttempts>0)){j.ZonePrepared=true;j.ZoneSyncActive=false;j.ZoneStatus=(j.FarmTarget.Zone>=0?"Đã tới khu chỉ định: ":"Đã chọn khu ít người: ")+j.ZoneId;return;}
                 j.ZoneSyncActive=true;j.ZoneStatus="Chuyển tới khu "+j.PlannedZone+"; chờ xác nhận";
                 if((now-j.ZoneActionAt).TotalSeconds<8)return;if(j.ZoneAttempts>=3){j.ZoneStatus="Chưa đổi được khu sau 3 lần";return;}QueueZone(r,data,j,2,j.PlannedZone);
-            }catch{j.ZoneSyncActive=true;j.ZoneStatus="Chưa đọc được danh sách khu";}
+            }catch(Exception e){j.ZoneSyncActive=true;j.ZoneStatus=e.Message=="farm_zone_unavailable"?"Khu chỉ định không có trong map này":"Chưa đọc được danh sách khu";}
         }
 
         static int FarmI(Remote r,long p){return BitConverter.ToInt32(r.Read(p,4),0);}
-        static bool SameFarmTarget(FarmSpot a,FarmSpot b){return a!=null&&b!=null&&a.MapId==b.MapId&&a.MobId==b.MobId&&a.Level==b.Level&&a.X==b.X&&a.Y==b.Y;}
+        static bool SameFarmTarget(FarmSpot a,FarmSpot b){return a!=null&&b!=null&&a.MapId==b.MapId&&a.MobId==b.MobId&&a.Level==b.Level&&a.X==b.X&&a.Y==b.Y&&a.Zone==b.Zone;}
         internal static bool HandleThiQuyFarmPause(Remote r,long data,NativeJob j){
             if(j.ThiQuyCombatActive&&j.FarmEnabled){
                 if(!j.FarmArrived&&!j.ThiQuyFarmPaused&&FarmI(r,data)==0){
@@ -3074,13 +3086,13 @@ namespace TGLL {
                 FarmSpot target=SelectFarmSpot(j.FarmChoices,j.FarmCharacterMode?lvl:j.FarmLevel,j.FarmCharacterMode);if(target==null){StopFarm(j);j.FarmStatus="Không có bãi phù hợp với level "+lvl;return;}
                 if(!SameFarmTarget(target,j.FarmTarget)){j.FarmTarget=target;j.FarmZoneCheckAt=DateTime.MinValue;j.FarmArrived=false;j.FarmRouteSent=false;j.FarmStableAt=DateTime.MinValue;j.FarmZoneWaiting=false;j.ZonePrepared=false;j.ZonePlanMap=-1;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;}
                 if(j.FarmZoneWaiting){
-                    if(j.ZonePrepared&&j.ZonePlanMap==map&&j.ZoneId==j.PlannedZone){j.FarmZoneWaiting=false;j.FarmZoneCheckAt=now;j.FarmRouteSent=Math.Abs(BitConverter.ToInt16(r.Read(player+16,2),0)-target.X)<=80&&Math.Abs(BitConverter.ToInt16(r.Read(player+18,2),0)-target.Y)<=80;j.FarmStableAt=DateTime.MinValue;}
-                    else{j.FarmStatus="Chọn khu ít người • "+j.ZoneStatus;if((now-j.FarmRouteAt).TotalSeconds>180){StopFarm(j);j.FarmStatus="Dừng: chưa chọn được khu ít người; kiểm tra thông báo game";}return;}
+                    if(FarmZoneReady(j,target,map,now)){j.FarmZoneWaiting=false;j.FarmZoneCheckAt=now;j.FarmRouteSent=Math.Abs(BitConverter.ToInt16(r.Read(player+16,2),0)-target.X)<=80&&Math.Abs(BitConverter.ToInt16(r.Read(player+18,2),0)-target.Y)<=80;j.FarmStableAt=DateTime.MinValue;}
+                    else{j.FarmStatus=(target.Zone>=0?"Chọn khu "+target.Zone:"Chọn khu ít người")+" • "+j.ZoneStatus;if((now-j.FarmRouteAt).TotalSeconds>180){StopFarm(j);j.FarmStatus="Dừng: chưa tới được khu đã chọn; kiểm tra thông báo game";}return;}
                 }
-                if(j.FarmArrived){if(map!=target.MapId){StopFarm(j);j.FarmStatus="Đã rời bãi; dừng để tránh xung đột";}else if(!BeginFarmZoneRecheck(j,now))j.FarmStatus="Đang treo • "+target;return;}
+                if(j.FarmArrived){if(map!=target.MapId){StopFarm(j);j.FarmStatus="Đã rời bãi; dừng để tránh xung đột";}else if(!BeginFixedFarmZoneRecheck(j,now)&&!BeginFarmZoneRecheck(j,now))j.FarmStatus="Đang treo • "+target;return;}
                 if(!j.FarmRouteSent){if(FarmI(r,data)!=0)return;r.Write(data+96,BitConverter.GetBytes(target.MapId));r.Write(data+100,BitConverter.GetBytes(target.X));r.Write(data+104,BitConverter.GetBytes(target.Y));r.Write(data+4,BitConverter.GetBytes(1));r.Write(data,BitConverter.GetBytes(8));j.FarmRouteAt=now;j.FarmRouteSent=true;Log(j,"farm_route",",\"map\":"+target.MapId+",\"level\":"+target.Level);}
                 int x=BitConverter.ToInt16(r.Read(player+16,2),0),y=BitConverter.ToInt16(r.Read(player+18,2),0);bool arrived=map==target.MapId&&Math.Abs(x-target.X)<=80&&Math.Abs(y-target.Y)<=80&&r.Ptr(fc+0x310)==0&&FarmI(r,data)==0;
-                if(arrived&&j.FarmQuietZone&&(!j.ZonePrepared||j.ZonePlanMap!=map||j.ZoneId!=j.PlannedZone)){j.FarmZoneWaiting=true;j.FarmStableAt=DateTime.MinValue;j.FarmStatus="Đã tới bãi; đang chọn khu ít người";return;}
+                if(arrived&&FarmNeedsZone(target,j.FarmQuietZone)&&!FarmZoneReady(j,target,map,now)){j.FarmZoneWaiting=true;j.FarmStableAt=DateTime.MinValue;j.FarmStatus=target.Zone>=0?"Đã tới map; đang chuyển khu "+target.Zone:"Đã tới bãi; đang chọn khu ít người";return;}
                 if(arrived){if(j.FarmStableAt==DateTime.MinValue)j.FarmStableAt=now;if((now-j.FarmStableAt).TotalSeconds>=2){j.FarmArrived=true;j.FarmZoneCheckAt=now;j.FarmStatus="Đã tới bãi; bật treo • "+target;Log(j,"farm_arrived",",\"map\":"+map);}}else j.FarmStableAt=DateTime.MinValue;
                 if((now-j.FarmRouteAt).TotalSeconds>180&&!j.FarmArrived){StopFarm(j);j.FarmStatus="Dừng: chưa tới bãi sau 3 phút; kiểm tra đường đi";return;}
                 if(!j.FarmArrived)j.FarmStatus="Đang chạy tới "+target;
@@ -3198,7 +3210,7 @@ namespace TGLL {
                     j.DailyLastDate=day;
                     if(!j.DailyPlan.Any(delegate(bool b){return b;}))continue;
                     if(j.FarmTarget==null){j.DailyStatus="Chưa có bãi train để quay lại";continue;}
-                    FarmSpot s=j.FarmTarget;j.DailyReturnSpot=new FarmSpot{MapId=s.MapId,MapName=s.MapName,MobId=s.MobId,MobName=s.MobName,Level=s.Level,X=s.X,Y=s.Y};j.DailyReturnQuiet=j.FarmQuietZone;
+                    FarmSpot s=j.FarmTarget;j.DailyReturnSpot=new FarmSpot{MapId=s.MapId,MapName=s.MapName,MobId=s.MobId,MobName=s.MobName,Level=s.Level,X=s.X,Y=s.Y,Zone=s.Zone};j.DailyReturnQuiet=j.FarmQuietZone;
                     j.DailyRunPlan=(bool[])j.DailyPlan.Clone();j.DailyStage=0;j.DailyExecuting=false;j.DailyActive=true;StopFarm(j);j.DailyStatus="Qua 00:00 — tạm dừng Up";Log(j,"daily_begin",",\"date\":"+Quote(day.ToString("yyyy-MM-dd")));continue;
                 }
                 if(j.FarmStopPending||j.ReceiveFlowActive||j.TravelActive)continue;
@@ -3925,8 +3937,8 @@ namespace TGLL {
   public static bool UpSessionReady(NativeJob j){return j!=null&&j.TrainReady&&j.GameSettingsReady&&!j.CloseRequested&&!j.CancelRequested&&Array.IndexOf(new[]{"queued","starting","typing","submitted","selecting_character","character_submitted","waiting_map","waiting_popup","confirming_popup","closed","failed","cancelled"},j.State)<0;}
   public static void PrepareUpFarmDestination(string id,bool characterMode,int level,FarmSpot[] spots,bool quiet){
    NativeJob j=Get(id);if(j==null||!j.TrainReady)throw new Exception("Chờ nhân vật vào game.");
-   FarmSpot[] copied=(spots??new FarmSpot[0]).Select(s=>new FarmSpot{MapId=s.MapId,MapName=s.MapName,MobId=s.MobId,MobName=s.MobName,Level=s.Level,X=s.X,Y=s.Y}).ToArray();
-   if(level<1||level>500||copied.Length==0||copied.Any(s=>!OrdinaryFarmMap(s.MapId,0,s.MapName)||s.X<0||s.Y<0||s.X>32767||s.Y>32767||s.Level<1||s.Level>500)||SelectFarmSpot(copied,characterMode?j.CharacterLevel:level,characterMode)==null)throw new Exception("Chưa có bãi Up phù hợp.");
+   FarmSpot[] copied=(spots??new FarmSpot[0]).Select(s=>new FarmSpot{MapId=s.MapId,MapName=s.MapName,MobId=s.MobId,MobName=s.MobName,Level=s.Level,X=s.X,Y=s.Y,Zone=s.Zone}).ToArray();
+   if(level<1||level>500||copied.Length==0||copied.Any(s=>!ValidFarmDestination(s))||SelectFarmSpot(copied,characterMode?j.CharacterLevel:level,characterMode)==null)throw new Exception("Chưa có bãi Up phù hợp.");
    j.FarmChoices=copied;j.FarmCharacterMode=characterMode;j.FarmLevel=level;j.FarmQuietZone=quiet;
   }
   public static void ConfigureUpActivities(string id,bool repeatDaily,bool key,bool dungeon,bool izanami,bool quest,bool soncap){
@@ -4009,7 +4021,7 @@ namespace TGLL {
     if(j.ReceiveFlowActive||j.TravelActive||j.FarmStopPending)return;
     FarmSpot spot=j.FarmTarget??SelectFarmSpot(j.FarmChoices,j.FarmCharacterMode?j.CharacterLevel:j.FarmLevel,j.FarmCharacterMode);
     if(spot==null){j.DailyStatus="Up đang chờ cấu hình bãi để quay lại";return;}
-    j.DailyReturnSpot=new FarmSpot{MapId=spot.MapId,MapName=spot.MapName,MobId=spot.MobId,MobName=spot.MobName,Level=spot.Level,X=spot.X,Y=spot.Y};j.DailyReturnQuiet=j.FarmQuietZone;
+    j.DailyReturnSpot=new FarmSpot{MapId=spot.MapId,MapName=spot.MapName,MobId=spot.MobId,MobName=spot.MobName,Level=spot.Level,X=spot.X,Y=spot.Y,Zone=spot.Zone};j.DailyReturnQuiet=j.FarmQuietZone;
     Log(j,"up_activity_begin",",\"plan\":"+Quote(String.Join(",",pending.Select(b=>b?"1":"0"))));j.DailyRunPlan=pending;j.DailyStage=0;j.DailyExecuting=false;j.DailyActive=true;StopFarm(j);j.DailyStatus="Tạm dừng Up — chuẩn bị hoạt động đã chọn";return;
    }
    if(j.FarmStopPending||j.ReceiveFlowActive||j.TravelActive||j.SonCapStopPending)return;
@@ -4541,7 +4553,7 @@ namespace TGLL {
   internal const long CuongThiStopHp=10000000;
   internal static bool IsCuongThiName(string name){string text=System.Text.RegularExpressions.Regex.Replace((name??"").Normalize(NormalizationForm.FormC).Trim(),"\\s+"," ");return text.Equals("Cương thi",StringComparison.OrdinalIgnoreCase)||text.StartsWith("Cương thi ",StringComparison.OrdinalIgnoreCase);}
   internal static bool CuongThiControlsAuto(NativeJob j){return j!=null&&j.CuongThiEnabled&&!j.QuestEnabled&&!j.SonCapEnabled&&!j.IzanamiEnabled&&!j.DungeonHighEnabled&&!j.DailyActive;}
-  internal static bool CuongThiWantsAuto(NativeJob j,DateTime now){CuongThiSnapshot s=j==null?null:j.CuongThi;return CuongThiControlsAuto(j)&&j.Auto&&UpSessionReady(j)&&s!=null&&s.Found&&s.Hp>=CuongThiStopHp&&(now-s.ReadAt).TotalMilliseconds>=0&&(now-s.ReadAt).TotalMilliseconds<=1500&&!j.CurseActive&&!j.ReceiveFlowActive&&!j.ReceiveKeyRequested&&!j.ReplayRequested&&!j.ReconnectRequested&&!j.QuestPauseAuto&&!j.TravelActive&&!j.ZoneSyncActive&&!j.FollowActive&&!j.CloakEnabled&&!j.ChestEnabled&&!j.MailEnabled&&!j.MailBusy&&!j.MailQueueOnly&&!j.CloakQueueOnly;}
+  internal static bool CuongThiWantsAuto(NativeJob j,DateTime now){CuongThiSnapshot s=j==null?null:j.CuongThi;return CuongThiControlsAuto(j)&&j.Auto&&UpSessionReady(j)&&(!j.FarmEnabled||j.FarmArrived)&&s!=null&&s.Found&&s.Hp>=CuongThiStopHp&&(now-s.ReadAt).TotalMilliseconds>=0&&(now-s.ReadAt).TotalMilliseconds<=1500&&!j.CurseActive&&!j.ReceiveFlowActive&&!j.ReceiveKeyRequested&&!j.ReplayRequested&&!j.ReconnectRequested&&!j.QuestPauseAuto&&!j.TravelActive&&!j.ZoneSyncActive&&!j.FollowActive&&!j.CloakEnabled&&!j.ChestEnabled&&!j.MailEnabled&&!j.MailBusy&&!j.MailQueueOnly&&!j.CloakQueueOnly;}
   public static void StartCuongThi(string id){NativeJob j=Get(id);if(j==null||!j.Auto||!UpSessionReady(j))throw new Exception("Chờ nhân vật vào game trước khi bật Auto Cương Thi.");j.CuongThi=null;j.CuongThiPollAt=DateTime.MinValue;j.CuongThiDiagnostic="";j.TrainEnabled=false;j.GameAutoManaged=true;j.CuongThiStatus="Đang đọc Cương Thi trong map";j.CuongThiEnabled=true;Log(j,"cuong_thi_start",",\"stop_below_hp\":10000000");}
   public static void StopCuongThi(string id){NativeJob j=Get(id);if(j==null)return;j.CuongThiEnabled=false;j.CuongThi=null;j.CuongThiStatus="Tắt";Log(j,"cuong_thi_stop","");}
   internal static CuongThiSnapshot ReadCuongThi(Remote r,long game,DateTime now){
