@@ -59,3 +59,10 @@ try {
 }finally {
     if($bulkDialog){$bulkDialog.Dispose()};$script:accounts=$bulkSavedAccounts;Set-Item Function:\Save-Accounts $bulkSaveFn;Set-Item Function:\Refresh-Grid $bulkRefreshFn
 }
+
+$httpTest=Normalize-Proxy 'http://127.0.0.1:8080:user:pass:colon'
+if($httpTest.type -ne 'http' -or $httpTest.password -ne 'pass:colon' -or (Normalize-Proxy '127.0.0.1:8080').type -ne 'http'){throw 'HTTP default/prefix normalization failed'}
+if((Normalize-Proxy 'socks5://127.0.0.1:1080').type -ne 'socks5'){throw 'Explicit SOCKS compatibility failed'}
+$httpStored=Protect-Proxy $httpTest;$httpRead=Read-Proxy ([pscustomobject]@{proxy=$httpStored})
+if($httpStored.type -ne 'http' -or $httpRead.type -ne 'http' -or $httpRead.password -ne $httpTest.password -or (Proxy-Summary $httpRead).type -ne 'http'){throw 'HTTP type lost in storage or summary'}
+Write-Output 'PASS: HTTP default and scheme, colon password, protocol persistence/readback, summary and explicit SOCKS compatibility.'

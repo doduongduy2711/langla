@@ -177,7 +177,7 @@ $grid.Add_CellContentClick({param($sender,$e) if($e.RowIndex -ge 0 -and $e.Colum
 $grid.Add_CellContentClick({param($sender,$e) if($e.RowIndex -ge 0 -and $e.ColumnIndex -ge 0 -and $grid.Columns[$e.ColumnIndex].Name -eq 'visibility'){Toggle-AccountVisibility $grid.Rows[$e.RowIndex]}})
 $grid.Columns['username'].HeaderText='Tài khoản';$grid.Columns['username'].FillWeight=125
 $grid.Columns['password'].HeaderText='Mật khẩu';$grid.Columns['password'].FillWeight=110
-$grid.Columns['proxy'].HeaderText='Proxy SOCKS5';$grid.Columns['proxy'].FillWeight=160
+$grid.Columns['proxy'].HeaderText='Proxy HTTP';$grid.Columns['proxy'].FillWeight=160
 $grid.Columns['status'].FillWeight=215;$openCol.HeaderText='Mở';$openCol.Text='OPEN';$openCol.FillWeight=65
 # Keep the reference column widths and order independent of window size.
 $grid.AutoSizeColumnsMode='None';$grid.AllowUserToResizeColumns=$false;$grid.AllowUserToResizeRows=$false;$grid.AllowUserToOrderColumns=$false
@@ -205,7 +205,7 @@ $flowGroup=Ui-Group 'Khi mở game' $tabs.TabPages[1];$flowGroup.SetBounds(14,15
 $null=Ui-Label "1. Truyền username và password trực tiếp vào game.`r`n2. Chọn nhân vật đầu tiên trong danh sách.`r`n3. Vào bản đồ, đợi 5 giây; có popup Xác nhận thì xử lý.`r`n4. Nếu bật Nhận chìa: tìm Raikage trên bản đồ hiện tại và nhận chìa." $flowGroup 14 22 610 86
 $null=Ui-Label 'Các bước tự động không cần chuột hay giữ cửa sổ phía trước.' $tabs.TabPages[1] 16 160 630 32
 $proxyGroup=Ui-Group 'Proxy theo từng tài khoản' $tabs.TabPages[2];$proxyGroup.SetBounds(14,15,650,160);$proxyGroup.Anchor='Top,Left,Right'
-$null=Ui-Label "Dán proxy trong cửa sổ Thêm / Sửa để tự tách host, port và thông tin xác thực.`r`nHỗ trợ SOCKS5 có hoặc không có username/password.`r`nĐể trống proxy nếu muốn dùng kết nối trực tiếp." $proxyGroup 14 23 610 64
+$null=Ui-Label "Dán proxy trong cửa sổ Thêm / Sửa để tự tách host, port và thông tin xác thực.`r`nHỗ trợ HTTP có hoặc không có username/password.`r`nĐể trống proxy nếu muốn dùng kết nối trực tiếp." $proxyGroup 14 23 610 64
 $proxyEdit=Ui-NewButton 'Sửa proxy đã chọn' {$buttons[1].PerformClick()};Ui-Place $proxyEdit $proxyGroup 14 100 155 28
 $proxySettings=Ui-NewButton 'Socket / Proxy' {$socketButton.PerformClick()};Ui-Place $proxySettings $proxyGroup 182 100 145 28
 $logHelp=Ui-Label "Chọn tài khoản đã mở rồi dùng Xem ID NPC hoặc Log menu.`r`nNhấp đúp ô Trạng thái bị lỗi để xem hướng dẫn xử lý." $tabs.TabPages[3] 16 20 635 44

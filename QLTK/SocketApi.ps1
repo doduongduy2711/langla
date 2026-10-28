@@ -13,16 +13,17 @@ $script:socketToken=''
 function Normalize-Proxy($value) {
     if ($null -eq $value) { return $null }
     if ($value -is [string]) {
-        $parts=$value.Trim().Split([char[]]':',4)
+        $text=$value.Trim();$protocol='http';if($text -match '^(http|socks5)://'){$protocol=$Matches[1];$text=$text.Substring($Matches[0].Length)}
+        $parts=$text.Split([char[]]':',4)
         if ($parts.Count -notin @(2,4)) {throw 'proxy_invalid: dùng host:port hoặc host:port:username:password.'}
         $userName=''; $password=''
         if ($parts.Count -eq 4) {$userName=$parts[2]; $password=$parts[3]}
-        $value=[pscustomobject]@{type='socks5';host=$parts[0];port=$parts[1];username=$userName;password=$password}
+        $value=[pscustomobject]@{type=$protocol;host=$parts[0];port=$parts[1];username=$userName;password=$password}
     }
     if ($value -isnot [pscustomobject] -and $value -isnot [hashtable]) { throw 'proxy_invalid: proxy phải là object hoặc null.' }
     if ($value.host -isnot [string]) { throw 'proxy_invalid: host phải là chuỗi.' }
     foreach ($field in @('username','password')) { if ($null -ne $value.$field -and $value.$field -isnot [string]) { throw 'proxy_invalid: username/password phải là chuỗi.' } }
-    if ([string]$value.type -cne 'socks5') { throw 'proxy_invalid: chỉ hỗ trợ type socks5.' }
+    $protocol=([string]$value.type).ToLowerInvariant();if(!$protocol){$protocol='http'};if($protocol -notin @('http','socks5')){throw 'proxy_invalid: hỗ trợ HTTP hoặc SOCKS5.'}
     $hostName=([string]$value.host).Trim()
     if ($hostName.Length -gt 253 -or [Uri]::CheckHostName($hostName) -eq [UriHostNameType]::Unknown) { throw 'proxy_invalid: host không hợp lệ.' }
     if ([string]$value.port -notmatch '^[0-9]{1,5}$') { throw 'proxy_invalid: port phải là số 1–65535.' }
@@ -31,12 +32,12 @@ function Normalize-Proxy($value) {
     $userName=[string]$value.username; $password=[string]$value.password
     if (($userName.Length -eq 0) -ne ($password.Length -eq 0)) { throw 'proxy_invalid: nhập đủ username/password proxy hoặc để trống cả hai.' }
     if ([Text.Encoding]::UTF8.GetByteCount($userName) -gt 255 -or [Text.Encoding]::UTF8.GetByteCount($password) -gt 255) { throw 'proxy_invalid: thông tin xác thực SOCKS5 quá dài.' }
-    return [pscustomobject]@{type='socks5';host=$hostName;port=$portNumber;username=$userName;password=$password}
+    return [pscustomobject]@{type=$protocol;host=$hostName;port=$portNumber;username=$userName;password=$password}
 }
 function Protect-Proxy($proxy) {
     if ($null -eq $proxy) { return $null }
     $secret=''; if ($proxy.password.Length) { $secret=Protect-Password $proxy.password }
-    [pscustomobject]@{type='socks5';host=$proxy.host;port=$proxy.port;username=$proxy.username;secret=$secret}
+    [pscustomobject]@{type=$proxy.type;host=$proxy.host;port=$proxy.port;username=$proxy.username;secret=$secret}
 }
 function Read-Proxy($account) {
     if ($null -eq $account.proxy) { return $null }
@@ -45,7 +46,7 @@ function Read-Proxy($account) {
 }
 function Proxy-Summary($proxy) {
     if ($null -eq $proxy) { return $null }
-    [pscustomobject]@{type='socks5';host=$proxy.host;port=$proxy.port;has_auth=([string]$proxy.username).Length -gt 0}
+    [pscustomobject]@{type=$proxy.type;host=$proxy.host;port=$proxy.port;has_auth=([string]$proxy.username).Length -gt 0}
 }
 function Invoke-ProxyBridge($account,$proxy,[bool]$autoLogin=$false) {
     $bridge=[string]$script:settings.proxyBridge
@@ -145,7 +146,7 @@ function Start-ManagedAccount($account,$proxy,[bool]$autoLogin=$false) {
     }
     if ($autoLogin -or $null -ne $proxy) {
         $nativeProxy=$null
-        if ($null -ne $proxy) {$nativeProxy=New-Object TGLL.SocksConfig([string]$proxy.host,[int]$proxy.port,[string]$proxy.username,[string]$proxy.password)}
+        if ($null -ne $proxy) {$nativeProxy=New-Object TGLL.SocksConfig([string]$proxy.host,[int]$proxy.port,[string]$proxy.username,[string]$proxy.password,[string]$proxy.type)}
         $allStage='';if(${function:Get-AutoAllStage}){$allStage=Get-AutoAllStage ([string]$account.id)}
         $queueStage=Get-ActivityLaunchContext ([string]$account.id);$launchStage=if($allStage){$allStage}else{$queueStage}
         $stageReceive=if($launchStage){$launchStage -eq 'dungeon' -and ([bool]$account.receiveKey -or [bool]$allStage)}else{[bool]$account.receiveKey};$stageDungeon=if($launchStage){$launchStage -eq 'dungeon'}else{[bool]$account.dungeonHigh};$stageIzanami=if($launchStage){$launchStage -eq 'izanami'}else{[bool]$account.izanami}
@@ -209,7 +210,7 @@ function Handle-SocketJson([string]$json) {
     if (!($request.token -is [string]) -or [string]::IsNullOrEmpty($script:socketToken) -or $request.token -cne $script:socketToken) { return '{"ok":false,"error":"unauthorized"}' }
     try {
         switch -CaseSensitive ([string]$request.command) {
-            'ping' { $result=@{ok=$true;version=89;proxy_types=@('socks5');login_backend='native';character_number=1;character_backend='native';npc_backend='native_entity_id';npc_capture=$true;dynamic_menu_log=$true;npc_name='Raikage Đệ Tam';npc_action='Nhận chìa khóa';train_backend='native_skill_bar_targeted';train_popup_independent=$true} }
+            'ping' { $result=@{ok=$true;version=89;proxy_types=@('http','socks5');login_backend='native';character_number=1;character_backend='native';npc_backend='native_entity_id';npc_capture=$true;dynamic_menu_log=$true;npc_name='Raikage Đệ Tam';npc_action='Nhận chìa khóa';train_backend='native_skill_bar_targeted';train_popup_independent=$true} }
             'game_auto' {
                 if($request.enabled -isnot [bool]){throw 'invalid_request: enabled phải là true/false.'}
                 [TGLL.NativeBackend]::SetGameAuto([string]$request.job_id,[bool]$request.enabled)

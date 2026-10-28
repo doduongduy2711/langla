@@ -116,6 +116,14 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Cuong Thi movement compilation failed'}
           ./CuongThiMovementTests.exe
           if($LASTEXITCODE -ne 0){throw 'Cuong Thi movement tests failed'}
+      - name: HTTP CONNECT proxy checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:ProxyHttpTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/ProxyHttpTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'HTTP proxy compilation failed'}
+          ./ProxyHttpTests.exe
+          if($LASTEXITCODE -ne 0){throw 'HTTP proxy checks failed'}
       - name: Native captcha input guards
         shell: powershell
         run: |

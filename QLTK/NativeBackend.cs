@@ -278,7 +278,8 @@ namespace TGLL {
     }
     // Only the exact analysed x64 build is supported. No file on disk is patched.
     public sealed class SocksConfig {
-        public string Host, Username, Password; public int Port;
+        public string Host, Username, Password; public string Protocol="socks5"; public int Port;
+        public SocksConfig(string host,int port,string username,string password,string protocol) : this(host,port,username,password) {if(protocol!="http"&&protocol!="socks5")throw new ArgumentException("proxy_protocol_invalid");Protocol=protocol;}
         public SocksConfig(string host,int port,string username,string password) {
             if(String.IsNullOrWhiteSpace(host)||port<1||port>65535)throw new ArgumentException("proxy_invalid");
             Host=host;Port=port;Username=username??"";Password=password??"";
@@ -1002,17 +1003,26 @@ namespace TGLL {
         internal static TcpClient Authenticate(SocksConfig c){
             TcpClient tcp=new TcpClient();try {
                 var task=tcp.ConnectAsync(c.Host,c.Port);if(!task.Wait(7000))throw new IOException("proxy_timeout");tcp.ReceiveTimeout=7000;tcp.SendTimeout=7000;NetworkStream s=tcp.GetStream();
+                if(c.Protocol=="http")return tcp;
                 byte method=(byte)(c.Username.Length>0?2:0);s.Write(new byte[]{5,1,method},0,3);byte[] choice=Read(s,2);if(choice[0]!=5||choice[1]!=method)throw new IOException("proxy_auth_failed");
                 if(method==2){byte[] u=Encoding.UTF8.GetBytes(c.Username),p=Encoding.UTF8.GetBytes(c.Password);using(MemoryStream msg=new MemoryStream()){msg.WriteByte(1);msg.WriteByte((byte)u.Length);msg.Write(u,0,u.Length);msg.WriteByte((byte)p.Length);msg.Write(p,0,p.Length);byte[] packet=msg.ToArray();s.Write(packet,0,packet.Length);Array.Clear(packet,0,packet.Length);}byte[] answer=Read(s,2);if(answer[0]!=1||answer[1]!=0)throw new IOException("proxy_auth_failed");Array.Clear(u,0,u.Length);Array.Clear(p,0,p.Length);}
                 return tcp;
             }catch{tcp.Close();throw;}
         }
         static void ConnectTarget(TcpClient tcp,byte[] destination){NetworkStream s=tcp.GetStream();byte[] request={5,1,0,1,destination[4],destination[5],destination[6],destination[7],destination[2],destination[3]};s.Write(request,0,request.Length);byte[] reply=Read(s,4);if(reply[0]!=5||reply[1]!=0)throw new IOException("proxy_connect_failed");if(reply[3]==1)Read(s,6);else if(reply[3]==4)Read(s,18);else if(reply[3]==3)Read(s,Read(s,1)[0]+2);else throw new IOException("proxy_reply_invalid");tcp.ReceiveTimeout=0;tcp.SendTimeout=0;}
+        internal static void ConnectHttp(TcpClient tcp,SocksConfig config,byte[] destination){
+            NetworkStream stream=tcp.GetStream();string authority=destination[4]+"."+destination[5]+"."+destination[6]+"."+destination[7]+":"+((destination[2]<<8)|destination[3]);
+            string request="CONNECT "+authority+" HTTP/1.1\r\nHost: "+authority+"\r\n";
+            if(config.Username.Length>0)request+="Proxy-Authorization: Basic "+Convert.ToBase64String(Encoding.UTF8.GetBytes(config.Username+":"+config.Password))+"\r\n";
+            byte[] packet=Encoding.ASCII.GetBytes(request+"\r\n");try{stream.Write(packet,0,packet.Length);}finally{Array.Clear(packet,0,packet.Length);}
+            using(MemoryStream header=new MemoryStream()){int end=0;while(header.Length<16384){int b=stream.ReadByte();if(b<0)throw new IOException("http_proxy_closed");header.WriteByte((byte)b);end=(end<<8)|b;if(end==0x0d0a0d0a)break;}if(end!=0x0d0a0d0a)throw new IOException("http_proxy_header_too_large");string line=Encoding.ASCII.GetString(header.ToArray()).Split(new string[]{"\r\n"},StringSplitOptions.None)[0];if(!System.Text.RegularExpressions.Regex.IsMatch(line,@"^HTTP/1\.[01] 200(?: |$)"))throw new IOException(line.Contains(" 407 ")?"http_proxy_auth_failed":"http_proxy_connect_failed");}
+            tcp.ReceiveTimeout=0;tcp.SendTimeout=0;
+        }
         void Accept(){while(!stopping){try{TcpClient client=listener.AcceptTcpClient();lock(clients)clients.Add(client);ThreadPool.QueueUserWorkItem(delegate{Serve(client);});}catch{if(!stopping)Thread.Sleep(100);}}}
         void Serve(TcpClient game){TcpClient upstream=null;try {
             int port=((IPEndPoint)game.Client.RemoteEndPoint).Port;byte[] destination=null;Stopwatch wait=Stopwatch.StartNew();
             while(!stopping && wait.ElapsedMilliseconds<5000 && destination==null){byte[] map=remote.Read(slots,2048);for(int i=0;i<64;i++){int p=i*32;int localPort=(map[p+4]<<8)|map[p+5];if(BitConverter.ToInt32(map,p)==1&&localPort==port){destination=new byte[16];Array.Copy(map,p+8,destination,0,16);remote.Write(slots+p,new byte[4]);break;}}if(destination==null)Thread.Sleep(10);}
-            if(destination==null)throw new IOException("proxy_mapping_failed");upstream=Authenticate(config);lock(clients)clients.Add(upstream);ConnectTarget(upstream,destination);
+            if(destination==null)throw new IOException("proxy_mapping_failed");upstream=Authenticate(config);lock(clients)clients.Add(upstream);if(config.Protocol=="http")ConnectHttp(upstream,config,destination);else ConnectTarget(upstream,destination);
             NetworkStream gs=game.GetStream(),us=upstream.GetStream();ThreadPool.QueueUserWorkItem(delegate{try{gs.CopyTo(us);upstream.Client.Shutdown(SocketShutdown.Send);}catch{} });us.CopyTo(gs);
         }catch{}finally{game.Close();if(upstream!=null)upstream.Close();lock(clients){clients.Remove(game);if(upstream!=null)clients.Remove(upstream);}}}
         public void Dispose(){stopping=true;listener.Stop();lock(clients){foreach(TcpClient c in clients)c.Close();clients.Clear();}}

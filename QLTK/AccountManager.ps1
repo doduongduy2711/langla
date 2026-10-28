@@ -158,6 +158,8 @@ try {
     }
 } catch { Show-Error "Không đọc được dữ liệu. Ứng dụng sẽ dừng để tránh ghi đè: $($_.Exception.Message)"; exit 1 }
 if(!$UiTest -and $script:defaultGame -and ([string]::IsNullOrWhiteSpace([string]$script:settings.jar) -or !(Test-Path -LiteralPath ([string]$script:settings.jar) -PathType Leaf))){$script:settings.jar=$script:defaultGame}
+# HTTP is the selected default; migrate existing proxy records without touching endpoints/secrets.
+if(!$UiTest){$httpChanged=$false;foreach($a in $script:accounts){if($a.proxy -and $a.proxy.type -ne 'http'){$a.proxy.type='http';$httpChanged=$true}};if($httpChanged){try{if(!(Test-Path -LiteralPath ($script:storePath+'.before-http.bak'))){Copy-Item -LiteralPath $script:storePath -Destination ($script:storePath+'.before-http.bak')};Save-Accounts}catch{Show-Error ('Không lưu được chuyển proxy HTTP: '+$_.Exception.Message);exit 1}}}
 if ($UiTest) { $script:accounts=@([pscustomobject]@{id='test';username='demo';secret='unused-in-masked-view'}) }
 $form = New-Object Windows.Forms.Form
 $form.Text = 'TGLL_minCPU_v2 • Quản lý tài khoản'
@@ -183,7 +185,7 @@ $grid.SelectionMode='FullRowSelect'; $grid.MultiSelect=$true; $grid.RowHeadersVi
 $grid.AutoSizeColumnsMode='Fill'; $grid.BackgroundColor=[Drawing.Color]::White
 $grid.Columns.Add('username','Username') | Out-Null
 $grid.Columns.Add('password','Password') | Out-Null
-$grid.Columns.Add('proxy','SOCKS5') | Out-Null
+$grid.Columns.Add('proxy','HTTP') | Out-Null
 $grid.Columns.Add('status','Trạng thái') | Out-Null
 $openCol = New-Object Windows.Forms.DataGridViewButtonColumn
 $openCol.Name='open'; $openCol.HeaderText='Chạy'; $openCol.Text='Open'; $openCol.UseColumnTextForButtonValue=$true
@@ -226,7 +228,7 @@ function Edit-Account($existing) {
     $pp=New-Object Windows.Forms.TextBox; $pp.SetBounds(325,118,75,28); $pp.Text='1080'
     $pu=New-Object Windows.Forms.TextBox; $pu.SetBounds(125,164,275,28)
     $ps=New-Object Windows.Forms.TextBox; $ps.SetBounds(125,210,275,28); $ps.UseSystemPasswordChar=$true
-    foreach($item in @(@('SOCKS5 host:port',118),@('Proxy username',164),@('Proxy password',210))) {
+    foreach($item in @(@('HTTP host:port',118),@('Proxy username',164),@('Proxy password',210))) {
         $label=New-Object Windows.Forms.Label; $label.Text=$item[0]; $label.SetBounds(15,$item[1],110,36); $dialog.Controls.Add($label)
     }
     $quickLabel=New-Object Windows.Forms.Label; $quickLabel.Text='Dán proxy'; $quickLabel.SetBounds(15,260,105,28)
@@ -238,7 +240,7 @@ function Edit-Account($existing) {
         try {
             $parsedProxy=Normalize-Proxy $quickProxy.Text
             $ph.Text=$parsedProxy.host; $pp.Text=[string]$parsedProxy.port; $pu.Text=$parsedProxy.username; $ps.Text=$parsedProxy.password
-            $note.ForeColor=[Drawing.Color]::DarkGreen; $note.Text='Đã tách proxy SOCKS5 vào các ô bên trên.'
+            $note.ForeColor=[Drawing.Color]::DarkGreen; $note.Text='Đã tách proxy HTTP vào các ô bên trên.'
         } catch {$note.ForeColor=[Drawing.Color]::DarkRed; $note.Text='Nhập host:port:username:password, hoặc host:port nếu không xác thực.'}
     })
     $ph.Add_TextChanged({
@@ -247,7 +249,7 @@ function Edit-Account($existing) {
         try {
             $parsedProxy=Normalize-Proxy $ph.Text
             $pp.Text=[string]$parsedProxy.port; $pu.Text=$parsedProxy.username; $ps.Text=$parsedProxy.password; $ph.Text=$parsedProxy.host
-            $quickProxy.Clear(); $note.ForeColor=[Drawing.Color]::DarkGreen; $note.Text='Đã tách proxy SOCKS5 vào host, port, username và password.'
+            $quickProxy.Clear(); $note.ForeColor=[Drawing.Color]::DarkGreen; $note.Text='Đã tách proxy HTTP vào host, port, username và password.'
         } catch {$note.ForeColor=[Drawing.Color]::DarkRed; $note.Text='Chuỗi proxy chưa hợp lệ. Dùng host:port:username:password.'}
     })
     $dialog.Controls.AddRange(@($u,$p,$ph,$pp,$pu,$ps,$quickLabel,$quickProxy,$note))
@@ -261,7 +263,7 @@ function Edit-Account($existing) {
         if ([string]::IsNullOrWhiteSpace($u.Text) -or $p.Text.Length -eq 0) { Show-Error 'Nhập đủ username và password.'; return }
         try {
             if ($quickProxy.Text.Trim().Length) {$null=Normalize-Proxy $quickProxy.Text}
-            elseif ($ph.Text.Trim().Length) {$null=Normalize-Proxy ([pscustomobject]@{type='socks5';host=$ph.Text;port=$pp.Text;username=$pu.Text;password=$ps.Text})}
+            elseif ($ph.Text.Trim().Length) {$null=Normalize-Proxy ([pscustomobject]@{type='http';host=$ph.Text;port=$pp.Text;username=$pu.Text;password=$ps.Text})}
             elseif ($pu.Text.Length -or $ps.Text.Length) {throw 'Nhập host proxy hoặc xóa username/password proxy.'}
         } catch {Show-Error $_.Exception.Message;return}
         $dialog.DialogResult='OK'
@@ -282,7 +284,7 @@ function Edit-Account($existing) {
             if ($duplicates.Count) { throw 'Username này đã có trong danh sách.' }
             $proxy=$null
             if ($quickProxy.Text.Trim().Length) { $proxy=Normalize-Proxy $quickProxy.Text }
-            elseif ($ph.Text.Trim().Length) { $proxy=Normalize-Proxy ([pscustomobject]@{type='socks5';host=$ph.Text;port=$pp.Text;username=$pu.Text;password=$ps.Text}) }
+            elseif ($ph.Text.Trim().Length) { $proxy=Normalize-Proxy ([pscustomobject]@{type='http';host=$ph.Text;port=$pp.Text;username=$pu.Text;password=$ps.Text}) }
             elseif ($pu.Text.Length -or $ps.Text.Length) { throw 'Nhập host proxy, hoặc xóa thông tin xác thực proxy để không dùng.' }
             $entry=[pscustomobject]@{id=([guid]::NewGuid().ToString());username=$name;secret=(Protect-Password $p.Text);proxy=(Protect-Proxy $proxy)}
             $old=$script:accounts
@@ -312,7 +314,7 @@ function Open-Account($a,[bool]$reconnect=$false) {
     if (!$autoLoginCheck.Checked -and $script:settings.mode -eq 'manual') { $status.Text+=' Chọn tài khoản, sao chép username/password để điền vào cửa sổ đăng nhập.' }
     if ($launched.job_id) {$script:accountJobs[$a.id]=$launched.job_id; $script:lastLoginJob=$launched.job_id; $status.Text='Đã xếp hàng đăng nhập: '+$a.username}
     if ($launched.pid -gt 0) {$script:accountWindowPids[[string]$a.id]=[int]$launched.pid}
-    if ($null -ne $proxy) { $status.Text='Bộ chuyển báo đã mở game qua SOCKS5. PID: '+$launched.pid }
+    if ($null -ne $proxy) { $status.Text='Bộ chuyển báo đã mở game qua HTTP. PID: '+$launched.pid }
     foreach($row in $grid.Rows){if([string]$row.Tag.id -eq [string]$a.id){Update-AccountVisibility $row;break}}
 }
 $grid.Add_CellContentClick({param($sender,$e) if ($e.RowIndex -ge 0 -and $grid.Columns[$e.ColumnIndex].Name -eq 'open') { try { Open-Account $grid.Rows[$e.RowIndex].Tag } catch { Show-Error $_.Exception.Message } }})
@@ -343,7 +345,7 @@ $buttons+=Add-Button 'Nhập CSV' 770 422 129 {try {
             }
             elseif ($_.PSObject.Properties['proxy_host']) {
                 $proxy=$null
-                if (![string]::IsNullOrWhiteSpace($_.proxy_host)) {$proxy=[pscustomobject]@{type='socks5';host=$_.proxy_host;port=$_.proxy_port;username=$_.proxy_username;password=$_.proxy_password}}
+                if (![string]::IsNullOrWhiteSpace($_.proxy_host)) {$proxy=[pscustomobject]@{type='http';host=$_.proxy_host;port=$_.proxy_port;username=$_.proxy_username;password=$_.proxy_password}}
                 $item | Add-Member -NotePropertyName proxy -NotePropertyValue $proxy
             }
             $item
@@ -394,7 +396,7 @@ foreach($b in $buttons) {$b.Anchor='Bottom,Left'}
 $status=Add-Label 'Nhập CSV, chọn tài khoản rồi Open. Không chuyển cửa sổ khi QLTK đang điền.' 24 550 870
 $status.Height=35; $status.Anchor='Bottom,Left,Right'
 $socketButton=Add-Button 'Socket / Proxy' 410 474 160 {
-    $d=New-Object Windows.Forms.Form; $d.Text='Socket TCP / SOCKS5'; $d.Size=New-Object Drawing.Size(690,430)
+    $d=New-Object Windows.Forms.Form; $d.Text='Socket TCP / HTTP'; $d.Size=New-Object Drawing.Size(690,430)
     $d.StartPosition='CenterParent'; $d.Font=$form.Font; $d.FormBorderStyle='FixedDialog'; $d.MaximizeBox=$false
     $head=New-Object Windows.Forms.Label; $head.SetBounds(15,15,650,32)
     $head.Text='API chỉ lắng nghe 127.0.0.1. Mỗi lệnh phải có token.'
@@ -408,7 +410,7 @@ $socketButton=Add-Button 'Socket / Proxy' 410 474 160 {
     $browse=New-Object Windows.Forms.Button; $browse.Text='Chọn EXE'; $browse.SetBounds(510,185,140,30)
     $browse.Add_Click({$f=New-Object Windows.Forms.OpenFileDialog; $f.Filter='Bộ chuyển (*.exe)|*.exe'; if ($f.ShowDialog() -eq 'OK') {$bridge.Text=$f.FileName}; $f.Dispose()})
     $hint=New-Object Windows.Forms.Label; $hint.SetBounds(15,238,640,78)
-    $hint.Text='Open dùng bộ nối trực tiếp trong game để đăng nhập, chọn nhân vật số 1 và nhận chìa khóa từ Raikage. Proxy SOCKS5 được xử lý sẵn; bạn không cần chọn EXE bộ chuyển. Để trống ô phía trên khi dùng chế độ mặc định.'
+    $hint.Text='Open dùng bộ nối trực tiếp trong game để đăng nhập, chọn nhân vật số 1 và nhận chìa khóa từ Raikage. Proxy HTTP được xử lý sẵn; bạn không cần chọn EXE bộ chuyển. Để trống ô phía trên khi dùng chế độ mặc định.'
     $save=New-Object Windows.Forms.Button; $save.Text='Lưu / áp dụng'; $save.SetBounds(480,335,170,34)
     $save.Add_Click({try {
         if ($bridge.Text.Length -and (!(Test-Path -LiteralPath $bridge.Text -PathType Leaf) -or [IO.Path]::GetExtension($bridge.Text) -ne '.exe')) { throw 'Chọn EXE bộ chuyển hợp lệ.' }
