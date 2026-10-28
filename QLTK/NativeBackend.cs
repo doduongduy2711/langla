@@ -1130,6 +1130,7 @@ namespace TGLL {
         public volatile bool FollowActive;public volatile string FollowStatus="";public volatile int FollowDistance=-1,FollowMoves;internal bool FollowStopPending;internal DateTime FollowPollAt=DateTime.MinValue;
         public volatile bool PersistentUp;internal bool UpRepeatDaily;internal DateTime UpDay;internal bool[] UpCompleted=new bool[5];internal string[] UpSonCapTeamIds=new string[0];internal bool UpIzanamiFull,UpSonCapFull;public volatile bool DailyManaged,DailyActive,DailyExecuting;internal bool DailyApplying;public volatile int DailyStage;public volatile string DailyStatus="";internal bool[] DailyPlan=new bool[4],DailyRunPlan=new bool[4];internal DateTime DailyLastDate;internal string[] DailyTeamIds=new string[0];internal FarmSpot DailyReturnSpot;internal bool DailyReturnQuiet;public volatile bool KeyReceiptVerified;public volatile bool CurseActive;internal readonly object CaptchaGate=new object();internal long CaptchaData;internal CaptchaFrame CaptchaFrame;internal int CaptchaGeneration,CaptchaEpisodeTries;internal bool CaptchaPending;internal bool CaptchaManual;internal string CaptchaSamplePath="",CaptchaReadKey="",CaptchaAttemptKey="",CaptchaCode="";internal DateTime CaptchaPollAt;public volatile string CaptchaStatus="";public DateTime CurseReadAt=DateTime.MinValue;internal DateTime CursePollAt=DateTime.MinValue;public volatile int MapId=-1,ZoneId=-1;public DateTime ZoneReadAt=DateTime.MinValue;public volatile string ZoneStatus="";public volatile bool ZoneSyncActive;
         internal int PlannedZone=-1,ZonePlanMap=-1,ZoneAttempts;internal volatile bool ZonePrepared;internal DateTime ZoneActionAt=DateTime.MinValue,ZonePollAt=DateTime.MinValue;internal long ZoneOldPopup;internal bool ZoneListWaiting;
+        public volatile bool CuongThiEnabled;public volatile CuongThiSnapshot CuongThi;public volatile string CuongThiStatus="Tắt";internal DateTime CuongThiPollAt;internal string CuongThiDiagnostic="";
         public volatile VitalsSnapshot Vitals;internal DateTime VitalsPollAt,IdentityPollAt;public volatile bool PrioritizeThiQuy,ThiQuyCombatActive;internal int ThiQuySkillCursor,ThiQuyNativeMode;public volatile string ThiQuyPriorityStatus="Tắt";internal DateTime ThiQuyPriorityAt=DateTime.MinValue;internal bool ThiQuyPriorityArmed,ThiQuyFarmPaused,ThiQuyReadSuspended;internal DateTime ThiQuyMissingAt=DateTime.MinValue,ThiQuyScanLogAt=DateTime.MinValue;internal string ThiQuyScanLast="";internal DateTime OnlineNoticePollAt;public volatile string CharacterName="",TeamStatus="";public volatile string[] TeamMembers=new string[0],Friends=new string[0];
         internal string LeaderZoneJob="";internal int LeaderZoneMap=-1,LeaderZoneTarget=-1;internal bool LeaderZoneConfirmed;
         internal string[] TeamJobIds=new string[0];internal DateTime TeamReadAt=DateTime.MinValue,TeamActionAt=DateTime.MinValue;internal int TeamAttempts,TeamAttemptCommand;internal bool TeamFriendRequested;internal string TeamTarget="";internal bool TeamManaged,TeamConfirmed;internal long TeamAcceptedPopup;
@@ -1810,6 +1811,7 @@ namespace TGLL {
         public static bool DungeonEntryBlocked(NativeJob j){return j.DungeonHighEnabled&&(j.DungeonStopped||j.DungeonCycleWaiting&&!j.DungeonLeftOrigin);}
         internal static bool GameAutoDesired(NativeJob j){
             if(j.CloakEnabled||j.QuestEnabled||j.ThiQuyCombatActive&&ThiQuyPriorityAllowed(j))return false;
+            if(CuongThiControlsAuto(j))return CuongThiWantsAuto(j,DateTime.UtcNow);
             if(j.SonCapEnabled)return j.SonCapMapAutoActive&&j.GameAutoWanted&&!j.SonCapMoving&&!j.SonCapStopPending&&!j.SonCapFinished&&j.SonCapFailure.Length==0&&!j.CloseRequested&&!j.CancelRequested&&!j.ReconnectRequested&&CurseDisplayStatus(j).Length==0;
             if(j.IzanamiMapAutoActive&&j.IzanamiEnabled&&!j.SonCapEnabled)return !j.CloseRequested&&!j.CancelRequested&&!j.ReconnectRequested;
             // Follow/zone synchronization and queued NPC requests must not silently
@@ -1824,6 +1826,7 @@ namespace TGLL {
             try{ReadGameSettings(r,data,j);}catch{j.GameSettingsReady=false;j.SettingsError="settings_read_failed";return;}if(!j.GameSettingsReady){j.GameAutoStatus="Chờ game sẵn sàng để bật/tắt treo";return;}
             bool desired=GameAutoDesired(j);
             j.GameAutoStatus=j.ThiQuyCombatActive&&ThiQuyPriorityAllowed(j)?(j.GameAutoEnabled?"Tắt treo để tập trung Thi Quỷ":"Đang tập trung Thi Quỷ; treo tạm tắt"):!j.GameAutoWanted?(j.GameAutoEnabled?"Đang tắt treo":"Treo đã tắt"):!desired?"Tạm dừng treo: đang đăng nhập/thao tác NPC":j.GameAutoEnabled?"Game: treo đang bật":"Đang bật treo; chờ game xác nhận";
+            if(CuongThiControlsAuto(j))j.GameAutoStatus="Auto Cương Thi: "+(desired?"cần bật treo":"cần tắt treo")+(j.GameAutoEnabled?" • treo đang bật":" • treo đang tắt");
             if(j.GameAutoManaged){
                 string diagnostic=j.GameAutoStatus+"|"+j.State+"|"+j.SettingsError;
                 if(diagnostic!=j.LastAutoDiagnostic&&(DateTime.UtcNow-j.AutoDiagnosticAt).TotalSeconds>=5){j.LastAutoDiagnostic=diagnostic;j.AutoDiagnosticAt=DateTime.UtcNow;
@@ -1857,6 +1860,7 @@ namespace TGLL {
         public static void StartTraining(string id,int skillId){StartTraining(id,new int[]{skillId});}
         public static void StartTraining(string id,int[] skillIds){
             NativeJob j=Get(id);if(j==null||!j.TrainReady||j.CloseRequested||j.ReplayRequested)throw new Exception("train_session_unavailable");
+            if(j.CuongThiEnabled)throw new Exception("Dừng Auto Cương Thi trước khi bật train riêng.");
             if(j.FarmEnabled)throw new Exception("Dừng Auto bãi quái trước khi bật train riêng.");
             if(skillIds==null||skillIds.Length<1||skillIds.Length>4)throw new Exception("train_select_1_to_4_skills");
             HashSet<int> unique=new HashSet<int>();foreach(int idValue in skillIds){bool found=false;foreach(SkillInfo skill in j.Skills)if(skill.Id==idValue&&skill.Usable)found=true;if(!found||!unique.Add(idValue))throw new Exception("train_skill_invalid");}
@@ -1866,6 +1870,7 @@ namespace TGLL {
         // iu là quái thường; 0x16f0198 là gd và không khớp quái trong map.
         internal const long TrainingMobSlotRva=0x16ee310;
         internal static SkillInfo HangingLevelOne(NativeJob j){
+            if(j.CuongThiEnabled&&!CuongThiWantsAuto(j,DateTime.UtcNow))return null;
             if(j.ThiQuyCombatActive||j.CurseActive||j.FarmEnabled&&!j.FarmArrived||j.SonCapEnabled&&(!j.SonCapMapAutoActive||j.SonCapMoving||j.SonCapStopPending||j.SonCapFinished))return null;
             if(!j.GameAutoEnabled||!(j.GameAutoWanted||j.FarmEnabled&&j.FarmArrived||j.IzanamiMapAutoActive&&j.IzanamiEnabled)||!j.GameSettingsReady||j.ReceiveFlowActive||j.ReceiveKeyRequested||j.ReplayRequested||j.CloseRequested||j.CancelRequested||j.ReconnectRequested||j.QuestPauseAuto||j.CloakEnabled||j.MailEnabled||j.MailBusy||j.MailQueueOnly||j.CloakQueueOnly||DungeonEntryBlocked(j)||AuxiliaryActionBlocked(j)||j.ZoneSyncActive||j.FollowActive&&(j.FollowDistance<0||j.FollowDistance>48))return null;
             // Treo mặc định xử lý chiêu còn lại; chỉ bổ sung chiêu cấp 1 đã chọn.
@@ -1881,7 +1886,7 @@ namespace TGLL {
             return 150;
         }
         public static void SetThiQuyPriority(string id,bool enabled){NativeJob j=Get(id);if(j==null)throw new Exception("train_session_unavailable");j.PrioritizeThiQuy=enabled;j.ThiQuyPriorityAt=DateTime.MinValue;}
-        internal static bool ThiQuyPriorityAllowed(NativeJob j){return j!=null&&j.PrioritizeThiQuy&&j.Auto&&UpSessionReady(j)&&(j.TrainEnabled||j.GameAutoWanted||j.FarmEnabled)&&!j.QuestEnabled&&!j.QuestPauseAuto&&!j.DailyActive&&!j.IzanamiEnabled&&!j.SonCapEnabled&&!j.DungeonHighEnabled&&!j.ReceiveFlowActive&&!j.ReceiveKeyRequested&&!j.ReplayRequested&&!j.CloseRequested&&!j.CancelRequested&&!j.ReconnectRequested&&!j.CurseActive&&!j.CloakEnabled&&!j.ChestEnabled&&!j.MailEnabled&&!j.MailBusy&&!j.MailQueueOnly&&!j.CloakQueueOnly&&!j.ZoneSyncActive&&!j.FollowActive;}
+        internal static bool ThiQuyPriorityAllowed(NativeJob j){return j!=null&&j.PrioritizeThiQuy&&!j.CuongThiEnabled&&j.Auto&&UpSessionReady(j)&&(j.TrainEnabled||j.GameAutoWanted||j.FarmEnabled)&&!j.QuestEnabled&&!j.QuestPauseAuto&&!j.DailyActive&&!j.IzanamiEnabled&&!j.SonCapEnabled&&!j.DungeonHighEnabled&&!j.ReceiveFlowActive&&!j.ReceiveKeyRequested&&!j.ReplayRequested&&!j.CloseRequested&&!j.CancelRequested&&!j.ReconnectRequested&&!j.CurseActive&&!j.CloakEnabled&&!j.ChestEnabled&&!j.MailEnabled&&!j.MailBusy&&!j.MailQueueOnly&&!j.CloakQueueOnly&&!j.ZoneSyncActive&&!j.FollowActive;}
         internal static bool IsThiQuyName(string name){return String.Equals((name??"").Normalize(NormalizationForm.FormC).Trim(),"Thi Quỷ",StringComparison.OrdinalIgnoreCase);}
         internal static long ReadThiQuyTarget(Remote r,long game,out int map){string scan;return ReadThiQuyTarget(r,game,out map,out scan);}
         internal static long ReadThiQuyTarget(Remote r,long game,out int map,out string scan){
@@ -1940,7 +1945,7 @@ namespace TGLL {
         }
         static void PumpTraining(Remote r,long data,NativeJob j){
             if(data==0)return;
-            if(j.HangingAwaiting&&!j.GameAutoEnabled)r.Write(data+12,new byte[4]);
+            if(j.HangingAwaiting&&(!j.GameAutoEnabled||j.CuongThiEnabled&&!CuongThiWantsAuto(j,DateTime.UtcNow)))r.Write(data+12,new byte[4]);
             bool focus=j.ThiQuyCombatActive&&ThiQuyPriorityAllowed(j);SkillInfo hanging=HangingLevelOne(j);bool overlay=hanging!=null;
             if(!focus&&!overlay&&!j.TrainEnabled&&!j.SkillScanRequested&&j.TrainIdleApplied)return;
             if(focus||j.TrainEnabled||j.SkillScanRequested)j.TrainIdleApplied=false;
@@ -2915,7 +2920,7 @@ namespace TGLL {
                         j.Stage="popup";j.State="waiting_map";r.Write(data,BitConverter.GetBytes(13));timer.Restart();Stopwatch mapDelay=null;bool popupReady=false,popupLogged=false;
                         while(timer.ElapsedMilliseconds<90000){
                             if(j.CancelRequested){j.Error="cancelled";break;}if(p.HasExited){j.Error="game_exited";break;}
-                            PumpCaptcha(r,game,j);if(j.CurseActive){timer.Restart();Thread.Sleep(150);continue;}PumpCharacterIdentity(r,game,j);PumpThiQuyPriority(r,game,trainData,j);PumpTraining(r,trainData,j);PumpGameSettings(r,settingsData,j);byte[] gate=r.Read(data,8);int gateState=BitConverter.ToInt32(gate,0);j.ReadyPhase=BitConverter.ToInt32(gate,4);
+                            PumpCaptcha(r,game,j);if(j.CurseActive){timer.Restart();Thread.Sleep(150);continue;}PumpCharacterIdentity(r,game,j);PumpThiQuyPriority(r,game,trainData,j);PumpTraining(r,trainData,j);PumpCuongThi(r,game,j);PumpGameSettings(r,settingsData,j);byte[] gate=r.Read(data,8);int gateState=BitConverter.ToInt32(gate,0);j.ReadyPhase=BitConverter.ToInt32(gate,4);
                             if(gateState==14){if(mapDelay==null){mapDelay=Stopwatch.StartNew();j.State="waiting_popup";Log(j,"map_ready",",\"delay_ms\":5000");}if(mapDelay.ElapsedMilliseconds>=5000){Log(j,"popup_delay_elapsed",",\"elapsed_ms\":"+mapDelay.ElapsedMilliseconds);j.State="confirming_popup";r.Write(data,BitConverter.GetBytes(15));}}
                             if(!popupLogged&&BitConverter.ToInt32(r.Read(data+3264,4),0)>0){popupLogged=true;Log(j,"popup_confirmed",",\"label\":\"Xác nhận\"");}
                             if(gateState==16){popupReady=true;Log(j,"popup_clear","");break;}Thread.Sleep(100);
@@ -2937,7 +2942,7 @@ namespace TGLL {
 
                     if(j.CurseActive||j.CaptchaFrame!=null)PumpCaptcha(keep,game,j);if(j.CurseActive){if(npcTimer.IsRunning){npcTimer.Stop();captchaNpcPaused=true;}Thread.Sleep(150);continue;}if(captchaNpcPaused){npcTimer.Start();captchaNpcPaused=false;}
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
-                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpActivityRetry(keep,data,questData,j,npcTimer);PumpQuest(keep,questData,j);PumpGameSettings(keep,settingsData,j);}
+                    if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpActivityRetry(keep,data,questData,j,npcTimer);PumpQuest(keep,questData,j);PumpCuongThi(keep,game,j);PumpGameSettings(keep,settingsData,j);}
                     PumpThiQuyPriority(keep,game,trainData,j);PumpTraining(keep,trainData,j);
                     if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){maintenance.Restart();PumpGemCombine(keep,gemData,game,j,autoItemData:itemData);PumpMarket(keep,marketData,game,j);PumpVitals(keep,game,j);PumpFarm(keep,farmData,game,j);if(j.InboxEnabled||j.InboxBusy)PumpInbox(keep,inboxData,game,j);if(j.MailEnabled||j.MailBusy)PumpMail(keep,mailData,game,j);PumpSonCap(keep,game,farmData,j);PumpSonCapMapAuto(keep,game,data,settingsData,j,npcTimer);PumpIzanamiMapAuto(keep,game,data,j,npcTimer);PumpIzanamiTravel(keep,data,j,npcTimer);if(j.GiftEnabled||j.GiftWaiting||j.GiftResultWaiting)PumpGiftCodes(keep,giftData,game,j);PumpCloak(keep,cloakData,game,j);PumpStoneChest(keep,chestData,itemData,game,j);PumpAutoItem(keep,itemData,j);PumpInventory(keep,game,j);PumpBiMa(keep,game,j);PumpTeam(keep,game,teamData,j);PumpZones(keep,game,teamData+2048,j);PumpFollow(keep,game,teamData+1024,j);
                     ReadDiagnostics(keep,data,j);PumpIzanamiAttemptLimit(keep,game,j);PumpDungeonCycle(keep,data,game,j,npcTimer);PumpReceiveKey(keep,data,j,npcTimer,game);if(j.ReplayRequested){Replay(keep,data,j);npcTimer.Restart();}
@@ -2945,7 +2950,7 @@ namespace TGLL {
                         if(state==11){FinishNpcAction(keep,data,j,npcTimer);}
                         else if(npcTimer.ElapsedMilliseconds>60000){j.ReceiveFlowActive=false;j.Error=state==8?(j.NpcAction==2?"onoki_not_found":"npc_not_found"):state==13||state==14||state==15||state==17?"startup_popup_not_ready":(j.NpcAction==2?"npc_izanami_menu_not_ready":j.NpcAction==1?"npc_dungeon_menu_not_ready":"npc_key_menu_not_ready");j.State=j.NpcAction==2?"izanami_unavailable":"npc_unavailable";keep.Write(data,BitConverter.GetBytes(12));npcTimer.Stop();}}
                     }
-                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.GemEnabled=false;j.GemBusy=false;j.GemItemPause=false;j.GemStatus="Game đã thoát";j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
+                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.CuongThiEnabled=false;j.CuongThi=null;j.CuongThiStatus="Game đã thoát";j.GemEnabled=false;j.GemBusy=false;j.GemItemPause=false;j.GemStatus="Game đã thoát";j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
             }catch(Exception startupError){
                 bool stopped=true;
                 if(p!=null){try{if(!p.HasExited){p.Kill();stopped=p.WaitForExit(3000);}}catch{stopped=false;}finally{p.Dispose();}}
@@ -4523,6 +4528,38 @@ namespace TGLL {
    a.Emit(0x48,0x89,0x74,0x24,48,0x48,0x8d,0x4b,64);a.Call(game+0x161150);a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x89,0x44,0x24,40,0x48,0x8b,0x07,0x48,0x89,0xf9,0x48,0x8b,0x90,0xa0,5,0,0,0xff,0x90,0x98,5,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x89,0xc1,0x4c,0x8b,0x10,0x48,0x8b,0x54,0x24,40,0x4d,0x8b,0x82,0xd0,3,0,0,0x41,0xff,0x92,0xc8,3,0,0);
    a.Emit(0x48,0x8b,0x74,0x24,48,0x48,0x3b,0xbe,0x90,0,0,0);a.J(0x85,"done");a.Emit(0xc7,0x43,4,2,0,0,0,0x4c,0x8b,0x4b,56,0x48,0x8b,0x07,0x48,0x89,0xf9,0xba,0xbe,0,0,0,0x4d,0x8b,0x81,0x98,0,0,0,0x4c,0x8b,0x90,0x90,4,0,0,0x4c,0x89,0x54,0x24,32,0xff,0x90,0x88,4,0,0);
    a.Label("done");a.Emit(0xc7,0x03,0,0,0,0);a.Label("return");a.Emit(0x48,0x83,0xc4,0x40,0x5f,0x5e,0x5b,0xc3);return a.Finish();
+  }
+ }
+}
+
+namespace TGLL {
+ public sealed class CuongThiSnapshot {
+  public readonly bool Found;public readonly int MapId,TemplateId,Uid;public readonly string Name;public readonly long Hp;public readonly DateTime ReadAt;
+  internal CuongThiSnapshot(int map,int id,int uid,string name,long hp,DateTime at){MapId=map;TemplateId=id;Uid=uid;Name=name??"";Hp=hp;Found=id>=0&&hp>0;ReadAt=at;}
+ }
+ public static partial class NativeBackend {
+  internal const long CuongThiStopHp=10000000;
+  internal static bool IsCuongThiName(string name){string text=System.Text.RegularExpressions.Regex.Replace((name??"").Normalize(NormalizationForm.FormC).Trim(),"\\s+"," ");return text.Equals("Cương thi",StringComparison.OrdinalIgnoreCase)||text.StartsWith("Cương thi ",StringComparison.OrdinalIgnoreCase);}
+  internal static bool CuongThiControlsAuto(NativeJob j){return j!=null&&j.CuongThiEnabled&&!j.QuestEnabled&&!j.SonCapEnabled&&!j.IzanamiEnabled&&!j.DungeonHighEnabled&&!j.DailyActive;}
+  internal static bool CuongThiWantsAuto(NativeJob j,DateTime now){CuongThiSnapshot s=j==null?null:j.CuongThi;return CuongThiControlsAuto(j)&&j.Auto&&UpSessionReady(j)&&s!=null&&s.Found&&s.Hp>=CuongThiStopHp&&(now-s.ReadAt).TotalMilliseconds>=0&&(now-s.ReadAt).TotalMilliseconds<=1500&&!j.CurseActive&&!j.ReceiveFlowActive&&!j.ReceiveKeyRequested&&!j.ReplayRequested&&!j.ReconnectRequested&&!j.QuestPauseAuto&&!j.TravelActive&&!j.ZoneSyncActive&&!j.FollowActive&&!j.CloakEnabled&&!j.ChestEnabled&&!j.MailEnabled&&!j.MailBusy&&!j.MailQueueOnly&&!j.CloakQueueOnly;}
+  public static void StartCuongThi(string id){NativeJob j=Get(id);if(j==null||!j.Auto||!UpSessionReady(j))throw new Exception("Chờ nhân vật vào game trước khi bật Auto Cương Thi.");j.CuongThi=null;j.CuongThiPollAt=DateTime.MinValue;j.CuongThiDiagnostic="";j.TrainEnabled=false;j.GameAutoManaged=true;j.CuongThiStatus="Đang đọc Cương Thi trong map";j.CuongThiEnabled=true;Log(j,"cuong_thi_start",",\"stop_below_hp\":10000000");}
+  public static void StopCuongThi(string id){NativeJob j=Get(id);if(j==null)return;j.CuongThiEnabled=false;j.CuongThi=null;j.CuongThiStatus="Tắt";Log(j,"cuong_thi_stop","");}
+  internal static CuongThiSnapshot ReadCuongThi(Remote r,long game,DateTime now){
+   long fcClass=ResolvedClass(r,game+0x16ee888),canvasClass=ResolvedClass(r,game+0x16ed658),playerClass=ResolvedClass(r,game+0x16ee330),mobClass=ResolvedClass(r,game+TrainingMobSlotRva);
+   long fc=r.Ptr(r.Ptr(fcClass+0xb8)+16),canvas=r.Ptr(r.Ptr(canvasClass+0xb8)),player=r.Ptr(r.Ptr(playerClass+0xb8)+8);
+   if(fc==0||canvas==0||player==0||r.Ptr(fc)!=fcClass||r.Ptr(player)!=playerClass||r.Ptr(canvas+0x1b8)!=fc)throw new Exception("cuong_thi_world_not_ready");
+   int map=BitConverter.ToInt16(r.Read(fc+0x134,2),0);long catalog=r.Ptr(canvas+0xd8),vector=r.Ptr(fc+0x150);if(catalog==0||vector==0)throw new Exception("cuong_thi_catalog_not_ready");int length=BitConverter.ToInt32(r.Read(catalog+24,4),0);if(length<1||length>10000)throw new Exception("cuong_thi_catalog_invalid");
+   var names=new Dictionary<int,string>();CuongThiSnapshot best=new CuongThiSnapshot(map,-1,-1,"",0,now);
+   foreach(long mob in ReadVector(r,vector)){
+    if(mob==0||r.Ptr(mob)!=mobClass)continue;int id=BitConverter.ToInt16(r.Read(mob+0x50,2),0);if(id<0||id>=length)continue;string name;if(!names.TryGetValue(id,out name)){long template=r.Ptr(catalog+32+id*8);name=template==0?"":ReadLabel(r,r.Ptr(template+48));names[id]=name;}if(!IsCuongThiName(name))continue;
+    byte[] state=r.Read(mob+0x38,60);long hp=BitConverter.ToInt32(state,56);if(state[5]>=4||hp<=0||BitConverter.ToInt16(state,24)!=id)continue;if(!best.Found||hp<best.Hp)best=new CuongThiSnapshot(map,id,BitConverter.ToInt32(state,0),name,hp,now);
+   }
+   if(r.Ptr(canvas+0x1b8)!=fc||r.Ptr(canvas+0xd8)!=catalog||r.Ptr(fc+0x150)!=vector||BitConverter.ToInt16(r.Read(fc+0x134,2),0)!=map)throw new Exception("cuong_thi_map_changed");return best;
+  }
+  internal static void ApplyCuongThiSnapshot(NativeJob j,CuongThiSnapshot value){j.CuongThi=value;j.CuongThiStatus=!value.Found?"Không có Cương Thi sống trong map; tắt treo":value.Name+" • HP: "+value.Hp.ToString("N0",System.Globalization.CultureInfo.GetCultureInfo("vi-VN"))+(value.Hp<CuongThiStopHp?" • dưới 10 triệu: tắt treo":" • từ 10 triệu: bật treo");string diagnostic=value.MapId+":"+value.TemplateId+":"+value.Uid+":"+(value.Hp>=CuongThiStopHp);if(diagnostic!=j.CuongThiDiagnostic){j.CuongThiDiagnostic=diagnostic;Log(j,"cuong_thi_state",",\"map\":"+value.MapId+",\"template_id\":"+value.TemplateId+",\"uid\":"+value.Uid+",\"hp\":"+value.Hp+",\"wanted\":"+(CuongThiWantsAuto(j,value.ReadAt)?"true":"false"));}}
+  static void PumpCuongThi(Remote r,long game,NativeJob j){
+   if(!j.CuongThiEnabled)return;DateTime now=DateTime.UtcNow;if(!CuongThiControlsAuto(j)||!UpSessionReady(j)){j.CuongThi=null;j.CuongThiStatus="Chờ đăng nhập/hoạt động khác xong";return;}if((now-j.CuongThiPollAt).TotalMilliseconds<250)return;j.CuongThiPollAt=now;
+   try{ApplyCuongThiSnapshot(j,ReadCuongThi(r,game,now));}catch(Exception e){j.CuongThi=null;j.CuongThiStatus="Chưa đọc được map/HP; tạm tắt treo";if(j.CuongThiDiagnostic!=e.Message){j.CuongThiDiagnostic=e.Message;Log(j,"cuong_thi_read_error",",\"reason\":"+Quote(e.Message));}}
   }
  }
 }

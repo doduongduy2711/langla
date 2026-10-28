@@ -15,6 +15,7 @@ function Update-ActiveTabUi {
     elseif($selected -eq $cloakPage){Update-CloakUi}
     elseif($selected -eq $trainPage){Update-TrainUi}
     elseif($selected -eq $captchaPage){Update-CaptchaUi}
+    elseif($selected -eq $cuongThiPage){Update-CuongThiUi}
     elseif($selected -eq $farmPage){Update-FarmUi}
     elseif($selected -eq $inventoryPage){Update-InventoryUi}
     elseif($selected -eq $izanamiPage){Update-IzanamiUi}

@@ -1,6 +1,6 @@
 ﻿$ocrPref=$captchaAuto.Checked;$ocrSetting=$script:settings.captchaAutoEnabled
 try{
- if($captchaPage.Text -ne 'Giải mã ảnh' -or !$captchaPage.AutoScroll -or $tabs.TabPages.Count -ne 25){throw 'Captcha tab missing'}
+ if($captchaPage.Text -ne 'Giải mã ảnh' -or !$captchaPage.AutoScroll -or $tabs.TabPages.Count -ne 26){throw 'Captcha tab missing'}
  $captchaAuto.Checked=$false;Save-CaptchaPreference
  if($script:settings.captchaAutoEnabled){throw 'Captcha disable preference did not persist'}
  $captchaAuto.Checked=$true;Save-CaptchaPreference

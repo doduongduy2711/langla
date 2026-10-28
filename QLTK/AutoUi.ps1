@@ -11,7 +11,7 @@ function Get-AccountAutoSkills($a,$j) {
     return [int[]][TGLL.NativeBackend]::DefaultTrainingSkills($j.Skills,[int[]]$wanted)
 }
 function Sync-AccountAutoTrain($row,$j) {
-    if($j.FarmEnabled -or $j.SonCapEnabled -or $j.QuestEnabled){return}
+    if($j.CuongThiEnabled -or $j.FarmEnabled -or $j.SonCapEnabled -or $j.QuestEnabled){return}
     $key=[string]$row.Tag.id
     if(!$script:autoTrainWanted[$key]){return}
     if([TGLL.NativeBackend]::UsesInstanceGameCombat($j) -or [TGLL.NativeBackend]::DungeonEntryBlocked($j) -or ($j.MailQueueOnly -or $j.CloakQueueOnly) -or $j.QuestPauseAuto -or !$j.TrainReady -or !$j.Skills.Count -or $j.ReceiveKeyRequested -or $j.IzanamiRequested -or $j.ReplayRequested -or $j.State -in @('waiting_map','waiting_popup','confirming_popup','finding_npc','choosing_key','waiting_dungeon','choosing_dungeon','creating_party','checking_dungeon_keys','finding_onoki','choosing_izanami','waiting_dungeon','choosing_dungeon','creating_party','checking_dungeon_keys','finding_onoki','choosing_izanami')){return}
@@ -24,6 +24,7 @@ function Sync-AccountAutoTrain($row,$j) {
 function Set-AccountAuto($row,[bool]$enabled) {
     $key=[string]$row.Tag.id
     if(!$enabled -and $script:farmUpRequests -and $script:farmUpRequests.ContainsKey($key)){Set-AutoCell $row $false;return}
+    if(!$enabled -and [bool]$row.Tag.cuongThiEnabled){Set-CuongThiPreference $row $false}
     $script:autoTrainWanted[$key]=$enabled
     if(!$enabled -and [bool]$row.Tag.soncap){$row.Tag | Add-Member NoteProperty soncap $false -Force;if(!$UiTest){Save-Accounts}}
     Set-AutoCell $row $enabled
@@ -51,6 +52,7 @@ function Sync-AutoRows([int]$maxRows=0) {
         if($null -eq $j -or !$j.PSObject.Properties['GameSettingsReady']){continue}
         if($j.State -in @('failed','closed','cancelled') -or $j.CloseRequested){Set-AutoCell $row $false;$script:autoTrainApplied.Remove($key);continue}
         Sync-GemCombineAccount $row.Tag $j
+        Sync-CuongThiAccount $row.Tag $j
         Sync-TrainPriority $row.Tag $j
         if($j -is [TGLL.NativeJob]){$selected=@(Get-AccountAutoSkills $row.Tag $j);if(($selected -join ',') -ne ($j.HangingSkillIds -join ',')){$j.HangingSkillIds=[int[]]$selected;$j.HangingSkillCursor=0}}
         if($j -is [TGLL.NativeJob] -and $j.IzanamiMapAutoActive){$script:autoTrainWanted[$key]=$true;$script:autoTrainApplied[$key]=$j.Id;Set-AutoCell $row $true;continue}

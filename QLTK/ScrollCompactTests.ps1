@@ -13,6 +13,6 @@ try {
   $form.ClientSize=$size;Resize-UiLayout
   if($grid.Bottom -ge $tabs.Top -or $tabs.Right -ge $detailsGroup.Left -or $detailsGroup.Right -gt $form.ClientSize.Width -or $options.Right -gt $form.ClientSize.Width -or $tabs.Height -lt 100){throw 'Compact layout overlaps or clips panels'}
  }
- if($grid.Columns.Count -ne 14 -or $tabs.TabPages.Count -ne 25 -or $grid.RowTemplate.Height -ne 22){throw 'Compact mode removed features'}
+ if($grid.Columns.Count -ne 14 -or $tabs.TabPages.Count -ne 26 -or $grid.RowTemplate.Height -ne 22){throw 'Compact mode removed features'}
  Write-Output 'PASS: native scroll tracking, queues/socket preserved while scrolling, deferred bulk refresh resumes after 250ms quiet, 900/1100px compact layout with all columns/tabs retained.'
 }finally{foreach($n in $scrollFunctions.Keys){Set-Item ('Function:\'+$n) $scrollFunctions[$n]};$script:uiTicks=$scrollTicks;$script:uiRefreshPending=$scrollPending;$script:uiDragging=$scrollDrag;$form.ClientSize=$scrollSize;Resize-UiLayout}

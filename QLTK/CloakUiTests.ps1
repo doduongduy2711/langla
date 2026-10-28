@@ -9,6 +9,6 @@ try{
  Start-CloakDirectSelected;if(!$clJ.CloakEnabled -or $clJ.CloakExpectedPrice -ne 900 -or $clJ.CloakQuantity -ne 2){throw 'Selected cloak purchase invalid'}
  Stop-CloakSelected;if($clJ.CloakEnabled){throw 'Cloak stop failed'}
  $clJ.FarmEnabled=$true;Start-CloakDirectSelected;if($clJ.CloakEnabled){throw 'Must block conflicting Up automation'}
- if($cloakChoice.Items.Count -ne 9 -or $tabs.TabPages.Count -ne 25 -or !$cloakPage.AutoScroll){throw 'Cloak page layout invalid'}
+ if($cloakChoice.Items.Count -ne 9 -or $tabs.TabPages.Count -ne 26 -or !$cloakPage.AutoScroll){throw 'Cloak page layout invalid'}
  Write-Output 'PASS: cloak page 9 offers, ID131/900 crystals, quantity, no purchase on save, selected start/stop and conflicting Up gate.'
 }finally{$clRemoved=$null;$null=$clJobs.TryRemove($clJ.Id,[ref]$clRemoved);if($clHad){$script:accountJobs[$clKey]=$clOld}else{$script:accountJobs.Remove($clKey)}}
