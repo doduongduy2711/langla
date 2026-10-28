@@ -18,6 +18,11 @@ class CaptchaTests {
   C(NativeBackend.IsCurseNotice("Mã xác nhận: Mã xác nhận:"),"live captcha title not detected");
   C(!NativeBackend.IsCurseNotice("Gửi thư thành công"),"ordinary popup detected");
   C(NativeBackend.CaptchaCodeValid("942B")&&!NativeBackend.CaptchaCodeValid("94-B")&&!NativeBackend.CaptchaCodeValid("94B")&&!NativeBackend.CaptchaCodeValid("94 B"),"invalid OCR code accepted");
+  string bitmap=System.IO.Path.GetTempFileName();try{
+   var colors=new CaptchaFrame{Width=2,Height=2,PixelOffset=40,Raw=new byte[]{1,2,3,255,4,5,6,255,7,8,9,255,10,11,12,255}};
+   NativeBackend.SaveCaptchaBitmap(colors,bitmap);byte[] bmp=System.IO.File.ReadAllBytes(bitmap);C(bmp[54]==3&&bmp[55]==2&&bmp[56]==1&&bmp[62]==9,"Unity bottom-up RGBA bitmap flipped or wrong colors");
+   colors.PixelOffset=32;NativeBackend.SaveCaptchaBitmap(colors,bitmap);bmp=System.IO.File.ReadAllBytes(bitmap);C(bmp[54]==8&&bmp[55]==9&&bmp[56]==255,"packed top-down bitmap flipped or wrong colors");
+  }finally{System.IO.File.Delete(bitmap);}
   using(var r=new Remote(Process.GetCurrentProcess())){
    long game=r.Allocate(0x1700000),data=r.Allocate(4096),code=r.Allocate(4096),fcClass=r.Allocate(2048),stat=r.Allocate(32),fc=r.Allocate(1024),dialogClass=r.Allocate(2048),popup=r.Allocate(512),vector=r.Allocate(32),vectorClass=r.Allocate(1024);
    long image=r.Allocate(128),pixmap=r.Allocate(96),pixels=r.Allocate(64),button=r.Allocate(160),input=r.Allocate(64),inputClass=r.Allocate(1024);

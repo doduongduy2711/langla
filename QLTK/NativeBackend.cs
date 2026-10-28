@@ -4439,7 +4439,7 @@ namespace TGLL {
   }
   internal static void SaveCaptchaBitmap(CaptchaFrame f,string path){
    using(BinaryWriter b=new BinaryWriter(File.Create(path))){b.Write((ushort)0x4d42);b.Write(54+f.Raw.Length);b.Write(0);b.Write(54);b.Write(40);b.Write(f.Width);b.Write(f.Height);b.Write((ushort)1);b.Write((ushort)32);b.Write(0);b.Write(f.Raw.Length);b.Write(0);b.Write(0);b.Write(0);b.Write(0);
-    for(int y=f.Height-1;y>=0;y--)for(int x=0;x<f.Width;x++){int n=(y*f.Width+x)*4;b.Write(f.Raw[n+(f.PixelOffset==40?2:1)]);b.Write(f.Raw[n+(f.PixelOffset==40?1:2)]);b.Write(f.Raw[n+(f.PixelOffset==40?0:3)]);b.Write((byte)255);}
+    for(int y=f.Height-1;y>=0;y--)for(int x=0;x<f.Width;x++){int row=f.PixelOffset==40?f.Height-1-y:y;int n=(row*f.Width+x)*4;b.Write(f.Raw[n+(f.PixelOffset==40?2:1)]);b.Write(f.Raw[n+(f.PixelOffset==40?1:2)]);b.Write(f.Raw[n+(f.PixelOffset==40?0:3)]);b.Write((byte)255);}
    }
   }
   internal static bool CaptchaCodeValid(string code){return code!=null&&code.Length==4&&code.All(c=>c>='0'&&c<='9'||c>='A'&&c<='Z');}
