@@ -76,11 +76,16 @@ class PortalTests(unittest.TestCase):
         self.request('/api/label', {'name': 'sample.bmp', 'code': 'a1b2'})
         self.assertEqual(self.request('/api/item?name=sample.bmp')['label'], 'A1B2')
 
+    def test_human_math_result_label(self):
+        self.request('/api/label', {'name': 'sample.bmp', 'code': '4'})
+        self.assertEqual(self.request('/api/item?name=sample.bmp')['label'], '4')
+        self.assertEqual(self.image.with_suffix('.label.txt').read_text().strip(), '4')
+
     def test_path_token_and_validation_guards(self):
         for name in ('../outside.bmp', '..\\outside.bmp', '/outside.bmp', 'missing.bmp'):
             with self.assertRaises(ValueError):
                 self.store.path(name)
-        for value in ('123', 'ABCDE', 'A!12'):
+        for value in ('ABC', 'ABCDE', 'A!12'):
             with self.assertRaises(urllib.error.HTTPError) as error:
                 self.request('/api/label', {'name': 'sample.bmp', 'code': value})
             self.assertEqual(error.exception.code, 400)
