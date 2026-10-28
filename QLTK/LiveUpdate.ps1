@@ -3,6 +3,10 @@ function Get-LiveUpdateHash([string]$path) {
     if(![IO.File]::Exists($path)){throw ('Không tìm thấy tệp cập nhật: '+[IO.Path]::GetFileName($path))}
     return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
 }
+function Get-LiveUpdateBinaryHash([string]$path) {
+    if([IO.Path]::GetFileName($path) -ceq 'CaptchaOcr.py' -and ![IO.File]::Exists($path)){return ''}
+    return Get-LiveUpdateHash $path
+}
 function Test-LiveUpdateNamedParser {
     return @([Management.Automation.Language.Parser].GetMethods([Reflection.BindingFlags]'Public,Static') | Where-Object {$_.Name -eq 'ParseInput' -and $_.GetParameters().Count -eq 4}).Count -gt 0
 }
@@ -33,13 +37,13 @@ function Initialize-LiveUpdate {
     }
     foreach($path in @($paths | Select-Object -Unique)){$script:liveUpdateSources[$path]=Read-LiveUpdateSource $path}
     foreach($name in @('NativeBackend.cs','AutoLogin.cs','SocketServer.cs','StoredJson.cs','UiPerformance.cs','MapCatalog.json','CaptchaOcr.py')){
-        $path=Join-Path $root $name;$script:liveUpdateBinaries[$path]=Get-LiveUpdateHash $path
+        $path=Join-Path $root $name;$script:liveUpdateBinaries[$path]=Get-LiveUpdateBinaryHash $path
     }
 }
 function Apply-LiveUpdate {
     $changed=@();$pending=@();$definitions=@{};$before=@{};$snapshots=@{}
     # Validate the entire batch first; a changed native type/startup requires restart, not partial execution.
-    foreach($path in $script:liveUpdateBinaries.Keys){if((Get-LiveUpdateHash $path) -ne $script:liveUpdateBinaries[$path]){$pending+=[IO.Path]::GetFileName($path)}}
+    foreach($path in $script:liveUpdateBinaries.Keys){if((Get-LiveUpdateBinaryHash $path) -ne $script:liveUpdateBinaries[$path]){$pending+=[IO.Path]::GetFileName($path)}}
     foreach($path in $script:liveUpdateSources.Keys){
         $old=$script:liveUpdateSources[$path]
         if((Get-LiveUpdateHash $path) -eq $old.Hash){continue}
@@ -71,7 +75,7 @@ function Apply-LiveUpdate {
     if($pending.Count){return [pscustomobject]@{Applied=0;RestartRequired=$true;Files=@($pending | Select-Object -Unique)}}
     # Reject files being replaced while the batch was being checked.
     foreach($path in $snapshots.Keys){if((Get-LiveUpdateHash $path) -ne $snapshots[$path].Hash){throw 'Tệp cập nhật đang được ghi. Đợi vài giây rồi bấm lại.'}}
-    foreach($path in $script:liveUpdateBinaries.Keys){if((Get-LiveUpdateHash $path) -ne $script:liveUpdateBinaries[$path]){throw 'Bộ điều khiển game vừa thay đổi. Chưa áp dụng cập nhật.'}}
+    foreach($path in $script:liveUpdateBinaries.Keys){if((Get-LiveUpdateBinaryHash $path) -ne $script:liveUpdateBinaries[$path]){throw 'Bộ điều khiển game vừa thay đổi. Chưa áp dụng cập nhật.'}}
     $applied=@()
     try{
         foreach($name in $definitions.Keys){$applied+=$name;. $definitions[$name]}

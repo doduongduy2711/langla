@@ -6,6 +6,12 @@ $null=New-Item -ItemType Directory -Path $liveDir
 $livePath=Join-Path $liveDir 'Fixture.ps1';$liveNativePath=Join-Path $liveDir 'Fixture.cs'
 $liveFile={param($text)[IO.File]::WriteAllText($livePath,$text,(New-Object Text.UTF8Encoding($true)))}
 try{
+ $missingOcr=Join-Path $liveDir 'CaptchaOcr.py'
+ if((Get-LiveUpdateBinaryHash $missingOcr) -ne ''){throw 'Missing optional OCR prevented updater bootstrap'}
+ [IO.File]::WriteAllText($missingOcr,'# synthetic OCR fixture')
+ if((Get-LiveUpdateBinaryHash $missingOcr) -notmatch '^[A-Fa-f0-9]{64}$'){throw 'New OCR file was not tracked for restart'}
+ $missingCriticalRejected=$false;try{Get-LiveUpdateBinaryHash (Join-Path $liveDir 'MissingNative.cs') | Out-Null}catch{$missingCriticalRejected=$true}
+ if(!$missingCriticalRejected){throw 'Optional OCR handling weakened critical source checks'}
  & $liveFile 'function Live-Fixture($value) { return "old:"+$value }; $script:fixtureStartup=1'
  . $livePath
  $script:liveUpdateSources=@{};$script:liveUpdateSources[$livePath]=Read-LiveUpdateSource $livePath
