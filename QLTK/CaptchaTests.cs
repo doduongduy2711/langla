@@ -35,14 +35,16 @@ class CaptchaTests {
    NewString text=delegate(IntPtr p){return new IntPtr(S(r,Marshal.PtrToStringAnsi(p)));};
    Input get=delegate(IntPtr self,IntPtr info){C(self.ToInt64()==popup,"wrong popup input getter");return new IntPtr(input);};
    SetText set=delegate(IntPtr self,IntPtr value,IntPtr info){C(self.ToInt64()==input,"wrong input setter");sets++;entered=Encoding.Unicode.GetString(r.Read(value.ToInt64()+20,R(r,value.ToInt64()+16)*2));};
-   Click click=delegate(IntPtr self,IntPtr info){C(self.ToInt64()==button,"wrong captcha confirmation button");confirms++;tick();};
+   Click click=delegate(IntPtr self,IntPtr info){throw new Exception("focus-dependent button wrapper called");};
+   Confirm submit=delegate(IntPtr self,int action,IntPtr context,IntPtr sender,IntPtr info){C(self.ToInt64()==popup&&action==190&&context==IntPtr.Zero&&sender.ToInt64()==button,"wrong popup confirmation event");confirms++;tick();};
    Confirm confirm=delegate(IntPtr self,int action,IntPtr p,IntPtr b,IntPtr info){C(self.ToInt64()==fc&&action==-7&&p.ToInt64()==popup&&b.ToInt64()==button,"wrong game confirmation dispatch");confirms++;tick();};
-   L(r,vectorClass+0x208,Marshal.GetFunctionPointerForDelegate(contains).ToInt64());L(r,dialogClass+0x598,Marshal.GetFunctionPointerForDelegate(get).ToInt64());L(r,inputClass+0x3c8,Marshal.GetFunctionPointerForDelegate(set).ToInt64());L(r,fcClass+0x488,Marshal.GetFunctionPointerForDelegate(confirm).ToInt64());Stub(r,game+0x161150,text);Stub(r,game+0x3d7d50,click);r.Protect(game,0x1700000,0x20);
+   L(r,vectorClass+0x208,Marshal.GetFunctionPointerForDelegate(contains).ToInt64());L(r,dialogClass+0x488,Marshal.GetFunctionPointerForDelegate(submit).ToInt64());L(r,dialogClass+0x598,Marshal.GetFunctionPointerForDelegate(get).ToInt64());L(r,inputClass+0x3c8,Marshal.GetFunctionPointerForDelegate(set).ToInt64());L(r,fcClass+0x488,Marshal.GetFunctionPointerForDelegate(confirm).ToInt64());Stub(r,game+0x161150,text);Stub(r,game+0x3d7d50,click);r.Protect(game,0x1700000,0x20);
    byte[] bytes=NativeCode.Captcha(data,game);C(bytes.Length<4096,"captcha hook too large");r.Write(code,bytes);r.Protect(code,4096,0x20);tick=(Tick)Marshal.GetDelegateForFunctionPointer(new IntPtr(code),typeof(Tick));
    Action queue=delegate{I(r,data+80,32);I(r,data+8,1);L(r,data+16,popup);L(r,data+24,image);L(r,data+32,pixmap);L(r,data+40,pixels);I(r,data+48,2);r.Write(data+52,BitConverter.GetBytes(NativeBackend.CaptchaHash(raw)));L(r,data+56,button);r.Write(data+64,Encoding.ASCII.GetBytes("942B\0"));I(r,data+72,2);I(r,data+76,1);I(r,data,1);};
    queue();tick();C(confirms==1&&sets==1&&entered=="942B"&&R(r,data+4)==2,"code not filled/confirmed exactly once");tick();C(confirms==1,"confirmation repeated on next frame");
    queue();r.Write(pixels+32,new byte[]{1});tick();C(confirms==1&&sets==1,"changed image was submitted");r.Write(pixels+32,raw);
    queue();r.Write(data+65,new byte[]{59});tick();C(confirms==1&&sets==1,"malformed code submitted");
+   queue();r.Write(button+0x51,new byte[]{1});tick();C(confirms==1,"disabled button event submitted");r.Write(button+0x51,new byte[]{0});
    queue();member=false;tick();C(confirms==1,"dismissed popup submitted");member=true;
    queue();I(r,data+8,0);tick();C(confirms==1,"disabled request submitted");
    queue();L(r,button+0x78,S(r,"Khác"));tick();C(confirms==1,"wrong button label submitted");L(r,button+0x78,label);
@@ -50,7 +52,7 @@ class CaptchaTests {
    long stored=r.Allocate(16032),mailList=r.Allocate(32),items=r.Allocate(40);L(r,vector+16,mailList);L(r,mailList+16,items);I(r,mailList+24,1);L(r,items+24,1);L(r,items+32,popup);L(r,popup+0xd0,input);L(r,popup+0xb0,S(r,"Vui lòng giải Capcha có ở dưới game"));I(r,pixmap+16,100);I(r,pixmap+20,40);L(r,pixmap+32,stored);L(r,stored+24,4000);r.Write(stored+32,new byte[16000]);
    long childVector=r.Allocate(32),childList=r.Allocate(32),childItems=r.Allocate(40);L(r,childVector,vectorClass);L(r,childVector+16,childList);L(r,childList+16,childItems);I(r,childList+24,1);L(r,childItems+24,1);L(r,childItems+32,button);L(r,popup+0x50,childVector);
    var snapshot=NativeBackend.ReadCaptchaFrame(r,game);C(snapshot!=null&&snapshot.Width==100&&snapshot.Height==40&&snapshot.Raw.Length==16000,"native captcha pixels not extracted");
-   long subclass=r.Allocate(2048);L(r,subclass+0x58,dialogClass);L(r,subclass+0x598,Marshal.GetFunctionPointerForDelegate(get).ToInt64());L(r,popup,subclass);L(r,popup+0xd0,0);L(r,popup+0xb0,S(r,"Mã xác nhận:"));L(r,pixmap+32,0);L(r,pixmap+40,stored);L(r,stored+24,16000);
+   long subclass=r.Allocate(2048);L(r,subclass+0x58,dialogClass);L(r,subclass+0x488,Marshal.GetFunctionPointerForDelegate(submit).ToInt64());L(r,subclass+0x598,Marshal.GetFunctionPointerForDelegate(get).ToInt64());L(r,popup,subclass);L(r,popup+0xd0,0);L(r,popup+0xb0,S(r,"Mã xác nhận:"));L(r,pixmap+32,0);L(r,pixmap+40,stored);L(r,stored+24,16000);
    snapshot=NativeBackend.ReadCaptchaFrame(r,game);C(snapshot!=null&&snapshot.PixelOffset==40,"live subclass byte RGBA captcha not extracted");
    I(r,pixmap+16,2);I(r,pixmap+20,1);r.Write(stored+32,raw);queue();I(r,data+80,40);L(r,data+40,stored);tick();C(confirms==2&&sets==2&&R(r,data+4)==2,"subclass RGBA confirm button was not dispatched");
    queue();I(r,data+80,40);L(r,data+40,stored);I(r,stored+24,2);tick();C(confirms==2,"short RGBA byte buffer submitted");I(r,stored+24,16000);
@@ -60,8 +62,8 @@ class CaptchaTests {
    I(r,button+0x80,-7);long canvasClass=r.Allocate(256),canvasStatic=r.Allocate(32),canvas=r.Allocate(512),popupData=r.Allocate(4096),popupCode=r.Allocate(4096);L(r,game+0x16ed658,canvasClass);L(r,canvasClass+0xb8,canvasStatic);L(r,canvasStatic,canvas);L(r,canvas+0x1b8,fc);
    r.Write(popupCode,NativeCode.PrepareMap(popupData,game+0x16ed658,game+0x16ee888,game+0x16eeba8,game+0x1dd900,0));r.Protect(popupCode,4096,0x20);var generic=(Tick)Marshal.GetDelegateForFunctionPointer(new IntPtr(popupCode),typeof(Tick));I(r,popupData,15);generic();C(confirms==2&&R(r,popupData)==15,"generic startup confirmation sent empty captcha");
    L(r,popup+0xc8,0);generic();C(confirms==3&&R(r,popupData)==17,"ordinary confirmation stopped working");GC.KeepAlive(generic);
-   GC.KeepAlive(click);GC.KeepAlive(contains);GC.KeepAlive(text);GC.KeepAlive(get);GC.KeepAlive(set);GC.KeepAlive(confirm);GC.KeepAlive(tick);
+   GC.KeepAlive(submit);GC.KeepAlive(click);GC.KeepAlive(contains);GC.KeepAlive(text);GC.KeepAlive(get);GC.KeepAlive(set);GC.KeepAlive(confirm);GC.KeepAlive(tick);
   }
-  Console.WriteLine("PASS: captcha prompt, strict code, native input/action-190 button dispatch, subclass and RGBA bytes, one-shot/reentry, changed image/dimensions, dismissed popup, disabled request and wrong button guards. No real game input.");
+  Console.WriteLine("PASS: captcha prompt, strict code, native input/action-190 popup callback without hover/focus, disabled-button guard, subclass and RGBA bytes, one-shot/reentry, changed image/dimensions, dismissed popup, disabled request and wrong button guards. No real game input.");
  }
 }
