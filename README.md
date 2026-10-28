@@ -24,3 +24,7 @@ Build tạo gói cập nhật `QLTK-update.zip` và gói cài mới `QLTK-portab
 Để phát hành: push tag `v209` (số phiên bản phải tăng cho các lần sau). GitHub Actions kiểm tra trên Windows, đóng gói và đưa hai ZIP lên GitHub Releases. Cần bật Actions và quyền workflow tạo Release. Mỗi bản phát hành có nguồn repo mặc định theo `github.repository`.
 
 Launcher được build bằng reference assemblies .NET Framework 4.8, có QLTK.exe.config đi kèm. Gói QLTK-net48-launcher.zip chỉ chứa EXE và cấu hình runtime; đóng cửa sổ QLTK trước khi thay hai file cạnh QLTK.exe. Không cần thay thư mục Data. Nút cập nhật nguồn chương trình không thay launcher đang chạy.
+
+## Portal OCR chạy riêng
+
+Tải `OCR-Portal-portable.zip` trong Releases, giải nén vào thư mục mới và mở `MO-PORTAL.cmd`. Gói đã kèm Python và bộ OCR; không cần chép đè QLTK. Dữ liệu mặc định nằm trong `OCR-Portal/Data/samples`. Để duyệt ảnh QLTK đang có, mở `CHON-THU-MUC-ANH.cmd` và chọn thư mục ảnh; nhãn đã duyệt được lưu tại thư mục đó. Dùng `DUNG-PORTAL.cmd` để dừng phiên do gói này mở. Khi cổng 47662 đã có ứng dụng khác, portal chọn cổng local còn trống trong 47663–47671.

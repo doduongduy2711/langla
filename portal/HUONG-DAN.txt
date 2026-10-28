@@ -1,0 +1,13 @@
+PORTAL OCR CHẠY RIÊNG
+
+1. Giải nén toàn bộ thư mục OCR-Portal vào một chỗ mới, không giải nén đè lên QLTK.
+2. Mở MO-PORTAL.cmd. Trình duyệt sẽ tự mở portal trên máy này.
+3. Bấm Thêm ảnh để nhập ảnh. OCR tự đọc; bạn chỉ sửa các kết quả sai hoặc còn trống.
+4. Muốn xem bộ ảnh có sẵn: mở CHON-THU-MUC-ANH.cmd, chọn Data\OCR\samples của QLTK.
+5. Dừng phiên của gói này bằng DUNG-PORTAL.cmd. Đóng trình duyệt không tự dừng OCR.
+
+Đã kèm Python và bộ OCR. Không cần chạy QLTK hoặc cài Python riêng.
+Dữ liệu mới mặc định lưu trong OCR-Portal\Data\samples.
+Nếu chọn thư mục ảnh có sẵn, nhãn bạn duyệt và kết quả OCR được lưu tại thư mục đã chọn.
+Kết quả OCR và nhãn đã duyệt được lưu riêng. Duyệt nhãn không tự huấn luyện lại mô hình.
+Portal chỉ nghe tại 127.0.0.1, không điều khiển hoặc gửi mã vào game.
