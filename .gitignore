@@ -16,3 +16,5 @@ farm-spots.json
 .env*
 /live-update-fixture-*/
 /github-update-fixture-*/
+__pycache__/
+*.pyc

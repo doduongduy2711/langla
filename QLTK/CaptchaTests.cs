@@ -21,6 +21,7 @@ class CaptchaTests {
   string bitmap=System.IO.Path.GetTempFileName();try{
    var colors=new CaptchaFrame{Width=2,Height=2,PixelOffset=40,Raw=new byte[]{1,2,3,255,4,5,6,255,7,8,9,255,10,11,12,255}};
    NativeBackend.SaveCaptchaBitmap(colors,bitmap);byte[] bmp=System.IO.File.ReadAllBytes(bitmap);C(bmp[54]==3&&bmp[55]==2&&bmp[56]==1&&bmp[62]==9,"Unity bottom-up RGBA bitmap flipped or wrong colors");
+   string samples=System.IO.Path.Combine(System.IO.Path.GetTempPath(),"qltk-captcha-tests-"+Guid.NewGuid().ToString("N"));try{bool created;string first=NativeBackend.SaveCaptchaSample(colors,samples,out created);C(created,"new sample not archived");string second=NativeBackend.SaveCaptchaSample(colors,samples,out created);C(!created&&first==second&&System.IO.Directory.GetFiles(samples).Length==1,"duplicate sample stored");colors.Raw[0]++;NativeBackend.SaveCaptchaSample(colors,samples,out created);C(created&&System.IO.Directory.GetFiles(samples).Length==2,"new image not stored");colors.Raw[0]--;}finally{if(System.IO.Directory.Exists(samples))System.IO.Directory.Delete(samples,true);}
    colors.PixelOffset=32;NativeBackend.SaveCaptchaBitmap(colors,bitmap);bmp=System.IO.File.ReadAllBytes(bitmap);C(bmp[54]==8&&bmp[55]==9&&bmp[56]==255,"packed top-down bitmap flipped or wrong colors");
   }finally{System.IO.File.Delete(bitmap);}
   using(var r=new Remote(Process.GetCurrentProcess())){

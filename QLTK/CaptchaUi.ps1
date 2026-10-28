@@ -6,11 +6,18 @@ $captchaInstall=Ui-NewButton 'Cài bộ đọc mã' {Start-CaptchaInstall};Ui-Pl
 $captchaRuntimeHint=Ui-Label '' $captchaPage 205 100 430 45
 $captchaAccountHint=Ui-Label 'Chọn acc để xem trạng thái giải mã.' $captchaPage 16 160 635 65
 $null=Ui-Label 'Máy chưa có bộ đọc: QLTK tự tải ở lần dùng đầu, hoặc bấm Cài ngay. Chỉ xác nhận một lần cho mỗi ảnh mã; ảnh đổi sẽ được đọc lại.' $captchaPage 16 235 635 50
+$captchaSamplesButton=Ui-NewButton 'Mở thư mục ảnh mẫu' {Open-CaptchaSamples};Ui-Place $captchaSamplesButton $captchaPage 16 300 190 28
+$null=Ui-Label 'Mỗi ảnh mã mới được lưu trong Data\OCR\samples. Ảnh trùng chỉ lưu một bản; cần gán mã đúng trước khi train.' $captchaPage 16 340 635 45
 $script:captchaRuntime=Join-Path $script:dataDir 'OCR\runtime';$script:captchaPython=Join-Path $script:captchaRuntime 'python.exe'
 $script:captchaInstallProcess=$null;$script:captchaInstallTried=$false;$script:captchaReady=$false;$script:captchaInstallResult=Join-Path $script:dataDir 'OCR\install-result.json'
 function Apply-CaptchaOptions {
  $script:captchaReady=(Test-Path -LiteralPath $script:captchaPython -PathType Leaf)
  [TGLL.NativeBackend]::ConfigureCaptcha(($captchaAuto.Checked -and !$UiTest),$script:captchaPython,(Join-Path $PSScriptRoot 'CaptchaOcr.py'),(Join-Path $script:dataDir 'OCR\jobs'))
+}
+function Open-CaptchaSamples {
+ if($UiTest){return}
+ $directory=Join-Path $script:dataDir 'OCR\samples';$null=[IO.Directory]::CreateDirectory($directory)
+ Start-Process -FilePath explorer.exe -ArgumentList ('"'+$directory+'"')
 }
 function Save-CaptchaPreference {
  $script:settings.captchaAutoEnabled=$captchaAuto.Checked

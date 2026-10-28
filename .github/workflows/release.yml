@@ -109,6 +109,8 @@ jobs:
           ./scripts/Build-OcrRuntime.ps1 -OutputDirectory (Join-Path $pwd 'dist')
           $build=@(Get-ChildItem dist -Directory -Filter 'ocr-build-*')[0]
           $runtime=Join-Path $build.FullName 'runtime/python.exe'
+          & $runtime -I (Join-Path $pwd 'QLTK/CaptchaOcrTests.py')
+          if($LASTEXITCODE -ne 0){throw 'OCR crop regression checks failed'}
           $info=New-Object Diagnostics.ProcessStartInfo
           $info.FileName=$runtime;$info.Arguments='-I "'+(Join-Path $pwd 'QLTK/CaptchaOcr.py')+'" --worker'
           $info.UseShellExecute=$false;$info.CreateNoWindow=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true;$info.RedirectStandardInput=$true

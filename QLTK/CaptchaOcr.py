@@ -36,7 +36,7 @@ def find_region(rgb, cv2, np):
     return x + int(w * .12), y + int(h * .15), int(w * .76), int(h * .57)
 
 
-def recognize(path: Path, crop=None, length=4, debug_dir=None, keep_case=False, engine=None):
+def recognize(path: Path, crop=None, length=4, debug_dir=None, keep_case=False, engine=None, native_frame=False):
     import cv2
     import ddddocr
     import numpy as np
@@ -45,7 +45,8 @@ def recognize(path: Path, crop=None, length=4, debug_dir=None, keep_case=False, 
     with Image.open(path) as source:
         image = ImageOps.exif_transpose(source).convert("RGB")
     rgb = np.asarray(image)
-    region = tuple(crop) if crop else find_region(rgb, cv2, np)
+    # Native captures already contain only the captcha image; its background varies.
+    region = tuple(crop) if crop else ((0, 0, image.width, image.height) if native_frame else find_region(rgb, cv2, np))
     x, y, w, h = region
     if x < 0 or y < 0 or w < 1 or h < 1 or x + w > image.width or y + h > image.height:
         raise ValueError("Vung --crop nam ngoai anh hoac co kich thuoc khong hop le.")
@@ -141,14 +142,17 @@ def worker():
     print("READY", flush=True)
     for line in sys.stdin:
         try:
-            path = Path(json.loads(line)["image"])
-            result = recognize(path, engine=engine)
+            request = json.loads(line)
+            path = Path(request["image"])
+            result = recognize(path, engine=engine, native_frame=request.get("native_frame") is True)
             if result["code"]:
                 print("OK\t" + result["code"], flush=True)
             else:
-                print("REVIEW", flush=True)
-        except Exception:
-            print("ERROR", flush=True)
+                valid = [c for c in result["candidates"] if c["valid"]]
+                print("REVIEW\tvalid=%d; distinct=%d; votes=%d" % (len(valid), len({c["text"] for c in valid}), result["votes"]), flush=True)
+        except Exception as error:
+            message = str(error).replace("\t", " ").replace("\r", " ").replace("\n", " ")[:200]
+            print("ERROR\t" + type(error).__name__ + ": " + message, flush=True)
 
 if __name__ == "__main__":
     if "--worker" in sys.argv:

@@ -4417,7 +4417,7 @@ namespace TGLL {
  }
  public static partial class NativeBackend {
   public static volatile bool CaptchaEnabled,CaptchaNeedsRuntime;static string captchaPython="",captchaScript="",captchaWork="";
-  static readonly object captchaRunnerGate=new object();static readonly ConcurrentQueue<CaptchaWork> captchaQueue=new ConcurrentQueue<CaptchaWork>();static readonly AutoResetEvent captchaSignal=new AutoResetEvent(false);static Thread captchaThread;static Process captchaProcess;
+  static readonly object captchaRunnerGate=new object();static readonly ConcurrentQueue<CaptchaWork> captchaQueue=new ConcurrentQueue<CaptchaWork>(),captchaSamples=new ConcurrentQueue<CaptchaWork>();static readonly AutoResetEvent captchaSignal=new AutoResetEvent(false);static Thread captchaThread;static Process captchaProcess;
   sealed class CaptchaWork {internal NativeJob Job;internal CaptchaFrame Frame;internal int Generation;}
   public static void ConfigureCaptcha(bool enabled,string python,string script,string work){
    captchaPython=python??"";captchaScript=script??"";captchaWork=work??"";CaptchaEnabled=enabled;if(File.Exists(captchaPython))CaptchaNeedsRuntime=false;
@@ -4442,6 +4442,12 @@ namespace TGLL {
     for(int y=f.Height-1;y>=0;y--)for(int x=0;x<f.Width;x++){int row=f.PixelOffset==40?f.Height-1-y:y;int n=(row*f.Width+x)*4;b.Write(f.Raw[n+(f.PixelOffset==40?2:1)]);b.Write(f.Raw[n+(f.PixelOffset==40?1:2)]);b.Write(f.Raw[n+(f.PixelOffset==40?0:3)]);b.Write((byte)255);}
    }
   }
+  internal static string SaveCaptchaSample(CaptchaFrame frame,string directory,out bool created){
+   Directory.CreateDirectory(directory);string hash;using(var sha=System.Security.Cryptography.SHA256.Create())hash=BitConverter.ToString(sha.ComputeHash(frame.Raw)).Replace("-","").ToLowerInvariant();
+   string path=Path.Combine(directory,frame.Width+"x"+frame.Height+"-"+frame.PixelOffset+"-"+hash+".bmp");created=!File.Exists(path);if(created)SaveCaptchaBitmap(frame,path);return path;
+  }
+  static void EnsureCaptchaThread(){lock(captchaRunnerGate){if(captchaThread==null){captchaThread=new Thread(CaptchaLoop);captchaThread.IsBackground=true;captchaThread.Start();}}}
+  static void QueueCaptchaSample(NativeJob job,CaptchaFrame frame){if(captchaSamples.Count>=256){Log(job,"captcha_sample_queue_full","");return;}captchaSamples.Enqueue(new CaptchaWork{Job=job,Frame=frame});EnsureCaptchaThread();captchaSignal.Set();}
   internal static bool CaptchaCodeValid(string code){return code!=null&&code.Length==4&&code.All(c=>c>='0'&&c<='9'||c>='A'&&c<='Z');}
   static string CaptchaReadLine(int milliseconds){var task=captchaProcess.StandardOutput.ReadLineAsync();if(!task.Wait(milliseconds))throw new Exception("ocr_timeout");return task.Result??"";}
   static void StopCaptchaProcess(){try{if(captchaProcess!=null){if(!captchaProcess.HasExited)captchaProcess.Kill();captchaProcess.Dispose();}}catch{}captchaProcess=null;}
@@ -4450,33 +4456,36 @@ namespace TGLL {
     var info=new ProcessStartInfo(captchaPython,"-I \""+captchaScript+"\" --worker"){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8};
     info.EnvironmentVariables["OMP_NUM_THREADS"]="1";captchaProcess=Process.Start(info);captchaProcess.ErrorDataReceived+=delegate{};captchaProcess.BeginErrorReadLine();if(CaptchaReadLine(20000)!="READY")throw new Exception("ocr_unavailable");
    }
-   byte[] message=Encoding.UTF8.GetBytes("{\"image\":"+Quote(path)+"}\n");captchaProcess.StandardInput.BaseStream.Write(message,0,message.Length);captchaProcess.StandardInput.BaseStream.Flush();return CaptchaReadLine(20000);
+   byte[] message=Encoding.UTF8.GetBytes("{\"image\":"+Quote(path)+",\"native_frame\":true}\n");captchaProcess.StandardInput.BaseStream.Write(message,0,message.Length);captchaProcess.StandardInput.BaseStream.Flush();return CaptchaReadLine(20000);
   }
-  static void CaptchaLoop(){while(true){CaptchaWork work;if(!captchaQueue.TryDequeue(out work)){captchaSignal.WaitOne();continue;}string image="";
+  static void CaptchaLoop(){while(true){CaptchaWork sample;if(captchaSamples.TryDequeue(out sample)){
+   try{string directory=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(captchaWork)),"samples");bool created;string file=SaveCaptchaSample(sample.Frame,directory,out created);if(created)Log(sample.Job,"captcha_sample_saved",",\"file\":"+Quote(Path.GetFileName(file)));}
+   catch(Exception error){Log(sample.Job,"captcha_sample_error",",\"message\":"+Quote(error.Message));}continue;
+  }CaptchaWork work;if(!captchaQueue.TryDequeue(out work)){captchaSignal.WaitOne();continue;}string image="";
    try{if(!CaptchaEnabled||work.Job.CloseRequested||work.Job.CancelRequested||work.Job.ReconnectRequested)continue;
     Directory.CreateDirectory(captchaWork);image=Path.Combine(captchaWork,work.Job.Id+"-"+work.Generation+".bmp");SaveCaptchaBitmap(work.Frame,image);string reply=RunCaptchaOcr(image);
     lock(work.Job.CaptchaGate){if(!CaptchaEnabled||work.Job.CaptchaGeneration!=work.Generation||work.Job.CloseRequested||work.Job.CancelRequested||work.Job.ReconnectRequested)continue;
      if(reply.StartsWith("OK\t",StringComparison.Ordinal)&&CaptchaCodeValid(reply.Substring(3))){work.Job.CaptchaCode=reply.Substring(3);work.Job.CaptchaStatus="Đã đọc "+work.Job.CaptchaCode+"; đợi xác nhận đúng ảnh";Log(work.Job,"captcha_ocr_result",",\"accepted\":true");}
-     else{work.Job.CaptchaStatus="Chưa đọc thống nhất mã; cần kiểm tra game";Log(work.Job,"captcha_ocr_result",",\"accepted\":false");}
+     else{work.Job.CaptchaStatus=reply.StartsWith("ERROR",StringComparison.Ordinal)?"Lỗi xử lý ảnh mã; xem log OCR":"Chưa đọc thống nhất mã; cần kiểm tra game";Log(work.Job,"captcha_ocr_result",",\"accepted\":false,\"detail\":"+Quote(reply.Length>240?reply.Substring(0,240):reply));}
     }
    }catch(Exception error){StopCaptchaProcess();Log(work.Job,"captcha_ocr_error",",\"message\":"+Quote(error.Message));work.Job.CaptchaStatus="Bộ đọc mã chưa sẵn sàng; kiểm tra tab Giải mã ảnh";}
    finally{lock(work.Job.CaptchaGate)work.Job.CaptchaPending=false;if(image.Length>0)try{File.Delete(image);}catch{}}
   }}
   static void QueueCaptcha(NativeJob j,CaptchaFrame frame){
    if(captchaQueue.Count>=16){j.CaptchaStatus="Đợi lượt đọc mã";return;}
-   lock(captchaRunnerGate){if(captchaThread==null){captchaThread=new Thread(CaptchaLoop);captchaThread.IsBackground=true;captchaThread.Start();}}
+   EnsureCaptchaThread();
    j.CaptchaPending=true;j.CaptchaReadKey=frame.Key;j.CaptchaStatus="Đang đọc mã trong ảnh";captchaQueue.Enqueue(new CaptchaWork{Job=j,Frame=frame,Generation=j.CaptchaGeneration});captchaSignal.Set();
   }
   static void PumpCaptcha(Remote r,long game,NativeJob j){
    if(j.CaptchaData==0)return;DateTime now=DateTime.UtcNow;if((now-j.CaptchaPollAt).TotalMilliseconds<500)return;j.CaptchaPollAt=now;
    ObserveCurseNotice(j,ReadKeyNotice(r,game),now);
    lock(j.CaptchaGate){
-    if(!CaptchaEnabled||j.CloseRequested||j.CancelRequested||j.ReconnectRequested){r.Write(j.CaptchaData+8,new byte[4]);if(j.CaptchaFrame==null||j.CaptchaAttemptKey!=j.CaptchaFrame.Key){j.CaptchaReadKey="";j.CaptchaCode="";}return;}
+    if(j.CloseRequested||j.CancelRequested||j.ReconnectRequested){r.Write(j.CaptchaData+8,new byte[4]);return;}if(!CaptchaEnabled){r.Write(j.CaptchaData+8,new byte[4]);if(j.CaptchaFrame==null||j.CaptchaAttemptKey!=j.CaptchaFrame.Key){j.CaptchaReadKey="";j.CaptchaCode="";}}
     CaptchaFrame frame;try{frame=ReadCaptchaFrame(r,game);}catch{j.CaptchaStatus="Chưa đọc được ảnh mã";return;}
     if(frame==null){ObserveCurseNotice(j,ReadKeyNotice(r,game),now);if(j.CurseActive){j.CaptchaStatus="Đã thấy yêu cầu mã; chưa đọc được ảnh hoặc ô nhập";return;}if(j.CaptchaFrame!=null){j.CaptchaGeneration++;j.CaptchaFrame=null;j.CaptchaReadKey="";j.CaptchaAttemptKey="";j.CaptchaEpisodeTries=0;j.CaptchaCode="";j.CaptchaStatus="Không còn hộp mã";Log(j,"captcha_cleared","");}return;}
     j.CurseActive=true;j.CurseReadAt=now;
-    if(j.CaptchaFrame==null||j.CaptchaFrame.Key!=frame.Key){j.CaptchaGeneration++;j.CaptchaFrame=frame;j.CaptchaCode="";Log(j,"captcha_detected",",\"image_hash\":"+Quote(frame.Hash.ToString("x8"))+",\"width\":"+frame.Width+",\"height\":"+frame.Height+",\"pixel_offset\":"+frame.PixelOffset+",\"button_action\":190");}else j.CaptchaFrame=frame;
-    if(j.CaptchaAttemptKey==frame.Key){int state=BitConverter.ToInt32(r.Read(j.CaptchaData,4),0);if(state==0){int result=BitConverter.ToInt32(r.Read(j.CaptchaData+4,4),0);string status=result==2?"Đã xác nhận mã; chờ game phản hồi":"Ảnh/ô nhập đã thay đổi; chưa xác nhận";if(j.CaptchaStatus!=status)Log(j,"captcha_submit_result",",\"result\":"+result);j.CaptchaStatus=status;}return;}
+    if(j.CaptchaFrame==null||j.CaptchaFrame.Key!=frame.Key){j.CaptchaGeneration++;j.CaptchaFrame=frame;j.CaptchaCode="";QueueCaptchaSample(j,frame);Log(j,"captcha_detected",",\"image_hash\":"+Quote(frame.Hash.ToString("x8"))+",\"width\":"+frame.Width+",\"height\":"+frame.Height+",\"pixel_offset\":"+frame.PixelOffset+",\"button_action\":190");}else j.CaptchaFrame=frame;
+    if(!CaptchaEnabled){j.CaptchaStatus="Tự giải mã đang tắt; ảnh đã đưa vào hàng lưu";return;}if(j.CaptchaAttemptKey==frame.Key){int state=BitConverter.ToInt32(r.Read(j.CaptchaData,4),0);if(state==0){int result=BitConverter.ToInt32(r.Read(j.CaptchaData+4,4),0);string status=result==2?"Đã xác nhận mã; chờ game phản hồi":"Ảnh/ô nhập đã thay đổi; chưa xác nhận";if(j.CaptchaStatus!=status)Log(j,"captcha_submit_result",",\"result\":"+result);j.CaptchaStatus=status;}return;}
     if(j.CaptchaEpisodeTries>=2){j.CaptchaStatus="Đã thử 2 mã; cần kiểm tra game trước khi thử thêm";return;}
     if(!File.Exists(captchaPython)||!File.Exists(captchaScript)){CaptchaNeedsRuntime=true;j.CaptchaStatus="Cần cài bộ đọc ở tab Giải mã ảnh";return;}
     if(CaptchaCodeValid(j.CaptchaCode)){
