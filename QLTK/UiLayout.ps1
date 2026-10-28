@@ -167,7 +167,7 @@ function Close-AccountGame($row) {
         if($script:accountJobs.ContainsKey($key)){$closed=[TGLL.NativeBackend]::CloseGame($script:accountJobs[$key])}
         else {$closed=[TGLL.ManagedGames]::CloseOne((Get-AccountWindowPid $account))}
         if($closed.Failed){$status.Text='Chưa tắt được game: '+$account.username;return}
-        Set-AccountAuto $row $false
+        Set-AccountAuto $row $false $true
         $script:accountWindowPids.Remove($key)
         $row.Cells['status'].Value='Đã tắt';$status.Text='Đã tắt game / hủy lượt mở: '+$account.username
         Update-AccountVisibility $row;Update-UiSummary

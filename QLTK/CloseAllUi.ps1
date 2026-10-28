@@ -12,7 +12,7 @@ function Start-CloseAllUi {
   [TGLL.AutoLogin]::CancelAll();Stop-MailCollection;if(Get-Command Stop-Distribution -ErrorAction SilentlyContinue){Stop-Distribution}
   $script:closeAllOperation=Begin-CloseAllOperation
   $script:deferAccountSave=$true;$script:accountSavePending=$false;$grid.SuspendLayout()
-  try{foreach($row in $grid.Rows){Set-AccountAuto $row $false}}
+  try{foreach($row in $grid.Rows){Set-AccountAuto $row $false $true}}
   finally{$grid.ResumeLayout();$script:deferAccountSave=$false}
   if($script:accountSavePending -and !$UiTest){Save-Accounts};$script:accountSavePending=$false
   $script:lastLoginJob='';$status.Text='Đang đóng các game; QLTK vẫn có thể thao tác.';$closeAllTimer.Start()

@@ -37,6 +37,7 @@ try{
  # Saved Move is false; user checks Move and edits coordinates without pressing Save.
  $ctSource.cuongThiConfig.Move=$false;$ctSource.cuongThiConfig.X=100;$cuongThiMove.Checked=$true;$cuongThiX.Value=700;Copy-AccountConfig
  if($ctSource.cuongThiConfig.Move -or $ctSource.cuongThiConfig.X -ne 100){throw 'Copy unexpectedly changed running source preference'}
+ Set-AccountAuto $grid.Rows[0] $false $true;if(!$ctSource.cuongThiEnabled){throw 'Game close cleared Cuong Thi preference'}
  $ctCopy=$script:copiedAccountConfig | ConvertFrom-Json;if(!$ctCopy.cuongThiEnabled -or $ctCopy.cuongThiConfig.Zone -ne 14 -or !$ctCopy.cuongThiConfig.Move -or $ctCopy.cuongThiConfig.X -ne 700){throw 'Cuong Thi clipboard must capture unsaved visible Move and XY'}
  $ctSource.cuongThiConfig.X=900;Paste-AccountConfigAll
  if(!$ctDest.cuongThiEnabled -or !$ctDest.cuongThiConfig.Move -or $ctDest.cuongThiConfig.MapId -ne 69 -or $ctDest.cuongThiConfig.X -ne 700 -or $ctDest.cuongThiConfig.Y -ne 400 -or $ctDest.cuongThiConfig.Zone -ne 14){throw 'Cuong Thi destination paste failed'}

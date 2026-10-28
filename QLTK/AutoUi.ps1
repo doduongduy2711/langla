@@ -21,10 +21,10 @@ function Sync-AccountAutoTrain($row,$j) {
     try{[TGLL.NativeBackend]::StartTraining($j.Id,[int[]]$ids);$row.Cells['auto'].ToolTipText=$j.GameAutoStatus+' • Train: '+($ids -join ', ')}
     catch{$row.Cells['auto'].ToolTipText=$j.GameAutoStatus+' • Chưa bật train: '+$_.Exception.Message}
 }
-function Set-AccountAuto($row,[bool]$enabled) {
+function Set-AccountAuto($row,[bool]$enabled,[bool]$preserveCuongThi=$false) {
     $key=[string]$row.Tag.id
     if(!$enabled -and $script:farmUpRequests -and $script:farmUpRequests.ContainsKey($key)){Set-AutoCell $row $false;return}
-    if(!$enabled -and [bool]$row.Tag.cuongThiEnabled){Set-CuongThiPreference $row $false}
+    if(!$enabled -and !$preserveCuongThi -and [bool]$row.Tag.cuongThiEnabled){Set-CuongThiPreference $row $false}
     $script:autoTrainWanted[$key]=$enabled
     if(!$enabled -and [bool]$row.Tag.soncap){$row.Tag | Add-Member NoteProperty soncap $false -Force;if(!$UiTest){Save-Accounts}}
     Set-AutoCell $row $enabled
