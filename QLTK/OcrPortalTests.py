@@ -81,6 +81,17 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(self.request('/api/item?name=sample.bmp')['label'], '4')
         self.assertEqual(self.image.with_suffix('.label.txt').read_text().strip(), '4')
 
+    def test_single_candidate_is_review_suggestion_not_auto_code(self):
+        self.store.reader = lambda path: {'status': 'needs_review', 'code': None, 'candidates': [{'text': 'AB12', 'valid': True, 'method': 'original'}]}
+        self.store.scan_one()
+        item = self.request('/api/item?name=sample.bmp')
+        self.assertEqual(item['suggestion'], 'AB12')
+        self.assertIsNone(item['code'])
+        self.assertIsNone(item['label'])
+        self.assertEqual(self.request('/api/items')['items'][0]['suggestion'], 'AB12')
+        self.request('/api/label', {'name': 'sample.bmp', 'code': item['suggestion']})
+        self.assertEqual(self.request('/api/item?name=sample.bmp')['label'], 'AB12')
+
     def test_path_token_and_validation_guards(self):
         for name in ('../outside.bmp', '..\\outside.bmp', '/outside.bmp', 'missing.bmp'):
             with self.assertRaises(ValueError):
