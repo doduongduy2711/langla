@@ -33,13 +33,17 @@ $ctSavedAccounts=$script:accounts;$ctSavedJobs=$script:accountJobs;$ctSavedClip=
 try{
  $script:accountJobs=@{};$ctSource=[pscustomobject]@{id='ct-copy-1';username='ct-source';cuongThiEnabled=$true;cuongThiConfig=[pscustomobject]@{Move=$true;MapId=69;MapName='Làng Mây';X=700;Y=400;Zone=14}}
  $ctDest=[pscustomobject]@{id='ct-copy-2';username='ct-dest';secret='keep';proxy='keep';cuongThiEnabled=$false;cuongThiConfig=[pscustomobject]@{Move=$false;MapId=59;X=111;Y=222;Zone=-1}}
- $script:accounts=@($ctSource,$ctDest);Refresh-Grid;$grid.ClearSelection();$grid.Rows[0].Selected=$true;Copy-AccountConfig
- $ctCopy=$script:copiedAccountConfig | ConvertFrom-Json;if(!$ctCopy.cuongThiEnabled -or $ctCopy.cuongThiConfig.Zone -ne 14){throw 'Cuong Thi clipboard fields missing'}
+ $script:accounts=@($ctSource,$ctDest);Refresh-Grid;$grid.ClearSelection();$grid.Rows[0].Selected=$true;Update-CuongThiUi
+ # Saved Move is false; user checks Move and edits coordinates without pressing Save.
+ $ctSource.cuongThiConfig.Move=$false;$ctSource.cuongThiConfig.X=100;$cuongThiMove.Checked=$true;$cuongThiX.Value=700;Copy-AccountConfig
+ if($ctSource.cuongThiConfig.Move -or $ctSource.cuongThiConfig.X -ne 100){throw 'Copy unexpectedly changed running source preference'}
+ $ctCopy=$script:copiedAccountConfig | ConvertFrom-Json;if(!$ctCopy.cuongThiEnabled -or $ctCopy.cuongThiConfig.Zone -ne 14 -or !$ctCopy.cuongThiConfig.Move -or $ctCopy.cuongThiConfig.X -ne 700){throw 'Cuong Thi clipboard must capture unsaved visible Move and XY'}
  $ctSource.cuongThiConfig.X=900;Paste-AccountConfigAll
  if(!$ctDest.cuongThiEnabled -or !$ctDest.cuongThiConfig.Move -or $ctDest.cuongThiConfig.MapId -ne 69 -or $ctDest.cuongThiConfig.X -ne 700 -or $ctDest.cuongThiConfig.Y -ne 400 -or $ctDest.cuongThiConfig.Zone -ne 14){throw 'Cuong Thi destination paste failed'}
  $ctSource.cuongThiConfig.Zone=2;if($ctDest.cuongThiConfig.Zone -ne 14){throw 'Pasted boss configs share object'}
  $grid.ClearSelection();$grid.Rows[1].Selected=$true;Update-CuongThiUi
  if(!$cuongThiMove.Checked -or $cuongThiX.Value -ne 700 -or $cuongThiZone.Value -ne 14 -or !$cuongThiCheck.Checked){throw 'Pasted boss config not displayed'}
+ $cuongThiMove.Checked=$false;$cuongThiZone.Value=9;Copy-AccountConfig;$ctUnchecked=$script:copiedAccountConfig | ConvertFrom-Json;if($ctUnchecked.cuongThiConfig.Move -or $ctUnchecked.cuongThiConfig.Zone -ne 9){throw 'Unchecked draft Move was replaced by saved config'}
  if($ctDest.secret -ne 'keep' -or $ctDest.proxy -ne 'keep'){throw 'Boss config paste changed credentials'}
  $ctCopy.PSObject.Properties.Remove('cuongThiEnabled');$ctCopy.PSObject.Properties.Remove('cuongThiConfig');$script:copiedAccountConfig=$ctCopy | ConvertTo-Json -Depth 12;Paste-AccountConfigAll
  if(!$ctDest.cuongThiEnabled -or $ctDest.cuongThiConfig.Zone -ne 14){throw 'Legacy clipboard cleared boss preferences'}
