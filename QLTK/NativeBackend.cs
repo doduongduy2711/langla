@@ -2382,7 +2382,7 @@ namespace TGLL {
                 b.Append(c=='đ'?'d':Char.IsLetterOrDigit(c)?c:' ');
             }
             string normalized=System.Text.RegularExpressions.Regex.Replace(b.ToString(),"\\s+"," ").Trim();
-            return normalized.Contains("giai capcha")||normalized.Contains("giai captcha")||normalized.Contains("nhap ma")&&(normalized.Contains("giai tru bua")||normalized.Contains("giai bua"))&&(normalized.Contains("yem bua")||normalized.Contains("bua chu"));
+            return normalized=="ma xac nhan"||normalized=="ma xac nhan ma xac nhan"||normalized.Contains("giai capcha")||normalized.Contains("giai captcha")||normalized.Contains("nhap ma")&&(normalized.Contains("giai tru bua")||normalized.Contains("giai bua"))&&(normalized.Contains("yem bua")||normalized.Contains("bua chu"));
         }
         internal static void ObserveCurseNotice(NativeJob j,string notice,DateTime now){
             bool active=!j.CloseRequested&&!j.CancelRequested&&IsCurseNotice(notice);bool changed=j.CurseActive!=active;
@@ -2463,7 +2463,7 @@ namespace TGLL {
         internal static string ReadKeyNotice(Remote r,long game){
             try{
                 long cls=ResolvedClass(r,game+0x16ee888),stat=r.Ptr(cls+0xb8),fc=r.Ptr(stat+16);if(fc==0||r.Ptr(fc)!=cls)return "";
-                long popup=r.Ptr(fc+0x90);if(popup==0||r.Ptr(popup)!=ResolvedClass(r,game+0x16eeba8)||Array.IndexOf(ReadVector(r,r.Ptr(fc+0x88)),popup)<0)return "";
+                long popup=r.Ptr(fc+0x90);if(popup==0||!CaptchaDialogClass(r,r.Ptr(popup),ResolvedClass(r,game+0x16eeba8))||Array.IndexOf(ReadVector(r,r.Ptr(fc+0x88)),popup)<0)return "";
                 // je.gpp is the message; je.gpo holds its wrapped string lines.
                 List<string> lines=new List<string>();string body=ReadLabel(r,r.Ptr(popup+0xb0));if(body.Length>0)lines.Add(body);foreach(long line in ReadArray(r,r.Ptr(popup+0xa8))){string textLine=ReadLabel(r,line);if(textLine.Length>0)lines.Add(textLine);}string text=String.Join(" ",lines.ToArray());
                 if(r.Ptr(fc+0x90)!=popup)return "";return text;
@@ -4412,7 +4412,7 @@ namespace TGLL {
 
 namespace TGLL {
  internal sealed class CaptchaFrame {
-  internal long Popup,Image,Pixmap,Pixels,Button;internal int Width,Height;internal byte[] Raw;internal uint Hash;
+  internal long Popup,Image,Pixmap,Pixels,Button;internal int Width,Height,PixelOffset=32;internal byte[] Raw;internal uint Hash;
   internal string Key {get{return Popup.ToString("x")+":"+Image.ToString("x")+":"+Hash.ToString("x8");}}
  }
  public static partial class NativeBackend {
@@ -4423,22 +4423,23 @@ namespace TGLL {
    captchaPython=python??"";captchaScript=script??"";captchaWork=work??"";CaptchaEnabled=enabled;if(File.Exists(captchaPython))CaptchaNeedsRuntime=false;
   }
   internal static uint CaptchaHash(byte[] raw){unchecked{uint hash=2166136261;for(int n=0;n<raw.Length;n+=4)hash=(hash^BitConverter.ToUInt32(raw,n))*16777619;return hash;}}
+  internal static bool CaptchaDialogClass(Remote r,long actual,long expected){for(int n=0;n<8&&actual!=0;n++,actual=r.Ptr(actual+0x58))if(actual==expected)return true;return false;}
   internal static CaptchaFrame ReadCaptchaFrame(Remote r,long game){
    long cls=ResolvedClass(r,game+0x16ee888),fc=r.Ptr(r.Ptr(cls+0xb8)+16);if(fc==0||r.Ptr(fc)!=cls)return null;
-   long popup=r.Ptr(fc+0x90);if(popup==0||r.Ptr(popup)!=ResolvedClass(r,game+0x16eeba8)||Array.IndexOf(ReadVector(r,r.Ptr(fc+0x88)),popup)<0)return null;
-   if(!IsCurseNotice(ReadKeyNotice(r,game))||r.Ptr(popup+0xd0)==0)return null;
+   long popup=r.Ptr(fc+0x90);if(popup==0||!CaptchaDialogClass(r,r.Ptr(popup),ResolvedClass(r,game+0x16eeba8))||Array.IndexOf(ReadVector(r,r.Ptr(fc+0x88)),popup)<0)return null;
+   if(!IsCurseNotice(ReadKeyNotice(r,game)))return null;
    long image=r.Ptr(popup+0xc8);if(image==0)return null;long pixmap=r.Ptr(image+0x18);if(pixmap==0)return null;
    int width=BitConverter.ToInt32(r.Read(pixmap+16,4),0),height=BitConverter.ToInt32(r.Read(pixmap+20,4),0);
    if(width<70||width>1000||height<20||height>500||r.Read(pixmap+0x3c,1)[0]!=0)return null;
-   long pixels=r.Ptr(pixmap+32);if(pixels==0||BitConverter.ToInt32(r.Read(pixels+24,4),0)<width*height)return null;
-   long button=r.Ptr(popup+0xe8);if(button==0||BitConverter.ToInt32(r.Read(button+0x80,4),0)!=-7||ReadLabel(r,r.Ptr(button+0x78))!="Xác nhận")return null;
+   int pixelOffset=32;long pixels=r.Ptr(pixmap+32);if(pixels==0){pixelOffset=40;pixels=r.Ptr(pixmap+40);}if(pixels==0||BitConverter.ToInt32(r.Read(pixels+24,4),0)<width*height*(pixelOffset==40?4:1))return null;
+   long button=0;foreach(long child in ReadVector(r,r.Ptr(popup+0x50))){if(r.Ptr(child+0x48)==popup&&BitConverter.ToInt32(r.Read(child+0x80,4),0)==190&&ReadLabel(r,r.Ptr(child+0x78))=="Xác nhận"){button=child;break;}}if(button==0)return null;
    byte[] raw=r.Read(pixels+32,width*height*4);uint hash=CaptchaHash(raw);
-   if(r.Ptr(fc+0x90)!=popup||r.Ptr(popup+0xc8)!=image||r.Ptr(image+0x18)!=pixmap||r.Ptr(pixmap+32)!=pixels)return null;
-   return new CaptchaFrame{Popup=popup,Image=image,Pixmap=pixmap,Pixels=pixels,Button=button,Width=width,Height=height,Raw=raw,Hash=hash};
+   if(r.Ptr(fc+0x90)!=popup||r.Ptr(popup+0xc8)!=image||r.Ptr(image+0x18)!=pixmap||r.Ptr(pixmap+pixelOffset)!=pixels)return null;
+   return new CaptchaFrame{Popup=popup,Image=image,Pixmap=pixmap,Pixels=pixels,Button=button,Width=width,Height=height,Raw=raw,Hash=hash,PixelOffset=pixelOffset};
   }
   internal static void SaveCaptchaBitmap(CaptchaFrame f,string path){
    using(BinaryWriter b=new BinaryWriter(File.Create(path))){b.Write((ushort)0x4d42);b.Write(54+f.Raw.Length);b.Write(0);b.Write(54);b.Write(40);b.Write(f.Width);b.Write(f.Height);b.Write((ushort)1);b.Write((ushort)32);b.Write(0);b.Write(f.Raw.Length);b.Write(0);b.Write(0);b.Write(0);b.Write(0);
-    for(int y=f.Height-1;y>=0;y--)for(int x=0;x<f.Width;x++){int n=(y*f.Width+x)*4;b.Write(f.Raw[n+1]);b.Write(f.Raw[n+2]);b.Write(f.Raw[n+3]);b.Write((byte)255);}
+    for(int y=f.Height-1;y>=0;y--)for(int x=0;x<f.Width;x++){int n=(y*f.Width+x)*4;b.Write(f.Raw[n+(f.PixelOffset==40?2:1)]);b.Write(f.Raw[n+(f.PixelOffset==40?1:2)]);b.Write(f.Raw[n+(f.PixelOffset==40?0:3)]);b.Write((byte)255);}
    }
   }
   internal static bool CaptchaCodeValid(string code){return code!=null&&code.Length==4&&code.All(c=>c>='0'&&c<='9'||c>='A'&&c<='Z');}
@@ -4455,10 +4456,10 @@ namespace TGLL {
    try{if(!CaptchaEnabled||work.Job.CloseRequested||work.Job.CancelRequested||work.Job.ReconnectRequested)continue;
     Directory.CreateDirectory(captchaWork);image=Path.Combine(captchaWork,work.Job.Id+"-"+work.Generation+".bmp");SaveCaptchaBitmap(work.Frame,image);string reply=RunCaptchaOcr(image);
     lock(work.Job.CaptchaGate){if(!CaptchaEnabled||work.Job.CaptchaGeneration!=work.Generation||work.Job.CloseRequested||work.Job.CancelRequested||work.Job.ReconnectRequested)continue;
-     if(reply.StartsWith("OK\t",StringComparison.Ordinal)&&CaptchaCodeValid(reply.Substring(3))){work.Job.CaptchaCode=reply.Substring(3);work.Job.CaptchaStatus="Đã đọc "+work.Job.CaptchaCode+"; đợi xác nhận đúng ảnh";}
-     else work.Job.CaptchaStatus="Chưa đọc thống nhất mã; cần kiểm tra game";
+     if(reply.StartsWith("OK\t",StringComparison.Ordinal)&&CaptchaCodeValid(reply.Substring(3))){work.Job.CaptchaCode=reply.Substring(3);work.Job.CaptchaStatus="Đã đọc "+work.Job.CaptchaCode+"; đợi xác nhận đúng ảnh";Log(work.Job,"captcha_ocr_result",",\"accepted\":true");}
+     else{work.Job.CaptchaStatus="Chưa đọc thống nhất mã; cần kiểm tra game";Log(work.Job,"captcha_ocr_result",",\"accepted\":false");}
     }
-   }catch{StopCaptchaProcess();work.Job.CaptchaStatus="Bộ đọc mã chưa sẵn sàng; kiểm tra tab Giải mã ảnh";}
+   }catch(Exception error){StopCaptchaProcess();Log(work.Job,"captcha_ocr_error",",\"message\":"+Quote(error.Message));work.Job.CaptchaStatus="Bộ đọc mã chưa sẵn sàng; kiểm tra tab Giải mã ảnh";}
    finally{lock(work.Job.CaptchaGate)work.Job.CaptchaPending=false;if(image.Length>0)try{File.Delete(image);}catch{}}
   }}
   static void QueueCaptcha(NativeJob j,CaptchaFrame frame){
@@ -4474,13 +4475,13 @@ namespace TGLL {
     CaptchaFrame frame;try{frame=ReadCaptchaFrame(r,game);}catch{j.CaptchaStatus="Chưa đọc được ảnh mã";return;}
     if(frame==null){ObserveCurseNotice(j,ReadKeyNotice(r,game),now);if(j.CurseActive){j.CaptchaStatus="Đã thấy yêu cầu mã; chưa đọc được ảnh hoặc ô nhập";return;}if(j.CaptchaFrame!=null){j.CaptchaGeneration++;j.CaptchaFrame=null;j.CaptchaReadKey="";j.CaptchaAttemptKey="";j.CaptchaEpisodeTries=0;j.CaptchaCode="";j.CaptchaStatus="Không còn hộp mã";Log(j,"captcha_cleared","");}return;}
     j.CurseActive=true;j.CurseReadAt=now;
-    if(j.CaptchaFrame==null||j.CaptchaFrame.Key!=frame.Key){j.CaptchaGeneration++;j.CaptchaFrame=frame;j.CaptchaCode="";Log(j,"captcha_detected",",\"image_hash\":"+Quote(frame.Hash.ToString("x8")));}else j.CaptchaFrame=frame;
-    if(j.CaptchaAttemptKey==frame.Key){int state=BitConverter.ToInt32(r.Read(j.CaptchaData,4),0);if(state==0){int result=BitConverter.ToInt32(r.Read(j.CaptchaData+4,4),0);j.CaptchaStatus=result==2?"Đã xác nhận mã; chờ game phản hồi":"Ảnh/ô nhập đã thay đổi; chưa xác nhận";}return;}
+    if(j.CaptchaFrame==null||j.CaptchaFrame.Key!=frame.Key){j.CaptchaGeneration++;j.CaptchaFrame=frame;j.CaptchaCode="";Log(j,"captcha_detected",",\"image_hash\":"+Quote(frame.Hash.ToString("x8"))+",\"width\":"+frame.Width+",\"height\":"+frame.Height+",\"pixel_offset\":"+frame.PixelOffset+",\"button_action\":190");}else j.CaptchaFrame=frame;
+    if(j.CaptchaAttemptKey==frame.Key){int state=BitConverter.ToInt32(r.Read(j.CaptchaData,4),0);if(state==0){int result=BitConverter.ToInt32(r.Read(j.CaptchaData+4,4),0);string status=result==2?"Đã xác nhận mã; chờ game phản hồi":"Ảnh/ô nhập đã thay đổi; chưa xác nhận";if(j.CaptchaStatus!=status)Log(j,"captcha_submit_result",",\"result\":"+result);j.CaptchaStatus=status;}return;}
     if(j.CaptchaEpisodeTries>=2){j.CaptchaStatus="Đã thử 2 mã; cần kiểm tra game trước khi thử thêm";return;}
     if(!File.Exists(captchaPython)||!File.Exists(captchaScript)){CaptchaNeedsRuntime=true;j.CaptchaStatus="Cần cài bộ đọc ở tab Giải mã ảnh";return;}
     if(CaptchaCodeValid(j.CaptchaCode)){
      if(BitConverter.ToInt32(r.Read(j.CaptchaData,4),0)!=0)return;
-     byte[] b=new byte[80];Array.Copy(BitConverter.GetBytes(1),0,b,8,4);Array.Copy(BitConverter.GetBytes(frame.Popup),0,b,16,8);Array.Copy(BitConverter.GetBytes(frame.Image),0,b,24,8);Array.Copy(BitConverter.GetBytes(frame.Pixmap),0,b,32,8);Array.Copy(BitConverter.GetBytes(frame.Pixels),0,b,40,8);Array.Copy(BitConverter.GetBytes(frame.Width*frame.Height),0,b,48,4);Array.Copy(BitConverter.GetBytes(frame.Hash),0,b,52,4);Array.Copy(BitConverter.GetBytes(frame.Button),0,b,56,8);Array.Copy(Encoding.ASCII.GetBytes(j.CaptchaCode),0,b,64,4);Array.Copy(BitConverter.GetBytes(frame.Width),0,b,72,4);Array.Copy(BitConverter.GetBytes(frame.Height),0,b,76,4);
+     byte[] b=new byte[84];Array.Copy(BitConverter.GetBytes(frame.PixelOffset),0,b,80,4);Array.Copy(BitConverter.GetBytes(1),0,b,8,4);Array.Copy(BitConverter.GetBytes(frame.Popup),0,b,16,8);Array.Copy(BitConverter.GetBytes(frame.Image),0,b,24,8);Array.Copy(BitConverter.GetBytes(frame.Pixmap),0,b,32,8);Array.Copy(BitConverter.GetBytes(frame.Pixels),0,b,40,8);Array.Copy(BitConverter.GetBytes(frame.Width*frame.Height),0,b,48,4);Array.Copy(BitConverter.GetBytes(frame.Hash),0,b,52,4);Array.Copy(BitConverter.GetBytes(frame.Button),0,b,56,8);Array.Copy(Encoding.ASCII.GetBytes(j.CaptchaCode),0,b,64,4);Array.Copy(BitConverter.GetBytes(frame.Width),0,b,72,4);Array.Copy(BitConverter.GetBytes(frame.Height),0,b,76,4);
      r.Write(j.CaptchaData,b);j.CaptchaEpisodeTries++;j.CaptchaAttemptKey=frame.Key;j.CaptchaStatus="Đang điền và xác nhận mã";r.Write(j.CaptchaData,BitConverter.GetBytes(1));Log(j,"captcha_submit_queued",",\"image_hash\":"+Quote(frame.Hash.ToString("x8")));return;
     }
     if(!j.CaptchaPending&&j.CaptchaReadKey!=frame.Key)QueueCaptcha(j,frame);
@@ -4491,14 +4492,14 @@ namespace TGLL {
   internal static byte[] Captcha(long data,long game){
    Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x40,0x48,0xbb);a.Q(data);a.Emit(0x83,0x3b,1);a.J(0x85,"return");a.Emit(0xc7,0x03,2,0,0,0,0xc7,0x43,4,3,0,0,0,0x83,0x7b,8,1);a.J(0x85,"done");
    Slot(a,game+0x16ee888,"done",game+0x1dd900);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x70,16,0x48,0x85,0xf6);a.J(0x84,"done");a.Emit(0x48,0x8b,0xbe,0x90,0,0,0,0x48,0x85,0xff);a.J(0x84,"done");a.Emit(0x48,0x3b,0x7b,16);a.J(0x85,"done");
-   Slot(a,game+0x16eeba8,"done",game+0x1dd900);a.Emit(0x48,0x39,0x07);a.J(0x85,"done");a.Emit(0x48,0x8b,0x8e,0x88,0,0,0,0x48,0x85,0xc9);a.J(0x84,"done");a.Emit(0x48,0x8b,0x01,0x48,0x89,0xfa,0x4c,0x8b,0x80,0x10,2,0,0,0xff,0x90,8,2,0,0,0x84,0xc0);a.J(0x84,"done");
+   Slot(a,game+0x16eeba8,"done",game+0x1dd900);a.Emit(0x48,0x8b,0x17,0xb9,8,0,0,0);a.Label("dialogClass");a.Emit(0x48,0x39,0xc2);a.J(0x84,"dialogClassOk");a.Emit(0x48,0x85,0xd2);a.J(0x84,"done");a.Emit(0x48,0x8b,0x52,0x58,0xff,0xc9);a.J(0x85,"dialogClass");a.Jump("done");a.Label("dialogClassOk");a.Emit(0x48,0x8b,0x8e,0x88,0,0,0,0x48,0x85,0xc9);a.J(0x84,"done");a.Emit(0x48,0x8b,0x01,0x48,0x89,0xfa,0x4c,0x8b,0x80,0x10,2,0,0,0xff,0x90,8,2,0,0,0x84,0xc0);a.J(0x84,"done");
    a.Emit(0x48,0x8b,0x87,0xc8,0,0,0,0x48,0x3b,0x43,24);a.J(0x85,"done");a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x40,24,0x48,0x3b,0x43,32);a.J(0x85,"done");a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x80,0x78,60,0);a.J(0x85,"done");a.Emit(0x8b,0x50,16,0x3b,0x53,72);a.J(0x85,"done");a.Emit(0x8b,0x50,20,0x3b,0x53,76);a.J(0x85,"done");a.Emit(0x8b,0x50,16,0x0f,0xaf,0x50,20,0x3b,0x53,48);a.J(0x85,"done");a.Emit(0x85,0xd2);a.J(0x8e,"done");a.Emit(0x81,0xfa,0x20,0xa1,7,0);a.J(0x8f,"done");
-   a.Emit(0x4c,0x8b,0x40,32,0x4c,0x3b,0x43,40);a.J(0x85,"done");a.Emit(0x4d,0x85,0xc0);a.J(0x84,"done");a.Emit(0x41,0x39,0x50,24);a.J(0x8c,"done");a.Emit(0xb8,0xc5,0x9d,0x1c,0x81,0x45,0x33,0xc9);
+   a.Emit(0x8b,0x4b,80,0x83,0xf9,32);a.J(0x84,"pixelOffsetOk");a.Emit(0x83,0xf9,40);a.J(0x85,"done");a.Label("pixelOffsetOk");a.Emit(0x4c,0x8b,0x04,0x08,0x4c,0x3b,0x43,40);a.J(0x85,"done");a.Emit(0x4d,0x85,0xc0);a.J(0x84,"done");a.Emit(0x8b,0xca,0x83,0x7b,80,40);a.J(0x85,"pixelLengthOk");a.Emit(0xc1,0xe1,2);a.Label("pixelLengthOk");a.Emit(0x41,0x39,0x48,24);a.J(0x8c,"done");a.Emit(0xb8,0xc5,0x9d,0x1c,0x81,0x45,0x33,0xc9);
    a.Label("hash");a.Emit(0x43,0x33,0x44,0x88,32,0x69,0xc0,0x93,1,0,1,0x41,0xff,0xc1,0x44,0x3b,0xca);a.J(0x82,"hash");a.Emit(0x3b,0x43,52);a.J(0x85,"done");
-   a.Emit(0x48,0x8b,0x87,0xe8,0,0,0,0x48,0x3b,0x43,56);a.J(0x85,"done");a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x83,0xb8,0x80,0,0,0,0xf9);a.J(0x85,"done");a.Emit(0x48,0x8b,0x40,0x78);MatchString(a,"Xác nhận","done");
+   a.Emit(0x48,0x8b,0x43,56,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x81,0xb8,0x80,0,0,0,0xbe,0,0,0);a.J(0x85,"done");a.Emit(0x48,0x39,0x78,0x48);a.J(0x85,"done");a.Emit(0x48,0x8b,0x40,0x78);MatchString(a,"Xác nhận","done");a.Emit(0x48,0x8b,0x4f,0x50,0x48,0x85,0xc9);a.J(0x84,"done");a.Emit(0x48,0x8b,0x01,0x48,0x8b,0x53,56,0x4c,0x8b,0x80,0x10,2,0,0,0xff,0x90,8,2,0,0,0x84,0xc0);a.J(0x84,"done");
    for(int n=0;n<4;n++){a.Emit(0x0f,0xb6,0x43,(byte)(64+n),0x83,0xf8,48);a.J(0x82,"done");a.Emit(0x83,0xf8,57);a.J(0x86,"code"+n);a.Emit(0x83,0xf8,65);a.J(0x82,"done");a.Emit(0x83,0xf8,90);a.J(0x87,"done");a.Label("code"+n);}a.Emit(0x80,0x7b,68,0);a.J(0x85,"done");
    a.Emit(0x48,0x89,0x74,0x24,48,0x48,0x8d,0x4b,64);a.Call(game+0x161150);a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x89,0x44,0x24,40,0x48,0x8b,0x07,0x48,0x89,0xf9,0x48,0x8b,0x90,0xa0,5,0,0,0xff,0x90,0x98,5,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x89,0xc1,0x4c,0x8b,0x10,0x48,0x8b,0x54,0x24,40,0x4d,0x8b,0x82,0xd0,3,0,0,0x41,0xff,0x92,0xc8,3,0,0);
-   a.Emit(0x48,0x8b,0x74,0x24,48,0x48,0x3b,0xbe,0x90,0,0,0);a.J(0x85,"done");a.Emit(0xc7,0x43,4,2,0,0,0,0x48,0x8b,0x06,0x48,0x89,0xf1,0xba,0xf9,0xff,0xff,0xff,0x49,0x89,0xf8,0x4c,0x8b,0x4b,56,0x4c,0x8b,0x90,0x90,4,0,0,0x4c,0x89,0x54,0x24,32,0xff,0x90,0x88,4,0,0);
+   a.Emit(0x48,0x8b,0x74,0x24,48,0x48,0x3b,0xbe,0x90,0,0,0);a.J(0x85,"done");a.Emit(0xc7,0x43,4,2,0,0,0,0x48,0x8b,0x4b,56,0x33,0xd2);a.Call(game+0x3d7d50);
    a.Label("done");a.Emit(0xc7,0x03,0,0,0,0);a.Label("return");a.Emit(0x48,0x83,0xc4,0x40,0x5f,0x5e,0x5b,0xc3);return a.Finish();
   }
  }
