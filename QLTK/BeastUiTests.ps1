@@ -20,7 +20,7 @@ try{
  Add-BeastQueue $script:accounts;for($n=0;$n -lt 3;$n++){Pump-BeastQueue}
  if($script:btStarts.Count -ne 1 -or $beastMax.Minimum -ne 1 -or $beastMax.Increment -ne 1){throw 'Single-account limit unsupported'}
  Update-BeastUi;if($beastHint.Text -notmatch '1 / 1' -or $beastCloseAfter.Text -notmatch 'Tắt từng game'){throw 'Solo status/close option not updated'}
- if($tabs.TabPages.Count -ne 24 -or $beastPage.Text -ne 'Auto Linh thú'){throw 'Beast UI missing'}
+ if($tabs.TabPages.Count -ne 25 -or $beastPage.Text -ne 'Auto Linh thú'){throw 'Beast UI missing'}
  # Max50 must fill with healthy accounts when the first 40 launch attempts fail.
  function Test-AccountOpenBlocked($a){$j=$script:btJobs[[string]$a.id];return ($j -and $j.State -in @('opened','queued','starting','retrying','reconnecting'))}
  function Get-AccountJob($id){return $script:btJobs[[string]$id]}

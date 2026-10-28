@@ -9,7 +9,7 @@ Add-Type -AssemblyName System.IO.Compression,System.IO.Compression.FileSystem
 $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'));$output=[IO.Path]::GetFullPath($OutputDirectory)
 $null=[IO.Directory]::CreateDirectory($output)
 $temp=Join-Path $output ('build-'+[guid]::NewGuid().ToString('N'));$program=Join-Path $temp 'QLTK';$null=[IO.Directory]::CreateDirectory($program)
-$native=@('AutoLogin.cs','NativeBackend.cs','SocketServer.cs','StoredJson.cs','UiPerformance.cs')
+$native=@('AutoLogin.cs','NativeBackend.cs','SocketServer.cs','StoredJson.cs','UiPerformance.cs','CaptchaOcr.py')
 $sources=@(Get-ChildItem -LiteralPath (Join-Path $root 'QLTK') -File | Where-Object {($_.Extension -eq '.ps1' -and $_.Name -notmatch '(?i)test' -and $_.Name -ne 'ProfileManager.ps1') -or $native -contains $_.Name -or $_.Name -eq 'MapCatalog.json'})
 foreach($source in $sources){Copy-Item -LiteralPath $source.FullName -Destination $program}
 [IO.File]::WriteAllText((Join-Path $program 'update-channel.json'),(@{repository=$Repository} | ConvertTo-Json -Compress),(New-Object Text.UTF8Encoding($false)))

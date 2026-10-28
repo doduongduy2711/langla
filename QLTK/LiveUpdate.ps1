@@ -32,7 +32,7 @@ function Initialize-LiveUpdate {
         if($path -and [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($path)) -eq $root -and $path -notlike '*Tests.ps1'){$paths+=$path}
     }
     foreach($path in @($paths | Select-Object -Unique)){$script:liveUpdateSources[$path]=Read-LiveUpdateSource $path}
-    foreach($name in @('NativeBackend.cs','AutoLogin.cs','SocketServer.cs','StoredJson.cs','UiPerformance.cs','MapCatalog.json')){
+    foreach($name in @('NativeBackend.cs','AutoLogin.cs','SocketServer.cs','StoredJson.cs','UiPerformance.cs','MapCatalog.json','CaptchaOcr.py')){
         $path=Join-Path $root $name;$script:liveUpdateBinaries[$path]=Get-LiveUpdateHash $path
     }
 }
@@ -151,6 +151,7 @@ function Read-GitHubRelease($release,[string]$repo) {
     return [pscustomobject]@{Version=$version;Url=$url;Size=[long]$asset.size;Hash=$Matches[1].ToUpperInvariant()}
 }
 function Test-UpdateFileName([string]$name) {
+    if($name -ceq 'CaptchaOcr.py'){return $true}
     if($name -notmatch '^[A-Za-z0-9_-]+\.(ps1|cs|json)$'){return $false}
     if($name -match '(?i)(test|profilemanager|nametestmanager)'){return $false}
     if($name.EndsWith('.json',[StringComparison]::OrdinalIgnoreCase)){return $name -cin @('MapCatalog.json','update-channel.json','release-version.json')}

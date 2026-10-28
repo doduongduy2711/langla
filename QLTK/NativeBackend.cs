@@ -601,11 +601,11 @@ namespace TGLL {
             Code64 a=new Code64();a.Emit(0x53,0x48,0x83,0xec,0x20);a.Call(original);a.Emit(0x48,0xbb);a.Q(data);a.Emit(0x83,0x7b,4,1);a.J(0x85,"done");a.Emit(0x83,0x7b,8,2);a.J(0x85,"done");a.Emit(0xff,0x43,28);a.Label("done");a.Emit(0x48,0x83,0xc4,0x20,0x5b,0xc3);return a.Finish();
         }
 
-        internal static byte[] Login(long data,long classSlot,long original,long stringNew,long setter,long login,long characterCode=0,long trainingCode=0,long settingsCode=0,long teamCode=0,long followCode=0,long zoneCode=0,long itemCode=0,long questCode=0,long travelItemCode=0,long travelMenuCode=0,long giftCode=0,long mailCode=0,long inboxCode=0,long farmCode=0,long chestCode=0,long cloakCode=0,long marketCode=0,long reminderCode=0,long gemCode=0) {
+        internal static byte[] Login(long data,long classSlot,long original,long stringNew,long setter,long login,long characterCode=0,long trainingCode=0,long settingsCode=0,long teamCode=0,long followCode=0,long zoneCode=0,long itemCode=0,long questCode=0,long travelItemCode=0,long travelMenuCode=0,long giftCode=0,long mailCode=0,long inboxCode=0,long farmCode=0,long chestCode=0,long cloakCode=0,long marketCode=0,long reminderCode=0,long gemCode=0,long captchaCode=0) {
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x40);
             // Thử skill trước Update treo; giữ nguyên tham số của Update gốc.
             a.Emit(0x48,0x89,0x4c,0x24,0x20,0x48,0x89,0x54,0x24,0x28,0x4c,0x89,0x44,0x24,0x30,0x4c,0x89,0x4c,0x24,0x38);
-            if(trainingCode!=0)a.Call(trainingCode);if(gemCode!=0)a.Call(gemCode);
+            if(captchaCode!=0)a.Call(captchaCode);if(trainingCode!=0)a.Call(trainingCode);if(gemCode!=0)a.Call(gemCode);
             a.Emit(0x48,0x8b,0x4c,0x24,0x20,0x48,0x8b,0x54,0x24,0x28,0x4c,0x8b,0x44,0x24,0x30,0x4c,0x8b,0x4c,0x24,0x38);a.Call(original);
             a.Emit(0x48,0xbb);a.Q(data);a.Emit(0x83,0x3b,0x01);a.J(0x85,"done");a.Phase(11);
             a.Rax(classSlot);a.Emit(0x48,0x8b,0x38,0x48,0x85,0xff);a.J(0x84,"done");a.Emit(0x40,0xf6,0xc7,0x01);a.J(0x85,"done");
@@ -950,6 +950,7 @@ namespace TGLL {
             // +0x90 can retain the dismissed dialog. Check membership of the live overlay stack.
             a.Emit(0x48,0x8b,0x8e,0x88,0,0,0,0x48,0x85,0xc9);a.J(0x84,"clear");a.Emit(0x48,0x8b,0x01,0x48,0x89,0xfa,0x4c,0x8b,0x80,0x10,0x02,0,0,0xff,0x90,0x08,0x02,0,0,0x84,0xc0);a.J(0x84,"clear");
             Slot(a,dialogSlot,"done",initialize);a.Emit(0x48,0x39,0x07);a.J(0x85,"clear");
+            a.Emit(0x48,0x83,0xbf,0xc8,0,0,0,0);a.J(0x84,"noCaptcha");a.Emit(0x48,0x83,0xbf,0xd0,0,0,0,0);a.J(0x85,"done");a.Label("noCaptcha");
             a.Emit(0x83,0x3b,0x11);a.J(0x84,"done"); // wait for actual closure; never submit twice
             a.Emit(0x48,0x8b,0x87,0xe8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"clear");a.Emit(0x83,0xb8,0x80,0,0,0,0xf9);a.J(0x85,"clear");
             a.Emit(0x48,0x8b,0x40,0x78);MatchString(a,"Xác nhận","clear");
@@ -1127,7 +1128,7 @@ namespace TGLL {
     public sealed partial class NativeJob {
         public volatile InventorySnapshot Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"",DateTime.MinValue);
         public volatile bool FollowActive;public volatile string FollowStatus="";public volatile int FollowDistance=-1,FollowMoves;internal bool FollowStopPending;internal DateTime FollowPollAt=DateTime.MinValue;
-        public volatile bool PersistentUp;internal bool UpRepeatDaily;internal DateTime UpDay;internal bool[] UpCompleted=new bool[5];internal string[] UpSonCapTeamIds=new string[0];internal bool UpIzanamiFull,UpSonCapFull;public volatile bool DailyManaged,DailyActive,DailyExecuting;internal bool DailyApplying;public volatile int DailyStage;public volatile string DailyStatus="";internal bool[] DailyPlan=new bool[4],DailyRunPlan=new bool[4];internal DateTime DailyLastDate;internal string[] DailyTeamIds=new string[0];internal FarmSpot DailyReturnSpot;internal bool DailyReturnQuiet;public volatile bool KeyReceiptVerified;public volatile bool CurseActive;public DateTime CurseReadAt=DateTime.MinValue;internal DateTime CursePollAt=DateTime.MinValue;public volatile int MapId=-1,ZoneId=-1;public DateTime ZoneReadAt=DateTime.MinValue;public volatile string ZoneStatus="";public volatile bool ZoneSyncActive;
+        public volatile bool PersistentUp;internal bool UpRepeatDaily;internal DateTime UpDay;internal bool[] UpCompleted=new bool[5];internal string[] UpSonCapTeamIds=new string[0];internal bool UpIzanamiFull,UpSonCapFull;public volatile bool DailyManaged,DailyActive,DailyExecuting;internal bool DailyApplying;public volatile int DailyStage;public volatile string DailyStatus="";internal bool[] DailyPlan=new bool[4],DailyRunPlan=new bool[4];internal DateTime DailyLastDate;internal string[] DailyTeamIds=new string[0];internal FarmSpot DailyReturnSpot;internal bool DailyReturnQuiet;public volatile bool KeyReceiptVerified;public volatile bool CurseActive;internal readonly object CaptchaGate=new object();internal long CaptchaData;internal CaptchaFrame CaptchaFrame;internal int CaptchaGeneration,CaptchaEpisodeTries;internal bool CaptchaPending;internal string CaptchaReadKey="",CaptchaAttemptKey="",CaptchaCode="";internal DateTime CaptchaPollAt;public volatile string CaptchaStatus="";public DateTime CurseReadAt=DateTime.MinValue;internal DateTime CursePollAt=DateTime.MinValue;public volatile int MapId=-1,ZoneId=-1;public DateTime ZoneReadAt=DateTime.MinValue;public volatile string ZoneStatus="";public volatile bool ZoneSyncActive;
         internal int PlannedZone=-1,ZonePlanMap=-1,ZoneAttempts;internal volatile bool ZonePrepared;internal DateTime ZoneActionAt=DateTime.MinValue,ZonePollAt=DateTime.MinValue;internal long ZoneOldPopup;internal bool ZoneListWaiting;
         public volatile VitalsSnapshot Vitals;internal DateTime VitalsPollAt,IdentityPollAt;public volatile bool PrioritizeThiQuy,ThiQuyCombatActive;internal int ThiQuySkillCursor,ThiQuyNativeMode;public volatile string ThiQuyPriorityStatus="Tắt";internal DateTime ThiQuyPriorityAt=DateTime.MinValue;internal bool ThiQuyPriorityArmed,ThiQuyFarmPaused,ThiQuyReadSuspended;internal DateTime ThiQuyMissingAt=DateTime.MinValue,ThiQuyScanLogAt=DateTime.MinValue;internal string ThiQuyScanLast="";internal DateTime OnlineNoticePollAt;public volatile string CharacterName="",TeamStatus="";public volatile string[] TeamMembers=new string[0],Friends=new string[0];
         internal string LeaderZoneJob="";internal int LeaderZoneMap=-1,LeaderZoneTarget=-1;internal bool LeaderZoneConfirmed;
@@ -2056,7 +2057,7 @@ namespace TGLL {
             j.DungeonNoKeyProbeConfirmed=true;return true;
         }
         static void PumpDungeonCycle(Remote r,long data,long game,NativeJob j,Stopwatch timer){
-            if(j.QuestEnabled)return;
+            if(j.QuestEnabled||j.CurseActive)return;
             if(!j.DungeonHighEnabled){j.DungeonCycleWaiting=false;j.DungeonRepeatRequested=false;return;}
             if(!j.DungeonCycleWaiting||j.DungeonStopped||j.ReceiveFlowActive)return;
             DateTime now=DateTime.UtcNow;if((now-j.DungeonPollAt).TotalSeconds<1)return;j.DungeonPollAt=now;
@@ -2374,14 +2375,14 @@ namespace TGLL {
             string s=System.Text.RegularExpressions.Regex.Replace(b.ToString(),"\\s+"," ").Trim();
             bool once=System.Text.RegularExpressions.Regex.IsMatch(s,"(?:^| )(?:1|mot) lan(?: |$)");return s.Contains("nhan")&&((s.Contains("moi ngay")&&once)||(s.Contains("chi")&&s.Contains("ngay")&&once)||(s.Contains("da nhan")&&s.Contains("chia")&&(s.Contains("hom nay")||s.Contains("trong ngay"))));
         }
-        // Chỉ nhận diện lời nhắc giải bùa; không đọc ảnh mã, ô nhập hoặc gửi xác nhận.
+        // Nhận diện lời nhắc để tạm giữ hoạt động trong khi xử lý mã ảnh.
         internal static bool IsCurseNotice(string text){
             StringBuilder b=new StringBuilder();foreach(char c in (text??"").ToLowerInvariant().Normalize(NormalizationForm.FormD)){
                 if(System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)==System.Globalization.UnicodeCategory.NonSpacingMark)continue;
                 b.Append(c=='đ'?'d':Char.IsLetterOrDigit(c)?c:' ');
             }
             string normalized=System.Text.RegularExpressions.Regex.Replace(b.ToString(),"\\s+"," ").Trim();
-            return normalized.Contains("nhap ma")&&(normalized.Contains("giai tru bua")||normalized.Contains("giai bua"))&&(normalized.Contains("yem bua")||normalized.Contains("bua chu"));
+            return normalized.Contains("giai capcha")||normalized.Contains("giai captcha")||normalized.Contains("nhap ma")&&(normalized.Contains("giai tru bua")||normalized.Contains("giai bua"))&&(normalized.Contains("yem bua")||normalized.Contains("bua chu"));
         }
         internal static void ObserveCurseNotice(NativeJob j,string notice,DateTime now){
             bool active=!j.CloseRequested&&!j.CancelRequested&&IsCurseNotice(notice);bool changed=j.CurseActive!=active;
@@ -2389,7 +2390,7 @@ namespace TGLL {
             if(changed)Log(j,active?"curse_detected":"curse_cleared",",\"pid\":"+j.ProcessId);
         }
         public static string CurseDisplayStatus(NativeJob j){
-            return j!=null&&j.CurseActive&&!j.CloseRequested&&!j.CancelRequested&&j.State!="closed"&&j.State!="failed"&&j.State!="cancelled"&&(DateTime.UtcNow-j.CurseReadAt).TotalSeconds<=5?"Bị bùa — cần nhập mã":"";
+            return j!=null&&j.CurseActive&&!j.CloseRequested&&!j.CancelRequested&&j.State!="closed"&&j.State!="failed"&&j.State!="cancelled"&&(DateTime.UtcNow-j.CurseReadAt).TotalSeconds<=5?(CaptchaEnabled&&j.CaptchaStatus.Length>0?"Giải mã ảnh: "+j.CaptchaStatus:"Bị bùa — cần nhập mã"):"";
         }
         // Chỉ khôi phục khi hộp thoại hiện tại báo mất kết nối, không dựa vào FPS.
         internal static bool IsDisconnectNotice(string text){
@@ -2612,6 +2613,7 @@ namespace TGLL {
             r.Write(data,BitConverter.GetBytes(12));timer.Stop();Log(j,"dungeon_resumed",",\"map\":"+map);return true;
         }
         internal static void PumpReceiveKey(Remote r,long data,NativeJob j,Stopwatch timer,long game=0,Func<InventorySnapshot> inventoryReader=null,Func<int> mapReader=null){
+            if(j.CurseActive)return;
             if(j.BeastQuestEnabled&&(!j.BeastStartupSandReady||j.BeastStartupSandPid!=j.ProcessId)){PumpBeastStartupSand(r,data,j,timer,game);return;}
             if(j.DungeonHighEnabled&&j.ReceiveKeyRequested&&!j.ReceiveFlowActive&&!j.DungeonCycleWaiting){try{if(ResumeHighDungeon(r,data,j,timer,mapReader==null?ReadDungeonMap(r,game):mapReader()))return;}catch{return;}}
             if(j.KeyReceiptPending){PumpKeyReceipt(r,data,j,timer,game,inventoryReader);return;}
@@ -2872,6 +2874,7 @@ namespace TGLL {
                     giftData=r.Allocate(4096);long giftCode=r.Allocate(4096);byte[] giftBytes=NativeCode.GiftCode(giftData,game);r.Write(giftCode,giftBytes);r.Protect(giftCode,4096,0x20);
                     mailData=r.Allocate(4096);long mailCode=r.Allocate(4096);byte[] mailBytes=NativeCode.Mail(mailData,game);if(mailBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(mailCode,mailBytes);r.Protect(mailCode,4096,0x20);
                     marketData=r.Allocate(8192);long marketCode=r.Allocate(4096),marketSplit=r.Allocate(4096);r.Write(marketSplit,NativeCode.Mail(marketData+4096,game));r.Protect(marketSplit,4096,0x20);byte[] marketBytes=NativeCode.Market(marketData,game,marketSplit);if(marketBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(marketCode,marketBytes);r.Protect(marketCode,4096,0x20);
+                    j.CaptchaData=r.Allocate(4096);long captchaCode=r.Allocate(4096);byte[] captchaBytes=NativeCode.Captcha(j.CaptchaData,game);if(captchaBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(captchaCode,captchaBytes);r.Protect(captchaCode,4096,0x20);
                     gemData=r.Allocate(4096);long gemCode=r.Allocate(4096);byte[] gemBytes=NativeCode.GemCombine(gemData,game);if(gemBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(gemCode,gemBytes);r.Protect(gemCode,4096,0x20);
                     inboxData=r.Allocate(4096);long inboxCode=r.Allocate(4096);r.Write(inboxCode,NativeCode.Inbox(inboxData,game));r.Protect(inboxCode,4096,0x20);
                     long inboxResponse=game+0x4f0300;byte[] inboxPrefix=r.Read(inboxResponse,15);
@@ -2890,7 +2893,7 @@ namespace TGLL {
                     teamData=r.Allocate(4096);teamCode=r.Allocate(4096);byte[] teamBytes=NativeCode.Team(teamData,game,game+0x1dd900);if(teamBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(teamCode,teamBytes);r.Protect(teamCode,4096,0x20);
                     followCode=r.Allocate(4096);byte[] followBytes=NativeCode.Follow(teamData+1024,game,game+0x1dd900);if(followBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(followCode,followBytes);r.Protect(followCode,4096,0x20);
                     zoneCode=r.Allocate(4096);byte[] zoneBytes=NativeCode.Zone(teamData+2048,game,game+0x1dd900);if(zoneBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(zoneCode,zoneBytes);r.Protect(zoneCode,4096,0x20);
-                    loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode,gemCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
+                    loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode,gemCode,captchaCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
                     patch=new byte[16];for(int i=0;i<16;i++)patch[i]=0x90;patch[0]=0xe9;Array.Copy(BitConverter.GetBytes(checked((int)(loginCode-update-5))),0,patch,1,4);
                 }
                 Check(j);r.Suspended(delegate{if(j.Proxy!=null){r.Install(game+0x129e618,BitConverter.GetBytes(connectCode));r.Install(baseModule+0x45448,BitConverter.GetBytes(connectCode));}if(j.Auto)r.Install(update,patch);});installed=true;
@@ -2912,7 +2915,7 @@ namespace TGLL {
                         j.Stage="popup";j.State="waiting_map";r.Write(data,BitConverter.GetBytes(13));timer.Restart();Stopwatch mapDelay=null;bool popupReady=false,popupLogged=false;
                         while(timer.ElapsedMilliseconds<90000){
                             if(j.CancelRequested){j.Error="cancelled";break;}if(p.HasExited){j.Error="game_exited";break;}
-                            PumpCharacterIdentity(r,game,j);PumpThiQuyPriority(r,game,trainData,j);PumpTraining(r,trainData,j);PumpGameSettings(r,settingsData,j);byte[] gate=r.Read(data,8);int gateState=BitConverter.ToInt32(gate,0);j.ReadyPhase=BitConverter.ToInt32(gate,4);
+                            PumpCaptcha(r,game,j);if(j.CurseActive){timer.Restart();Thread.Sleep(150);continue;}PumpCharacterIdentity(r,game,j);PumpThiQuyPriority(r,game,trainData,j);PumpTraining(r,trainData,j);PumpGameSettings(r,settingsData,j);byte[] gate=r.Read(data,8);int gateState=BitConverter.ToInt32(gate,0);j.ReadyPhase=BitConverter.ToInt32(gate,4);
                             if(gateState==14){if(mapDelay==null){mapDelay=Stopwatch.StartNew();j.State="waiting_popup";Log(j,"map_ready",",\"delay_ms\":5000");}if(mapDelay.ElapsedMilliseconds>=5000){Log(j,"popup_delay_elapsed",",\"elapsed_ms\":"+mapDelay.ElapsedMilliseconds);j.State="confirming_popup";r.Write(data,BitConverter.GetBytes(15));}}
                             if(!popupLogged&&BitConverter.ToInt32(r.Read(data+3264,4),0)>0){popupLogged=true;Log(j,"popup_confirmed",",\"label\":\"Xác nhận\"");}
                             if(gateState==16){popupReady=true;Log(j,"popup_clear","");break;}Thread.Sleep(100);
@@ -2926,12 +2929,13 @@ namespace TGLL {
                 // Retain the proxy relay independently of the job; keep QLTK running.
                 if(data!=0&&!j.CancelRequested&&!j.ReceiveFlowActive)r.Write(data,BitConverter.GetBytes(12));
                 Remote keep=r;SocksRelay keepRelay=relay;r=null;relay=null;
-                Thread lifetime=new Thread(delegate(){Stopwatch maintenance=new Stopwatch();Stopwatch npcTimer=new Stopwatch();if(j.ReceiveFlowActive)npcTimer.Start();try{while(!p.HasExited){if(data!=0&&!j.CloseRequested){try{
+                Thread lifetime=new Thread(delegate(){Stopwatch maintenance=new Stopwatch();bool captchaNpcPaused=false;Stopwatch npcTimer=new Stopwatch();if(j.ReceiveFlowActive)npcTimer.Start();try{while(!p.HasExited){if(data!=0&&!j.CloseRequested){try{
                     if(!j.ReconnectRequested&&(DateTime.UtcNow-j.DisconnectPollAt).TotalSeconds>=1){j.DisconnectPollAt=DateTime.UtcNow;if(ObserveDisconnect(j,ReadDisconnectNotice(keep,game),j.DisconnectPollAt))BeginDisconnectRecovery(j);}
                     if(j.ReconnectRequested){Thread.Sleep(150);continue;}
                     if((DateTime.UtcNow-j.OnlineNoticePollAt).TotalSeconds>=1){j.OnlineNoticePollAt=DateTime.UtcNow;PumpOnlineNotice(keep,reminderData,j,game);}
                     if((DateTime.UtcNow-j.CursePollAt).TotalSeconds>=1){j.CursePollAt=DateTime.UtcNow;ObserveCurseNotice(j,ReadDisconnectNotice(keep,game),j.CursePollAt);}
 
+                    if(j.CurseActive||j.CaptchaFrame!=null)PumpCaptcha(keep,game,j);if(j.CurseActive){if(npcTimer.IsRunning){npcTimer.Stop();captchaNpcPaused=true;}Thread.Sleep(150);continue;}if(captchaNpcPaused){npcTimer.Start();captchaNpcPaused=false;}
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
                     if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpActivityRetry(keep,data,questData,j,npcTimer);PumpQuest(keep,questData,j);PumpGameSettings(keep,settingsData,j);}
                     PumpThiQuyPriority(keep,game,trainData,j);PumpTraining(keep,trainData,j);
@@ -4404,4 +4408,98 @@ namespace TGLL {
             if(j.ActivityWatchKind=="dungeon"&&j.MapId==59)npcTimer.Start();
         }
     }
+}
+
+namespace TGLL {
+ internal sealed class CaptchaFrame {
+  internal long Popup,Image,Pixmap,Pixels,Button;internal int Width,Height;internal byte[] Raw;internal uint Hash;
+  internal string Key {get{return Popup.ToString("x")+":"+Image.ToString("x")+":"+Hash.ToString("x8");}}
+ }
+ public static partial class NativeBackend {
+  public static volatile bool CaptchaEnabled,CaptchaNeedsRuntime;static string captchaPython="",captchaScript="",captchaWork="";
+  static readonly object captchaRunnerGate=new object();static readonly ConcurrentQueue<CaptchaWork> captchaQueue=new ConcurrentQueue<CaptchaWork>();static readonly AutoResetEvent captchaSignal=new AutoResetEvent(false);static Thread captchaThread;static Process captchaProcess;
+  sealed class CaptchaWork {internal NativeJob Job;internal CaptchaFrame Frame;internal int Generation;}
+  public static void ConfigureCaptcha(bool enabled,string python,string script,string work){
+   captchaPython=python??"";captchaScript=script??"";captchaWork=work??"";CaptchaEnabled=enabled;if(File.Exists(captchaPython))CaptchaNeedsRuntime=false;
+  }
+  internal static uint CaptchaHash(byte[] raw){unchecked{uint hash=2166136261;for(int n=0;n<raw.Length;n+=4)hash=(hash^BitConverter.ToUInt32(raw,n))*16777619;return hash;}}
+  internal static CaptchaFrame ReadCaptchaFrame(Remote r,long game){
+   long cls=ResolvedClass(r,game+0x16ee888),fc=r.Ptr(r.Ptr(cls+0xb8)+16);if(fc==0||r.Ptr(fc)!=cls)return null;
+   long popup=r.Ptr(fc+0x90);if(popup==0||r.Ptr(popup)!=ResolvedClass(r,game+0x16eeba8)||Array.IndexOf(ReadVector(r,r.Ptr(fc+0x88)),popup)<0)return null;
+   if(!IsCurseNotice(ReadKeyNotice(r,game))||r.Ptr(popup+0xd0)==0)return null;
+   long image=r.Ptr(popup+0xc8);if(image==0)return null;long pixmap=r.Ptr(image+0x18);if(pixmap==0)return null;
+   int width=BitConverter.ToInt32(r.Read(pixmap+16,4),0),height=BitConverter.ToInt32(r.Read(pixmap+20,4),0);
+   if(width<70||width>1000||height<20||height>500||r.Read(pixmap+0x3c,1)[0]!=0)return null;
+   long pixels=r.Ptr(pixmap+32);if(pixels==0||BitConverter.ToInt32(r.Read(pixels+24,4),0)<width*height)return null;
+   long button=r.Ptr(popup+0xe8);if(button==0||BitConverter.ToInt32(r.Read(button+0x80,4),0)!=-7||ReadLabel(r,r.Ptr(button+0x78))!="Xác nhận")return null;
+   byte[] raw=r.Read(pixels+32,width*height*4);uint hash=CaptchaHash(raw);
+   if(r.Ptr(fc+0x90)!=popup||r.Ptr(popup+0xc8)!=image||r.Ptr(image+0x18)!=pixmap||r.Ptr(pixmap+32)!=pixels)return null;
+   return new CaptchaFrame{Popup=popup,Image=image,Pixmap=pixmap,Pixels=pixels,Button=button,Width=width,Height=height,Raw=raw,Hash=hash};
+  }
+  internal static void SaveCaptchaBitmap(CaptchaFrame f,string path){
+   using(BinaryWriter b=new BinaryWriter(File.Create(path))){b.Write((ushort)0x4d42);b.Write(54+f.Raw.Length);b.Write(0);b.Write(54);b.Write(40);b.Write(f.Width);b.Write(f.Height);b.Write((ushort)1);b.Write((ushort)32);b.Write(0);b.Write(f.Raw.Length);b.Write(0);b.Write(0);b.Write(0);b.Write(0);
+    for(int y=f.Height-1;y>=0;y--)for(int x=0;x<f.Width;x++){int n=(y*f.Width+x)*4;b.Write(f.Raw[n+1]);b.Write(f.Raw[n+2]);b.Write(f.Raw[n+3]);b.Write((byte)255);}
+   }
+  }
+  internal static bool CaptchaCodeValid(string code){return code!=null&&code.Length==4&&code.All(c=>c>='0'&&c<='9'||c>='A'&&c<='Z');}
+  static string CaptchaReadLine(int milliseconds){var task=captchaProcess.StandardOutput.ReadLineAsync();if(!task.Wait(milliseconds))throw new Exception("ocr_timeout");return task.Result??"";}
+  static void StopCaptchaProcess(){try{if(captchaProcess!=null){if(!captchaProcess.HasExited)captchaProcess.Kill();captchaProcess.Dispose();}}catch{}captchaProcess=null;}
+  static string RunCaptchaOcr(string path){
+   if(captchaProcess==null||captchaProcess.HasExited){StopCaptchaProcess();
+    var info=new ProcessStartInfo(captchaPython,"-I \""+captchaScript+"\" --worker"){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true,StandardOutputEncoding=Encoding.UTF8,StandardErrorEncoding=Encoding.UTF8};
+    info.EnvironmentVariables["OMP_NUM_THREADS"]="1";captchaProcess=Process.Start(info);captchaProcess.ErrorDataReceived+=delegate{};captchaProcess.BeginErrorReadLine();if(CaptchaReadLine(20000)!="READY")throw new Exception("ocr_unavailable");
+   }
+   byte[] message=Encoding.UTF8.GetBytes("{\"image\":"+Quote(path)+"}\n");captchaProcess.StandardInput.BaseStream.Write(message,0,message.Length);captchaProcess.StandardInput.BaseStream.Flush();return CaptchaReadLine(20000);
+  }
+  static void CaptchaLoop(){while(true){CaptchaWork work;if(!captchaQueue.TryDequeue(out work)){captchaSignal.WaitOne();continue;}string image="";
+   try{if(!CaptchaEnabled||work.Job.CloseRequested||work.Job.CancelRequested||work.Job.ReconnectRequested)continue;
+    Directory.CreateDirectory(captchaWork);image=Path.Combine(captchaWork,work.Job.Id+"-"+work.Generation+".bmp");SaveCaptchaBitmap(work.Frame,image);string reply=RunCaptchaOcr(image);
+    lock(work.Job.CaptchaGate){if(!CaptchaEnabled||work.Job.CaptchaGeneration!=work.Generation||work.Job.CloseRequested||work.Job.CancelRequested||work.Job.ReconnectRequested)continue;
+     if(reply.StartsWith("OK\t",StringComparison.Ordinal)&&CaptchaCodeValid(reply.Substring(3))){work.Job.CaptchaCode=reply.Substring(3);work.Job.CaptchaStatus="Đã đọc "+work.Job.CaptchaCode+"; đợi xác nhận đúng ảnh";}
+     else work.Job.CaptchaStatus="Chưa đọc thống nhất mã; cần kiểm tra game";
+    }
+   }catch{StopCaptchaProcess();work.Job.CaptchaStatus="Bộ đọc mã chưa sẵn sàng; kiểm tra tab Giải mã ảnh";}
+   finally{lock(work.Job.CaptchaGate)work.Job.CaptchaPending=false;if(image.Length>0)try{File.Delete(image);}catch{}}
+  }}
+  static void QueueCaptcha(NativeJob j,CaptchaFrame frame){
+   if(captchaQueue.Count>=16){j.CaptchaStatus="Đợi lượt đọc mã";return;}
+   lock(captchaRunnerGate){if(captchaThread==null){captchaThread=new Thread(CaptchaLoop);captchaThread.IsBackground=true;captchaThread.Start();}}
+   j.CaptchaPending=true;j.CaptchaReadKey=frame.Key;j.CaptchaStatus="Đang đọc mã trong ảnh";captchaQueue.Enqueue(new CaptchaWork{Job=j,Frame=frame,Generation=j.CaptchaGeneration});captchaSignal.Set();
+  }
+  static void PumpCaptcha(Remote r,long game,NativeJob j){
+   if(j.CaptchaData==0)return;DateTime now=DateTime.UtcNow;if((now-j.CaptchaPollAt).TotalMilliseconds<500)return;j.CaptchaPollAt=now;
+   ObserveCurseNotice(j,ReadKeyNotice(r,game),now);
+   lock(j.CaptchaGate){
+    if(!CaptchaEnabled||j.CloseRequested||j.CancelRequested||j.ReconnectRequested){r.Write(j.CaptchaData+8,new byte[4]);if(j.CaptchaFrame==null||j.CaptchaAttemptKey!=j.CaptchaFrame.Key){j.CaptchaReadKey="";j.CaptchaCode="";}return;}
+    CaptchaFrame frame;try{frame=ReadCaptchaFrame(r,game);}catch{j.CaptchaStatus="Chưa đọc được ảnh mã";return;}
+    if(frame==null){ObserveCurseNotice(j,ReadKeyNotice(r,game),now);if(j.CurseActive){j.CaptchaStatus="Đã thấy yêu cầu mã; chưa đọc được ảnh hoặc ô nhập";return;}if(j.CaptchaFrame!=null){j.CaptchaGeneration++;j.CaptchaFrame=null;j.CaptchaReadKey="";j.CaptchaAttemptKey="";j.CaptchaEpisodeTries=0;j.CaptchaCode="";j.CaptchaStatus="Không còn hộp mã";Log(j,"captcha_cleared","");}return;}
+    j.CurseActive=true;j.CurseReadAt=now;
+    if(j.CaptchaFrame==null||j.CaptchaFrame.Key!=frame.Key){j.CaptchaGeneration++;j.CaptchaFrame=frame;j.CaptchaCode="";Log(j,"captcha_detected",",\"image_hash\":"+Quote(frame.Hash.ToString("x8")));}else j.CaptchaFrame=frame;
+    if(j.CaptchaAttemptKey==frame.Key){int state=BitConverter.ToInt32(r.Read(j.CaptchaData,4),0);if(state==0){int result=BitConverter.ToInt32(r.Read(j.CaptchaData+4,4),0);j.CaptchaStatus=result==2?"Đã xác nhận mã; chờ game phản hồi":"Ảnh/ô nhập đã thay đổi; chưa xác nhận";}return;}
+    if(j.CaptchaEpisodeTries>=2){j.CaptchaStatus="Đã thử 2 mã; cần kiểm tra game trước khi thử thêm";return;}
+    if(!File.Exists(captchaPython)||!File.Exists(captchaScript)){CaptchaNeedsRuntime=true;j.CaptchaStatus="Cần cài bộ đọc ở tab Giải mã ảnh";return;}
+    if(CaptchaCodeValid(j.CaptchaCode)){
+     if(BitConverter.ToInt32(r.Read(j.CaptchaData,4),0)!=0)return;
+     byte[] b=new byte[80];Array.Copy(BitConverter.GetBytes(1),0,b,8,4);Array.Copy(BitConverter.GetBytes(frame.Popup),0,b,16,8);Array.Copy(BitConverter.GetBytes(frame.Image),0,b,24,8);Array.Copy(BitConverter.GetBytes(frame.Pixmap),0,b,32,8);Array.Copy(BitConverter.GetBytes(frame.Pixels),0,b,40,8);Array.Copy(BitConverter.GetBytes(frame.Width*frame.Height),0,b,48,4);Array.Copy(BitConverter.GetBytes(frame.Hash),0,b,52,4);Array.Copy(BitConverter.GetBytes(frame.Button),0,b,56,8);Array.Copy(Encoding.ASCII.GetBytes(j.CaptchaCode),0,b,64,4);Array.Copy(BitConverter.GetBytes(frame.Width),0,b,72,4);Array.Copy(BitConverter.GetBytes(frame.Height),0,b,76,4);
+     r.Write(j.CaptchaData,b);j.CaptchaEpisodeTries++;j.CaptchaAttemptKey=frame.Key;j.CaptchaStatus="Đang điền và xác nhận mã";r.Write(j.CaptchaData,BitConverter.GetBytes(1));Log(j,"captcha_submit_queued",",\"image_hash\":"+Quote(frame.Hash.ToString("x8")));return;
+    }
+    if(!j.CaptchaPending&&j.CaptchaReadKey!=frame.Key)QueueCaptcha(j,frame);
+   }
+  }
+ }
+ internal static partial class NativeCode {
+  internal static byte[] Captcha(long data,long game){
+   Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x40,0x48,0xbb);a.Q(data);a.Emit(0x83,0x3b,1);a.J(0x85,"return");a.Emit(0xc7,0x03,2,0,0,0,0xc7,0x43,4,3,0,0,0,0x83,0x7b,8,1);a.J(0x85,"done");
+   Slot(a,game+0x16ee888,"done",game+0x1dd900);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x70,16,0x48,0x85,0xf6);a.J(0x84,"done");a.Emit(0x48,0x8b,0xbe,0x90,0,0,0,0x48,0x85,0xff);a.J(0x84,"done");a.Emit(0x48,0x3b,0x7b,16);a.J(0x85,"done");
+   Slot(a,game+0x16eeba8,"done",game+0x1dd900);a.Emit(0x48,0x39,0x07);a.J(0x85,"done");a.Emit(0x48,0x8b,0x8e,0x88,0,0,0,0x48,0x85,0xc9);a.J(0x84,"done");a.Emit(0x48,0x8b,0x01,0x48,0x89,0xfa,0x4c,0x8b,0x80,0x10,2,0,0,0xff,0x90,8,2,0,0,0x84,0xc0);a.J(0x84,"done");
+   a.Emit(0x48,0x8b,0x87,0xc8,0,0,0,0x48,0x3b,0x43,24);a.J(0x85,"done");a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x40,24,0x48,0x3b,0x43,32);a.J(0x85,"done");a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x80,0x78,60,0);a.J(0x85,"done");a.Emit(0x8b,0x50,16,0x3b,0x53,72);a.J(0x85,"done");a.Emit(0x8b,0x50,20,0x3b,0x53,76);a.J(0x85,"done");a.Emit(0x8b,0x50,16,0x0f,0xaf,0x50,20,0x3b,0x53,48);a.J(0x85,"done");a.Emit(0x85,0xd2);a.J(0x8e,"done");a.Emit(0x81,0xfa,0x20,0xa1,7,0);a.J(0x8f,"done");
+   a.Emit(0x4c,0x8b,0x40,32,0x4c,0x3b,0x43,40);a.J(0x85,"done");a.Emit(0x4d,0x85,0xc0);a.J(0x84,"done");a.Emit(0x41,0x39,0x50,24);a.J(0x8c,"done");a.Emit(0xb8,0xc5,0x9d,0x1c,0x81,0x45,0x33,0xc9);
+   a.Label("hash");a.Emit(0x43,0x33,0x44,0x88,32,0x69,0xc0,0x93,1,0,1,0x41,0xff,0xc1,0x44,0x3b,0xca);a.J(0x82,"hash");a.Emit(0x3b,0x43,52);a.J(0x85,"done");
+   a.Emit(0x48,0x8b,0x87,0xe8,0,0,0,0x48,0x3b,0x43,56);a.J(0x85,"done");a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x83,0xb8,0x80,0,0,0,0xf9);a.J(0x85,"done");a.Emit(0x48,0x8b,0x40,0x78);MatchString(a,"Xác nhận","done");
+   for(int n=0;n<4;n++){a.Emit(0x0f,0xb6,0x43,(byte)(64+n),0x83,0xf8,48);a.J(0x82,"done");a.Emit(0x83,0xf8,57);a.J(0x86,"code"+n);a.Emit(0x83,0xf8,65);a.J(0x82,"done");a.Emit(0x83,0xf8,90);a.J(0x87,"done");a.Label("code"+n);}a.Emit(0x80,0x7b,68,0);a.J(0x85,"done");
+   a.Emit(0x48,0x89,0x74,0x24,48,0x48,0x8d,0x4b,64);a.Call(game+0x161150);a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x89,0x44,0x24,40,0x48,0x8b,0x07,0x48,0x89,0xf9,0x48,0x8b,0x90,0xa0,5,0,0,0xff,0x90,0x98,5,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x89,0xc1,0x4c,0x8b,0x10,0x48,0x8b,0x54,0x24,40,0x4d,0x8b,0x82,0xd0,3,0,0,0x41,0xff,0x92,0xc8,3,0,0);
+   a.Emit(0x48,0x8b,0x74,0x24,48,0x48,0x3b,0xbe,0x90,0,0,0);a.J(0x85,"done");a.Emit(0xc7,0x43,4,2,0,0,0,0x48,0x8b,0x06,0x48,0x89,0xf1,0xba,0xf9,0xff,0xff,0xff,0x49,0x89,0xf8,0x4c,0x8b,0x4b,56,0x4c,0x8b,0x90,0x90,4,0,0,0x4c,0x89,0x54,0x24,32,0xff,0x90,0x88,4,0,0);
+   a.Label("done");a.Emit(0xc7,0x03,0,0,0,0);a.Label("return");a.Emit(0x48,0x83,0xc4,0x40,0x5f,0x5e,0x5b,0xc3);return a.Finish();
+  }
+ }
 }
