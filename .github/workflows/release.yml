@@ -159,9 +159,12 @@ jobs:
       - name: Build program-only update and portable bundles
         shell: powershell
         run: ./scripts/Build-Release.ps1 -Version ([int]$env:QLTK_VERSION) -Repository $env:GITHUB_REPOSITORY
+      - name: Verify NET Framework 4.8 launcher
+        shell: powershell
+        run: ./scripts/Test-Net48Release.ps1 -OutputDirectory (Join-Path $pwd 'dist')
       - name: Publish release assets
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME dist/QLTK-update.zip dist/QLTK-portable.zip dist/QLTK-ocr-runtime-win64.zip --repo $env:GITHUB_REPOSITORY --title "QLTK $env:GITHUB_REF_NAME" --generate-notes
+          gh release create $env:GITHUB_REF_NAME dist/QLTK-update.zip dist/QLTK-portable.zip dist/QLTK-net48-launcher.zip dist/QLTK-ocr-runtime-win64.zip --repo $env:GITHUB_REPOSITORY --title "QLTK $env:GITHUB_REF_NAME" --generate-notes

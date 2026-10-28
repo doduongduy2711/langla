@@ -1,6 +1,6 @@
 # QLTK
 
-Trình quản lý tài khoản chạy trên Windows 64-bit và Windows PowerShell 5.1.
+Trình quản lý tài khoản chạy trên Windows 64-bit, .NET Framework 4.8 trở lên và Windows PowerShell 5.1.
 
 Repository chỉ chứa mã chương trình và bộ kiểm tra. Tài khoản, mật khẩu, proxy, cấu hình riêng và log luôn ở máy người dùng, không nằm trong bản phát hành. Game được cài riêng; chọn đường dẫn trong QLTK.
 
@@ -22,3 +22,5 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Build-Release.ps
 Build tạo gói cập nhật `QLTK-update.zip` và gói cài mới `QLTK-portable.zip`. Máy đang dùng bản cũ chưa có phần tải GitHub cần nhận gói mới một lần. Bản tải không thay thế QLTK.exe của phiên đang chạy.
 
 Để phát hành: push tag `v209` (số phiên bản phải tăng cho các lần sau). GitHub Actions kiểm tra trên Windows, đóng gói và đưa hai ZIP lên GitHub Releases. Cần bật Actions và quyền workflow tạo Release. Mỗi bản phát hành có nguồn repo mặc định theo `github.repository`.
+
+Launcher được build bằng reference assemblies .NET Framework 4.8, có QLTK.exe.config đi kèm. Gói QLTK-net48-launcher.zip chỉ chứa EXE và cấu hình runtime; đóng cửa sổ QLTK trước khi thay hai file cạnh QLTK.exe. Không cần thay thư mục Data. Nút cập nhật nguồn chương trình không thay launcher đang chạy.

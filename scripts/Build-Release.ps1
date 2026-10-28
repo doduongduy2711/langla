@@ -25,14 +25,21 @@ try{
 }finally{$zip.Dispose();$stream.Dispose()}
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $automation=[Management.Automation.PowerShell].Assembly.Location;$launcher=Join-Path $temp 'QLTK.exe'
-& $compiler /nologo /target:winexe /platform:x64 "/out:$launcher" /r:System.Windows.Forms.dll "/r:$automation" (Join-Path $root 'QLTK/QltkHost.cs')
+if($PSVersionTable.PSEdition -eq 'Core'){throw 'Build QLTK using Windows PowerShell 5.1'}
+$reference=& (Join-Path $PSScriptRoot 'Get-Net48References.ps1')
+$references=@('mscorlib.dll','System.dll','System.Core.dll','System.Windows.Forms.dll') | ForEach-Object {'/r:'+(Join-Path $reference $_)}
+& $compiler /nologo /noconfig /nostdlib+ /target:winexe /platform:x64 ('/win32manifest:'+(Join-Path $root 'QLTK.manifest')) "/out:$launcher" $references "/r:$automation" (Join-Path $root 'QLTK/QltkHost.cs')
 if($LASTEXITCODE -ne 0){throw 'Launcher compilation failed'}
 Copy-Item -LiteralPath (Join-Path $root 'QLTK.cmd') -Destination $temp
+Copy-Item -LiteralPath (Join-Path $root 'QLTK.exe.config') -Destination $temp
 $portableZip=Join-Path $output 'QLTK-portable.zip'
 $stream=[IO.File]::Open($portableZip,[IO.FileMode]::CreateNew);$zip=New-Object IO.Compression.ZipArchive($stream,[IO.Compression.ZipArchiveMode]::Create)
 try{
- foreach($name in @('QLTK.exe','QLTK.cmd')){$null=[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip,(Join-Path $temp $name),$name,[IO.Compression.CompressionLevel]::Optimal)}
+ foreach($name in @('QLTK.exe','QLTK.exe.config','QLTK.cmd')){$null=[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip,(Join-Path $temp $name),$name,[IO.Compression.CompressionLevel]::Optimal)}
  foreach($file in $files){$null=[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip,(Join-Path $program $file.name),('QLTK/'+$file.name),[IO.Compression.CompressionLevel]::Optimal)}
 }finally{$zip.Dispose();$stream.Dispose()}
+$launcherZip=Join-Path $output 'QLTK-net48-launcher.zip'
+$stream=[IO.File]::Open($launcherZip,[IO.FileMode]::CreateNew);$zip=New-Object IO.Compression.ZipArchive($stream,[IO.Compression.ZipArchiveMode]::Create)
+try{foreach($name in @('QLTK.exe','QLTK.exe.config')){$null=[IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip,(Join-Path $temp $name),$name,[IO.Compression.CompressionLevel]::Optimal)}}finally{$zip.Dispose();$stream.Dispose()}
 Write-Output ('Built v'+$Version+' with '+$files.Count+' program files; no Data, credentials, logs, user settings or game binaries.')
-Get-FileHash -LiteralPath $updateZip,$portableZip -Algorithm SHA256 | Select-Object Path,Hash
+Get-FileHash -LiteralPath $updateZip,$portableZip,$launcherZip -Algorithm SHA256 | Select-Object Path,Hash

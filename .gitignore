@@ -18,3 +18,5 @@ farm-spots.json
 /github-update-fixture-*/
 __pycache__/
 *.pyc
+
+/QLTK/obj/
