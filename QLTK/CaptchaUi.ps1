@@ -17,7 +17,7 @@ $captchaSaveAndSend=Ui-NewButton 'Lưu và xác nhận' {Save-CaptchaManualResul
 $captchaReload=Ui-NewButton 'Nạp ảnh đang chờ' {Update-CaptchaManualReview $true};Ui-Place $captchaReload $captchaManualGroup 365 145 225 28
 $captchaChooseSample=Ui-NewButton 'Chọn ảnh đã lưu' {Select-CaptchaSample};Ui-Place $captchaChooseSample $captchaManualGroup 12 138 170 28
 $captchaManualHint=Ui-Label 'Chọn acc đang chờ mã để xem ảnh.' $captchaManualGroup 12 178 595 35
-$script:captchaReviewKey='';$script:captchaReviewFile='';$script:captchaReviewJobId='';$script:captchaReviewPinned=$false;$script:captchaReviewNoticeKey=''
+$script:captchaReviewKey='';$script:captchaReviewFile='';$script:captchaReviewJobId='';$script:captchaReviewPinned=$false;$script:captchaReviewNoticeKey='';$script:captchaReviewSubmittedKey=''
 $script:captchaRuntime=Join-Path $script:dataDir 'OCR\runtime';$script:captchaPython=Join-Path $script:captchaRuntime 'python.exe'
 $script:captchaInstallProcess=$null;$script:captchaInstallTried=$false;$script:captchaReady=$false;$script:captchaInstallResult=Join-Path $script:dataDir 'OCR\install-result.json'
 function Apply-CaptchaOptions {
@@ -31,6 +31,7 @@ function Get-CaptchaSelectedJob {
 }
 function Show-CaptchaReviewSnapshot($review,[string]$jobId,[bool]$force=$false) {
  $changedAccount=$script:captchaReviewJobId -ne $jobId
+ if(!$changedAccount -and !$script:captchaReviewPinned -and $review -and $review.Key -ne $script:captchaReviewKey -and $script:captchaReviewSubmittedKey -eq $script:captchaReviewKey){$captchaManualCode.Clear();$script:captchaReviewSubmittedKey=''}
  if($changedAccount -or $force){$captchaManualCode.Clear();$script:captchaReviewPinned=$false;$script:captchaReviewNoticeKey=''}
  if($changedAccount -or $force -or ($review -and !$script:captchaReviewPinned -and $review.Key -ne $script:captchaReviewKey -and !$captchaManualCode.Text)){
   if($captchaPreview.Image){$old=$captchaPreview.Image;$captchaPreview.Image=$null;$old.Dispose()}
@@ -63,7 +64,7 @@ function Save-CaptchaManualResult([bool]$send) {
   $code=$captchaManualCode.Text.Trim().ToUpperInvariant()
   $null=[TGLL.NativeBackend]::SaveCaptchaLabel($script:captchaReviewFile,$code)
   $captchaManualCode.Text=$code;$captchaManualHint.Text='Đã lưu kết quả '+$code+' cùng ảnh mẫu để huấn luyện.'
-  if($send){$job=Get-CaptchaSelectedJob;if($job -and [string]$job.Id -eq $script:captchaReviewJobId -and [TGLL.NativeBackend]::QueueManualCaptcha($job,$script:captchaReviewKey,$code)){$captchaSaveAndSend.Enabled=$false;$captchaManualHint.Text='Đã lưu kết quả và xếp lệnh xác nhận cho đúng ảnh.'}else{$captchaManualHint.Text='Đã lưu kết quả. Ảnh đã đổi hoặc đã gửi trước đó; chưa gửi thêm vào game.'}}
+  if($send){$job=Get-CaptchaSelectedJob;if($job -and [string]$job.Id -eq $script:captchaReviewJobId -and [TGLL.NativeBackend]::QueueManualCaptcha($job,$script:captchaReviewKey,$code)){$script:captchaReviewSubmittedKey=$script:captchaReviewKey;$captchaSaveAndSend.Enabled=$false;$captchaManualHint.Text='Đã lưu kết quả và xếp lệnh xác nhận cho đúng ảnh.'}else{$captchaManualHint.Text='Đã lưu kết quả. Ảnh đã đổi hoặc đã gửi trước đó; chưa gửi thêm vào game.'}}
  }catch{$captchaManualHint.Text=$_.Exception.GetBaseException().Message}
 }
 function Open-CaptchaSamples {

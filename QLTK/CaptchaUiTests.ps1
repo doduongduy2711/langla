@@ -23,6 +23,9 @@ try{
   if((Get-Content -LiteralPath $label -Raw).Trim() -cne 'AB12'){throw 'Invalid label overwrote saved result'}
   Show-CaptchaReviewSnapshot $review2 'fixture' $true
   if($script:captchaReviewKey -ne 'fixture-2' -or $captchaManualCode.Text){throw 'Reload did not reset manual entry'}
+  $captchaManualCode.Text='AB12';$script:captchaReviewSubmittedKey=$script:captchaReviewKey;Show-CaptchaReviewSnapshot $review 'fixture'
+  if($script:captchaReviewKey -ne 'fixture-1' -or $captchaManualCode.Text){throw 'Submitted old image prevented automatic new-image preview'}
+  Show-CaptchaReviewSnapshot $review2 'fixture' $true
   $script:captchaReviewPinned=$true;Show-CaptchaReviewSnapshot $review 'fixture'
   if($script:captchaReviewKey -ne 'fixture-2'){throw 'Archived preview was replaced automatically'}
   Write-Output 'PASS: manual image preview, uppercase label save, frozen typing, stale-image send guard, explicit reload and pinned archived image.'
