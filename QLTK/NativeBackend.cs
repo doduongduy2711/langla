@@ -1002,7 +1002,7 @@ namespace TGLL {
         static byte[] Read(Stream s,int n){byte[] b=new byte[n];int p=0;while(p<n){int k=s.Read(b,p,n-p);if(k==0)throw new IOException("proxy_closed");p+=k;}return b;}
         internal static TcpClient Authenticate(SocksConfig c){
             TcpClient tcp=new TcpClient();try {
-                var task=tcp.ConnectAsync(c.Host,c.Port);if(!task.Wait(7000))throw new IOException("proxy_timeout");tcp.ReceiveTimeout=7000;tcp.SendTimeout=7000;NetworkStream s=tcp.GetStream();
+                var task=tcp.ConnectAsync(c.Host,c.Port);if(!task.Wait(60000))throw new IOException("proxy_timeout");tcp.ReceiveTimeout=60000;tcp.SendTimeout=60000;NetworkStream s=tcp.GetStream();
                 if(c.Protocol=="http")return tcp;
                 byte method=(byte)(c.Username.Length>0?2:0);s.Write(new byte[]{5,1,method},0,3);byte[] choice=Read(s,2);if(choice[0]!=5||choice[1]!=method)throw new IOException("proxy_auth_failed");
                 if(method==2){byte[] u=Encoding.UTF8.GetBytes(c.Username),p=Encoding.UTF8.GetBytes(c.Password);using(MemoryStream msg=new MemoryStream()){msg.WriteByte(1);msg.WriteByte((byte)u.Length);msg.Write(u,0,u.Length);msg.WriteByte((byte)p.Length);msg.Write(p,0,p.Length);byte[] packet=msg.ToArray();s.Write(packet,0,packet.Length);Array.Clear(packet,0,packet.Length);}byte[] answer=Read(s,2);if(answer[0]!=1||answer[1]!=0)throw new IOException("proxy_auth_failed");Array.Clear(u,0,u.Length);Array.Clear(p,0,p.Length);}
