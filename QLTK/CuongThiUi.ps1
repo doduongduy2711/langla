@@ -60,9 +60,9 @@ function Update-CuongThiUi {
   if($script:cuongThiShownAccount -ne $key){$script:cuongThiShownAccount=$key;$config=if($a){$a.cuongThiConfig}else{$null};$cuongThiMove.Checked=[bool]($config -and $config.Move);$mapId=if($config){[int]$config.MapId}else{69};for($n=0;$n -lt $script:cuongThiMapChoices.Count;$n++){if($script:cuongThiMapChoices[$n].Id -eq $mapId){$cuongThiMap.SelectedIndex=$n;break}};$cuongThiX.Value=if($config){[Math]::Max(0,[Math]::Min(32767,[int]$config.X))}else{0};$cuongThiY.Value=if($config){[Math]::Max(0,[Math]::Min(32767,[int]$config.Y))}else{0};$cuongThiZone.Value=if($config -and $config.PSObject.Properties['Zone']){[Math]::Max(-1,[Math]::Min(255,[int]$config.Zone))}else{-1}}
   $cuongThiCheck.Enabled=$null -ne $a;$cuongThiCheck.Checked=$null -ne $a -and [bool]$a.cuongThiEnabled;$cuongThiCheck.Text=if($a){'Auto Cương Thi: '+$a.username}else{'Bật Auto Cương Thi cho tài khoản đang chọn'}
  }finally{$script:cuongThiLoading=$false};Enable-CuongThiDestinationControls
- $text='Chọn một acc để xem Cương Thi và HP trong map.'
+ $text='Chọn một acc để xem trạng thái Auto Cương Thi.'
  if($a){$j=if($script:accountJobs.ContainsKey($key)){Get-AccountJob $script:accountJobs[$key]}else{$null};$text=$a.username+': '+$(if($j -is [TGLL.NativeJob]){$j.CuongThiStatus}else{if($a.cuongThiEnabled){'Đã lưu lựa chọn; chờ acc vào game.'}else{'Tắt'}})
-  if($j -is [TGLL.NativeJob]){if($j.CuongThiRouteStatus){$text+="`r`n"+$j.CuongThiRouteStatus};if($j.CuongThi){$snap=$j.CuongThi;$text+="`r`nMap: "+$snap.MapId;if($snap.Found){$text+=' • ID: '+$snap.TemplateId+' • '+$snap.Name+"`r`nHP thực: "+$snap.Hp.ToString('N0',[Globalization.CultureInfo]::GetCultureInfo('vi-VN'))}};$text+="`r`n"+$j.GameAutoStatus}
+  if($j -is [TGLL.NativeJob]){if($j.CuongThiRouteStatus){$text+="`r`n"+$j.CuongThiRouteStatus};if($j.CuongThi){$snap=$j.CuongThi;$text+="`r`nMap: "+$snap.MapId;if($snap.Found){$text+=' • ID: '+$snap.TemplateId+' • '+$snap.Name}};$text+="`r`n"+$j.GameAutoStatus}
  }
  if($cuongThiReport.Text -ne $text){$cuongThiReport.Text=$text}
 }

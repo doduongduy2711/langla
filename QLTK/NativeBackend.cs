@@ -1187,11 +1187,11 @@ namespace TGLL {
         internal PortalRightOperation SonCapReleaseOperation;internal bool SonCapReleaseAttempted;internal DateTime SonCapAutoRetryAt;internal int SonCapAutoRetries;internal bool SonCapAutoConfirmed,SonCapMapAutoActive;internal int SonCapAutoMap=-1;internal DateTime SonCapAutoSeenAt,SonCapAutoPollAt;
         internal int SonCapClearedStage=-1;internal bool SonCapApplying,SonCapStopPending,SonCapRebound;internal DateTime SonCapPollAt,SonCapMapAt,SonCapEmptyAt,SonCapRouteAt;
         public volatile bool UpRequested;public volatile bool FarmEnabled,FarmArrived,FarmQuietZone;internal bool FarmZoneWaiting;internal volatile bool FarmStopPending;public volatile int CharacterLevel;public volatile string FarmStatus="";public volatile FarmSpot[] FarmObserved=new FarmSpot[0];public volatile int FarmPositionMap=-1,FarmPositionX,FarmPositionY;public DateTime FarmPositionReadAt=DateTime.MinValue;internal FarmSpot[] FarmChoices=new FarmSpot[0];internal FarmSpot FarmTarget;internal bool FarmCharacterMode;internal int FarmLevel;internal DateTime FarmPollAt,FarmRouteAt,FarmStableAt,FarmZoneCheckAt;internal bool FarmRouteSent;
-        public volatile SkillInfo[] Skills=new SkillInfo[0];public volatile bool TrainEnabled,SkillScanRequested=true,TrainReady;public volatile int TrainSkillId=-1,TrainStatus,TrainAttempts,TrainTargetId=-1,TrainTargetHp;public volatile int[] HangingSkillIds=new[]{367,271,285,1};public int HangingSkillCursor;internal bool HangingAwaiting;internal DateTime HangingRequestLogAt,HangingResultLogAt;internal int HangingLogStatus=Int32.MinValue,HangingLogSkill=-1;public int HangingRequests;internal DateTime LevelOneNextAt;internal int SkillGeneration,TrainCursor;internal bool TrainIdleApplied;internal bool ReceiveFlowActive;public volatile int[] TrainSkillIds=new int[0];
+        public volatile SkillInfo[] Skills=new SkillInfo[0];public volatile bool TrainEnabled,SkillScanRequested=true,TrainReady;public volatile int TrainSkillId=-1,TrainStatus,TrainAttempts,TrainTargetId=-1,TrainTargetHp;public volatile int[] HangingSkillIds=new[]{367,271,285,1};public int HangingSkillCursor;internal bool HangingAwaiting;internal DateTime HangingResultLogAt;internal int HangingLogStatus=Int32.MinValue,HangingLogSkill=-1;public int HangingRequests;internal DateTime LevelOneNextAt;internal int SkillGeneration,TrainCursor;internal bool TrainIdleApplied;internal bool ReceiveFlowActive;public volatile int[] TrainSkillIds=new int[0];
 
         public volatile bool GameSettingsReady,GameAutoEnabled,GameAutoWanted;public volatile string GameAutoStatus="Chờ game sẵn sàng";public volatile int EntryAutoActivations;internal int EntryAutoOrigin=-1,EntryAutoKind,EntryCombatMap=-1;internal bool EntryAutoWaiting;internal DateTime EntryAutoAt;public volatile string SettingsError="";
         public volatile GameOption[] GameOptions=new GameOption[0];
-        internal bool GameAutoManaged,SettingsInFlight;internal int SettingsAutoSent=-1;internal string LastAutoDiagnostic="";internal DateTime AutoDiagnosticAt,WorkerErrorAt,SettingsAutoAt;internal int SettingsAutoValue=-1;
+        internal bool GameAutoManaged,SettingsInFlight;internal int SettingsAutoSent=-1;internal DateTime WorkerErrorAt,SettingsAutoAt;internal int SettingsAutoValue=-1;
         internal DateTime SettingsReadAt=DateTime.MinValue;internal readonly ConcurrentQueue<GameOption> SettingsQueue=new ConcurrentQueue<GameOption>();
         public string LogFile;internal int CaptureGeneration;internal string LastMenu="",LastSkills="";
         internal string Target,Password;internal SocksConfig Proxy;internal bool Auto;public bool AutoLoginEnabled {get{return Auto;}}
@@ -1630,7 +1630,8 @@ namespace TGLL {
         public static string LogDirectory=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"logs");
         internal static bool IsRaikage(string name,int template){name=(name??"").Normalize(NormalizationForm.FormC).Trim();return String.Equals(name,"Raikage Đệ Tam",StringComparison.OrdinalIgnoreCase)||(template==59&&String.Equals(name,"Raikage",StringComparison.OrdinalIgnoreCase));}
         static string Quote(string value){StringBuilder b=new StringBuilder("\"");foreach(char c in value??""){if(c=='\"'||c=='\\')b.Append('\\').Append(c);else if(c<32)b.Append("\\u").Append(((int)c).ToString("x4"));else b.Append(c);}return b.Append('"').ToString();}
-        internal static void Log(NativeJob j,string evt,string fields){try{if(j.LogFile==null)j.LogFile=Path.Combine(LogDirectory,j.Id+".jsonl");Directory.CreateDirectory(Path.GetDirectoryName(j.LogFile));File.AppendAllText(j.LogFile,"{\"time\":"+Quote(DateTime.UtcNow.ToString("o"))+",\"event\":"+Quote(evt)+fields+"}\n",new UTF8Encoding(false));}catch{j.LogError="log_write_failed";}}
+        internal static bool IsRoutineCombatLog(string evt){return evt=="hanging_skill_requested"||evt=="hanging_skill_result"||evt=="thi_quy_scan"||evt=="game_auto_observed";}
+        internal static void Log(NativeJob j,string evt,string fields){if(IsRoutineCombatLog(evt))return;try{if(j.LogFile==null)j.LogFile=Path.Combine(LogDirectory,j.Id+".jsonl");Directory.CreateDirectory(Path.GetDirectoryName(j.LogFile));File.AppendAllText(j.LogFile,"{\"time\":"+Quote(DateTime.UtcNow.ToString("o"))+",\"event\":"+Quote(evt)+fields+"}\n",new UTF8Encoding(false));}catch{j.LogError="log_write_failed";}}
         static string ReadLabel(Remote r,long p){try{if(p==0)return "";int length=BitConverter.ToInt32(r.Read(p+16,4),0);if(length<0||length>256)return "";return Encoding.Unicode.GetString(r.Read(p+20,length*2));}catch{return "";}}
         internal static void ReadDiagnostics(Remote r,long data,NativeJob j){
             byte[] captured=r.Read(data+40,24);int gen=BitConverter.ToInt32(captured,0);
@@ -1839,11 +1840,6 @@ namespace TGLL {
             bool desired=GameAutoDesired(j);
             j.GameAutoStatus=j.ThiQuyCombatActive&&ThiQuyPriorityAllowed(j)?(j.GameAutoEnabled?"Tắt treo để tập trung Thi Quỷ":"Đang tập trung Thi Quỷ; treo tạm tắt"):!j.GameAutoWanted?(j.GameAutoEnabled?"Đang tắt treo":"Treo đã tắt"):!desired?"Tạm dừng treo: đang đăng nhập/thao tác NPC":j.GameAutoEnabled?"Game: treo đang bật":"Đang bật treo; chờ game xác nhận";
             if(CuongThiControlsAuto(j))j.GameAutoStatus="Auto Cương Thi: "+(desired?"cần bật treo":"cần tắt treo")+(j.GameAutoEnabled?" • treo đang bật":" • treo đang tắt");
-            if(j.GameAutoManaged){
-                string diagnostic=j.GameAutoStatus+"|"+j.State+"|"+j.SettingsError;
-                if(diagnostic!=j.LastAutoDiagnostic&&(DateTime.UtcNow-j.AutoDiagnosticAt).TotalSeconds>=5){j.LastAutoDiagnostic=diagnostic;j.AutoDiagnosticAt=DateTime.UtcNow;
-                    Log(j,"game_auto_observed",",\"wanted\":"+(j.GameAutoWanted?"true":"false")+",\"desired\":"+(desired?"true":"false")+",\"enabled\":"+(j.GameAutoEnabled?"true":"false")+",\"state\":"+Quote(j.State)+",\"npc_active\":"+(j.ReceiveFlowActive?"true":"false")+",\"error\":"+Quote(j.SettingsError));}
-            }
             if(j.GameAutoManaged&&j.GameAutoEnabled!=desired){if(!CanSubmitGameAuto(j,desired,DateTime.UtcNow))return;r.Write(data+32,BitConverter.GetBytes(desired?1:0));r.Write(data,BitConverter.GetBytes(1));j.SettingsInFlight=true;return;}
             if(j.GameAutoManaged)j.SettingsAutoSent=desired?1:0;
             GameOption command;if(j.SettingsQueue.TryDequeue(out command)){
@@ -1931,8 +1927,8 @@ namespace TGLL {
             if(j.ThiQuyCombatActive)j.ThiQuyPriorityStatus=j.ThiQuyReadSuspended?"Đợi xác nhận dữ liệu Thi Quỷ; giữ focus":j.GameAutoEnabled?"Đã gặp Thi Quỷ: đợi tắt treo":"Treo tạm tắt: tập trung đánh Thi Quỷ (ID 261)";
         }
         internal static void LogThiQuyScan(NativeJob j,string scan){
-            DateTime now=DateTime.UtcNow;if(scan==j.ThiQuyScanLast&&(now-j.ThiQuyScanLogAt).TotalSeconds<5)return;
-            j.ThiQuyScanLast=scan;j.ThiQuyScanLogAt=now;Log(j,"thi_quy_scan",",\"pid\":"+j.ProcessId+",\"character\":"+Quote(j.CharacterName)+",\"scan\":"+Quote(scan)+",\"focus\":"+(j.ThiQuyCombatActive?"true":"false"));
+            DateTime now=DateTime.UtcNow;if(scan==j.ThiQuyScanLast)return;
+            j.ThiQuyScanLast=scan;j.ThiQuyScanLogAt=now;if(!scan.StartsWith("read_error:",StringComparison.Ordinal))return;Log(j,"thi_quy_read_error",",\"pid\":"+j.ProcessId+",\"character\":"+Quote(j.CharacterName)+",\"scan\":"+Quote(scan)+",\"focus\":"+(j.ThiQuyCombatActive?"true":"false"));
         }
         internal static void SuspendThiQuyFocus(Remote r,long data,NativeJob j){j.ThiQuyReadSuspended=true;r.Write(data+12,new byte[4]);ArmThiQuyFocus(r,data,j);}
         internal static void PumpThiQuyPriority(Remote r,long game,long data,NativeJob j){
@@ -1966,7 +1962,6 @@ namespace TGLL {
             if(BitConverter.ToInt32(r.Read(data,4),0)!=0)return;
             j.TrainReady=true;ReadTraining(r,data,j);
             if(j.HangingAwaiting){
-                if(ShouldLogHangingResult(j,DateTime.UtcNow)){Log(j,"hanging_skill_result",",\"skill_id\":"+j.TrainSkillId+",\"status\":"+j.TrainStatus+",\"started\":"+j.TrainAttempts);}
                 if(j.TrainStatus!=6)j.HangingSkillCursor++;
                 j.HangingAwaiting=false;hanging=HangingLevelOne(j);overlay=hanging!=null;
             }
@@ -1977,7 +1972,7 @@ namespace TGLL {
                 bool levelOne=overlay||j.TrainEnabled&&Array.Exists(j.Skills,x=>x.Id==j.TrainSkillId&&x.Level==1);
                 if(levelOne&&!focus&&DateTime.UtcNow<j.LevelOneNextAt)return;
                 if(levelOne)j.LevelOneNextAt=DateTime.UtcNow.AddMilliseconds(overlay?HangingSkillIntervalMs(j):500);
-                if(overlay){j.HangingAwaiting=true;j.HangingRequests++;if((DateTime.UtcNow-j.HangingRequestLogAt).TotalSeconds>=10){j.HangingRequestLogAt=DateTime.UtcNow;Log(j,"hanging_skill_requested",",\"skill_id\":"+j.TrainSkillId+",\"interval_ms\":"+HangingSkillIntervalMs(j)+",\"requests\":"+j.HangingRequests);}}
+                if(overlay){j.HangingAwaiting=true;j.HangingRequests++;}
                 r.Write(data+88,BitConverter.GetBytes(overlay?1:0));
                 r.Write(data+80,BitConverter.GetBytes(j.QuestEnabled?(j.BeastQuestEnabled?2:1):0));r.Write(data+16,BitConverter.GetBytes(j.TrainSkillId));r.Write(data+12,BitConverter.GetBytes((focus?!j.GameAutoEnabled&&j.ThiQuyPriorityArmed&&(!j.FarmEnabled||j.FarmArrived||j.ThiQuyFarmPaused):(overlay||j.TrainEnabled&&(!j.QuestEnabled||j.QuestPhase==6&&!j.GameAutoEnabled)))&&!j.ReceiveFlowActive&&!j.ReconnectRequested&&!j.CloseRequested&&!j.CancelRequested&&!j.CloakEnabled&&(!UsesInstanceGameCombat(j)||overlay||focus)&&!DungeonEntryBlocked(j)&&!j.QuestPauseAuto&&!(j.ZoneSyncActive||j.FollowActive&&(j.FollowDistance<0||j.FollowDistance>48))?1:0));r.Write(data,BitConverter.GetBytes(1));j.SkillScanRequested=j.Skills.Length==0;
             }
@@ -4645,7 +4640,7 @@ namespace TGLL {
    }
    if(r.Ptr(canvas+0x1b8)!=fc||r.Ptr(canvas+0xd8)!=catalog||r.Ptr(fc+0x150)!=vector||BitConverter.ToInt16(r.Read(fc+0x134,2),0)!=map)throw new Exception("cuong_thi_map_changed");return best;
   }
-  internal static void ApplyCuongThiSnapshot(NativeJob j,CuongThiSnapshot value){j.CuongThi=value;j.CuongThiStatus=!value.Found?"Không có Cương Thi sống trong map; tắt treo":value.Name+" • HP: "+value.Hp.ToString("N0",System.Globalization.CultureInfo.GetCultureInfo("vi-VN"))+(value.Hp<CuongThiStopHp?" • dưới 10 triệu: tắt treo":" • từ 10 triệu: bật treo");string diagnostic=value.MapId+":"+value.TemplateId+":"+value.Uid+":"+(value.Hp>=CuongThiStopHp);if(diagnostic!=j.CuongThiDiagnostic){j.CuongThiDiagnostic=diagnostic;Log(j,"cuong_thi_state",",\"map\":"+value.MapId+",\"template_id\":"+value.TemplateId+",\"uid\":"+value.Uid+",\"hp\":"+value.Hp+",\"wanted\":"+(CuongThiWantsAuto(j,value.ReadAt)?"true":"false"));}}
+  internal static void ApplyCuongThiSnapshot(NativeJob j,CuongThiSnapshot value){j.CuongThi=value;j.CuongThiStatus=!value.Found?"Không có Cương Thi sống trong map; tắt treo":value.Name+(value.Hp<CuongThiStopHp?" • dưới 10 triệu: tắt treo":" • từ 10 triệu: bật treo");string diagnostic=value.MapId+":"+value.TemplateId+":"+value.Uid+":"+(value.Hp>=CuongThiStopHp);if(diagnostic!=j.CuongThiDiagnostic){j.CuongThiDiagnostic=diagnostic;Log(j,"cuong_thi_state",",\"map\":"+value.MapId+",\"template_id\":"+value.TemplateId+",\"uid\":"+value.Uid+",\"hp\":"+value.Hp+",\"wanted\":"+(CuongThiWantsAuto(j,value.ReadAt)?"true":"false"));}}
   internal static int CuongThiPollIntervalMs(NativeJob j){return j.CuongThi!=null&&j.CuongThi.Found?500:1000;}
   static void PumpCuongThi(Remote r,long game,NativeJob j){
    if(!j.CuongThiEnabled)return;DateTime now=DateTime.UtcNow;if(!CuongThiControlsAuto(j)||!UpSessionReady(j)){j.CuongThi=null;j.CuongThiStatus="Chờ đăng nhập/hoạt động khác xong";return;}if(j.CuongThiDestination!=null&&!j.CuongThiNavigationReady){j.CuongThi=null;j.CuongThiStatus="Chờ tới đúng map/khu Cương Thi trước khi đọc HP";return;}if((now-j.CuongThiPollAt).TotalMilliseconds<CuongThiPollIntervalMs(j))return;j.CuongThiPollAt=now;

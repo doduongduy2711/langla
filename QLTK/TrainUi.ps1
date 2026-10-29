@@ -55,9 +55,9 @@ function Update-TrainUi {
         foreach($skill in $j.Skills){if($skill.Usable){$null=$skillChoice.Items.Add($skill,($wanted -contains $skill.Id))}}
         $script:loadingSkills=$false;$script:skillViewKey=$signature;Save-TrainChoice
     }
-    $state=@{0='Chưa sẵn sàng trên bản đồ';1='Đã đọc chiêu';2='Không có chiêu đã chọn';3='Chưa có quái sống';4='Đã bắt đầu chiêu';5='Nhân vật đã chết';6='Đang hoàn tất đòn';7='Game chưa cho bắt đầu chiêu (MP/trạng thái/hồi chiêu)'}[$j.TrainStatus]
-    $trainHint.Text=$a.username+' • '+$state+"`r`nTrain: "+$(if($j.TrainEnabled){'Bật'}else{'Tắt'})+' • Đang thử ID '+$j.TrainSkillId+' • Bắt đầu: '+$j.TrainAttempts+' • Quái '+$j.TrainTargetId+' HP '+$j.TrainTargetHp
-    if($a.trainPriorityThiQuy){$trainHint.Text+=' • '+$j.ThiQuyPriorityStatus}
+    $text=$a.username+' • Auto skill: '+$(if($j.TrainEnabled -or $j.GameAutoWanted){'Bật'}else{'Tắt'})
+    if($a.trainPriorityThiQuy){$text+=' • '+$j.ThiQuyPriorityStatus}
+    if($trainHint.Text -ne $text){$trainHint.Text=$text}
 }
 $skillChoice.Add_ItemCheck({
     if($script:loadingSkills){return}

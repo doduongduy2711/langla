@@ -29,7 +29,17 @@ class TrainTests{
   }
   Console.WriteLine("PASS: pending team recovery takes next startup slot ahead of normal accounts, preserves normal FIFO, deduplicates repeated priority requests and does not preempt active startup.");
  }
- static void LogSampling(){
+ static void QuietCombatLogs(){
+  var job=new NativeJob("fixture.exe","synthetic","",null,true);string previous=NativeBackend.LogDirectory;
+  string folder=System.IO.Path.Combine(System.IO.Path.GetTempPath(),"qltk-quiet-combat-"+Guid.NewGuid().ToString("N"));
+  try{NativeBackend.LogDirectory=folder;
+   for(int n=0;n<1000;n++)foreach(string evt in new[]{"hanging_skill_requested","hanging_skill_result","thi_quy_scan","game_auto_observed"})NativeBackend.Log(job,evt,"");
+   Assert(job.LogFile==null&&!System.IO.Directory.Exists(folder),"routine combat performed manager file IO");
+   NativeBackend.Log(job,"thi_quy_read_error",",\"reason\":\"synthetic\"");
+   Assert(job.LogFile!=null&&System.IO.File.ReadAllText(job.LogFile).Contains("thi_quy_read_error"),"real combat read error was lost");
+  }finally{NativeBackend.LogDirectory=previous;if(System.IO.Directory.Exists(folder))System.IO.Directory.Delete(folder,true);}
+ }
+ static void LogSampling(){QuietCombatLogs();
   foreach(int code in new[]{6,299,183})Assert(NativeBackend.ReadStartupModules<string>(delegate{throw new System.ComponentModel.Win32Exception(code);})==null,"transient module read aborted startup");
   Assert(NativeBackend.ReadStartupModules(delegate{return "ready";})=="ready","module read did not recover on next poll");
   bool denied=false;try{NativeBackend.ReadStartupModules<string>(delegate{throw new System.ComponentModel.Win32Exception(5);});}catch(System.ComponentModel.Win32Exception){denied=true;}Assert(denied,"permanent module error hidden");
