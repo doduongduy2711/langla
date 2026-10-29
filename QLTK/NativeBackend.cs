@@ -2405,6 +2405,11 @@ namespace TGLL {
             string normalized=System.Text.RegularExpressions.Regex.Replace(b.ToString(),"\\s+"," ").Trim();
             return normalized=="ma xac nhan"||normalized=="ma xac nhan ma xac nhan"||normalized.Contains("giai capcha")||normalized.Contains("giai captcha")||normalized.Contains("nhap ma")&&(normalized.Contains("giai tru bua")||normalized.Contains("giai bua"))&&(normalized.Contains("yem bua")||normalized.Contains("bua chu"));
         }
+        internal static void PollCurseNotice(Remote r,long game,NativeJob j,DateTime now){
+            if((now-j.CursePollAt).TotalSeconds<1)return;j.CursePollAt=now;
+            // Captcha dialogs can inherit je; keep disconnect detection's strict class guard separate.
+            ObserveCurseNotice(j,ReadKeyNotice(r,game),now);
+        }
         internal static void ObserveCurseNotice(NativeJob j,string notice,DateTime now){
             bool active=!j.CloseRequested&&!j.CancelRequested&&IsCurseNotice(notice);bool changed=j.CurseActive!=active;
             j.CurseActive=active;j.CurseReadAt=now;
@@ -2956,7 +2961,7 @@ namespace TGLL {
                     if(!j.ReconnectRequested&&(DateTime.UtcNow-j.DisconnectPollAt).TotalSeconds>=1){j.DisconnectPollAt=DateTime.UtcNow;if(ObserveDisconnect(j,ReadDisconnectNotice(keep,game),j.DisconnectPollAt))BeginDisconnectRecovery(j);}
                     if(j.ReconnectRequested){Thread.Sleep(150);continue;}
                     if((DateTime.UtcNow-j.OnlineNoticePollAt).TotalSeconds>=1){j.OnlineNoticePollAt=DateTime.UtcNow;PumpOnlineNotice(keep,reminderData,j,game);}
-                    if((DateTime.UtcNow-j.CursePollAt).TotalSeconds>=1){j.CursePollAt=DateTime.UtcNow;ObserveCurseNotice(j,ReadDisconnectNotice(keep,game),j.CursePollAt);}
+                    PollCurseNotice(keep,game,j,DateTime.UtcNow);
 
                     if(j.CurseActive||j.CaptchaFrame!=null)PumpCaptcha(keep,game,j);if(j.CurseActive){if(npcTimer.IsRunning){npcTimer.Stop();captchaNpcPaused=true;}Thread.Sleep(150);continue;}if(captchaNpcPaused){npcTimer.Start();captchaNpcPaused=false;}
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
