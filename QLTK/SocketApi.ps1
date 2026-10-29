@@ -2,6 +2,7 @@
 if (!('TGLL.AutoLogin' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'AutoLogin.cs') -ReferencedAssemblies System.dll,System.Core.dll,System.Drawing.dll }
 if (!('TGLL.NativeBackend' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'NativeBackend.cs') -ReferencedAssemblies System.dll,System.Core.dll }
 [TGLL.NativeBackend]::LogDirectory=Join-Path $PSScriptRoot 'logs'
+$script:socketSourceRoot=$PSScriptRoot
 if(!$UiTest){[TGLL.NativeBackend]::BiMaDataDirectory=Join-Path $script:dataDir 'bi-ma-counts'}
 function Get-AccountJob([string]$id) {
     $job=[TGLL.NativeBackend]::Get($id)
@@ -209,10 +210,11 @@ function Get-ManagerPreviewSnapshot {
     $items=@(foreach($row in $grid.Rows){
         $a=$row.Tag;if(!$a){continue};$j=$null
         if($script:accountJobs.ContainsKey([string]$a.id)){$j=Get-AccountJob $script:accountJobs[[string]$a.id]}
-        [pscustomobject]@{id=[string]$a.id;username=[string]$a.username;character=[string]$row.Cells['character'].Value;zone=[string]$row.Cells['zone'].Value;bima=[string]$row.Cells['bima'].Value;proxy=[string]$row.Cells['proxy'].Value;status=[string]$row.Cells['status'].Value;auto=($row.Cells['auto'].Value -eq $true);up=($row.Cells['up'].Value -eq $true);pid=$(if($j){[int]$j.ProcessId}else{0});job_id=$(if($j){[string]$j.Id}else{''});visibility=[string]$row.Cells['visibility'].Value}
+        [pscustomobject]@{id=[string]$a.id;username=[string]$a.username;character=[string]$row.Cells['character'].Value;zone=[string]$row.Cells['zone'].Value;bima=[string]$row.Cells['bima'].Value;password=$(if($script:showPasswords){[string]$row.Cells['password'].Value}else{''});proxy=[string]$row.Cells['proxy'].Value;status=[string]$row.Cells['status'].Value;auto=($row.Cells['auto'].Value -eq $true);up=($row.Cells['up'].Value -eq $true);pid=$(if($j){[int]$j.ProcessId}else{0});job_id=$(if($j){[string]$j.Id}else{''});visibility=[string]$row.Cells['visibility'].Value}
     })
     $activity=if($script:autoAllRun -and $script:autoAllRun.active){[string]$script:autoAllRun.message}else{'Auto tất cả đang tắt'}
-    return @{ok=$true;preview_version=1;accounts=$items;activity=$activity}
+    $modalOpen=$false;if($script:nativeUiBridge){$modalOpen=$script:nativeUiBridge.ModalOpen}elseif('System.Windows.Forms.Application' -as [type]){foreach($window in [Windows.Forms.Application]::OpenForms){if($window -ne $form -and $window.Modal){$modalOpen=$true;break}}}
+    return @{ok=$true;preview_version=1;ui_version=$(if([IO.File]::Exists((Join-Path $script:socketSourceRoot 'NativeUiBridge.cs'))){2}else{0});modal=$modalOpen;show_passwords=[bool]$script:showPasswords;accounts=$items;activity=$activity}
 }
 function Invoke-ManagerPreviewAction($request) {
     $action=[string]$request.action
@@ -237,6 +239,13 @@ function Handle-SocketJson([string]$json) {
     try { $request=ConvertFrom-Json -InputObject $json -ErrorAction Stop } catch { return '{"ok":false,"error":"invalid_json"}' }
     if ($null -eq $request -or $request -is [array] -or !($request -is [pscustomobject])) { return '{"ok":false,"error":"invalid_request"}' }
     if (!($request.token -is [string]) -or [string]::IsNullOrEmpty($script:socketToken) -or $request.token -cne $script:socketToken) { return '{"ok":false,"error":"unauthorized"}' }
+    if([string]$request.command -in @('manager_ui_catalog','manager_ui_frame','manager_ui_event','manager_ui_flags','manager_ui_dialog')){
+        try{
+            if(!('TGLL.NativeUiBridge' -as [type])){Add-Type -Path (Join-Path $script:socketSourceRoot 'NativeUiBridge.cs') -ReferencedAssemblies System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll}
+            if(!$script:nativeUiBridge){$script:nativeUiBridge=New-Object TGLL.NativeUiBridge($form,$tabs,$grid,[Func[string[]]]{return [string[]]@($grid.Rows|ForEach-Object {[string]$_.Tag.id})},[Func[string]]{return [string]$status.Text})}
+            return $script:nativeUiBridge.Handle($json)
+        }catch{return '{"ok":false,"error":"ui_not_ready","message":"Kênh chức năng chưa sẵn sàng; kiểm tra bản cập nhật và mở lại bộ điều phối."}'}
+    }
     try {
         switch -CaseSensitive ([string]$request.command) {
             'manager_snapshot' { $result=Get-ManagerPreviewSnapshot }

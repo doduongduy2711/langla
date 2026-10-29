@@ -28,3 +28,9 @@ Launcher được build bằng reference assemblies .NET Framework 4.8, có QLTK
 ## Portal OCR chạy riêng
 
 Tải `OCR-Portal-portable.zip` trong Releases, giải nén vào thư mục mới và mở `MO-PORTAL.cmd`. Gói đã kèm Python và bộ OCR; không cần chép đè QLTK. Dữ liệu mặc định nằm trong `OCR-Portal/Data/samples`. Để duyệt ảnh QLTK đang có, mở `CHON-THU-MUC-ANH.cmd` và chọn thư mục ảnh; nhãn đã duyệt được lưu tại thư mục đó. Dùng `DUNG-PORTAL.cmd` để dừng phiên do gói này mở. Khi cổng 47662 đã có ứng dụng khác, portal chọn cổng local còn trống trong 47663–47671.
+
+## Giao diện C# thử nghiệm đầy đủ tab
+
+Từ v290, `QLTK-CSharp-Preview.zip` có toàn bộ 26 tab và trang Điều khiển chung bằng WinForms C#. Giải nén riêng, mở EXE và chọn Data hiện có. Gói kèm bộ điều phối ẩn, tự khởi động khi chưa có phiên QLTK; nếu đã có phiên, kết nối lại phiên đó. Phiên QLTK cũ cần mở lại sau cập nhật để nạp giao tiếp mới.
+
+Đây là chuyển giao diện và kết nối các chức năng hiện có, chưa viết lại toàn bộ nghiệp vụ PowerShell. Các hộp thoại phụ và luồng auto tiếp tục dùng bộ xử lý cũ. Đóng cửa sổ C# vẫn giữ game/bộ điều phối. Xem `preview/README.txt` để biết cách chạy. Kiểm thử bao gồm toàn bộ tab, ngăn thao tác nhầm tài khoản/dữ liệu cũ, phản hồi giao diện khi bộ điều phối chậm, và khởi động bộ điều phối với dữ liệu giả cách ly.

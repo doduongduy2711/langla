@@ -184,4 +184,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME dist/QLTK-update.zip dist/QLTK-portable.zip dist/QLTK-net48-launcher.zip dist/QLTK-ocr-runtime-win64.zip dist/OCR-Portal-portable.zip dist/QLTK-CSharp-Preview.zip --repo $env:GITHUB_REPOSITORY --title "QLTK $env:GITHUB_REF_NAME" --generate-notes
+          gh release create $env:GITHUB_REF_NAME --draft --repo $env:GITHUB_REPOSITORY --title "QLTK $env:GITHUB_REF_NAME" --generate-notes
+          if($LASTEXITCODE -ne 0){throw 'Could not create draft release'}
+          $assets=@('QLTK-update.zip','QLTK-portable.zip','QLTK-net48-launcher.zip','QLTK-ocr-runtime-win64.zip','OCR-Portal-portable.zip','QLTK-CSharp-Preview.zip')
+          foreach($name in $assets){
+            $uploaded=$false
+            for($attempt=1;$attempt -le 3;$attempt++){
+              gh release upload $env:GITHUB_REF_NAME (Join-Path 'dist' $name) --clobber --repo $env:GITHUB_REPOSITORY
+              if($LASTEXITCODE -eq 0){$uploaded=$true;break}
+              Start-Sleep -Seconds 3
+            }
+            if(!$uploaded){throw ('Upload failed; release remains draft: '+$name)}
+          }
+          $release=gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --json isDraft,assets | ConvertFrom-Json
+          if($LASTEXITCODE -ne 0 -or !$release.isDraft){throw 'Release changed during upload'}
+          foreach($name in $assets){
+            $asset=@($release.assets | Where-Object {$_.name -eq $name})
+            if($asset.Count -ne 1 -or $asset[0].size -ne (Get-Item (Join-Path 'dist' $name)).Length){throw ('Asset size mismatch: '+$name)}
+          }
+          gh release edit $env:GITHUB_REF_NAME --draft=false --repo $env:GITHUB_REPOSITORY
+          if($LASTEXITCODE -ne 0){throw 'Could not publish verified release'}

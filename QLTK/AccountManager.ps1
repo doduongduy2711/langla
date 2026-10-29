@@ -1,9 +1,10 @@
-﻿param([switch]$SelfTest,[switch]$UiTest,[switch]$IntegrationTest)
+﻿param([switch]$SelfTest,[switch]$UiTest,[switch]$IntegrationTest,[switch]$BackendOnly,[string]$DataDirectory='',[int]$FrontendPort=0,[string]$NativeUiExport='')
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms,System.Drawing,System.Security
 if(!('TGLL.UiPerformance' -as [type])){Add-Type -Path (Join-Path $PSScriptRoot 'UiPerformance.cs') -ReferencedAssemblies System.dll,System.Drawing.dll,System.Windows.Forms.dll}
 $script:legacyDataDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'TGLLAccountManager'
 $script:dataDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'Data'
+if($DataDirectory){$script:dataDir=[IO.Path]::GetFullPath($DataDirectory)}
 $script:storePath = Join-Path $script:dataDir 'accounts.json'
 $script:configPath = Join-Path $script:dataDir 'settings.json'
 $script:accounts = @()
@@ -579,10 +580,21 @@ function Update-ManagerStatus([bool]$changesOnly=$false) {
     if($script:liveUpdateMessageUntil -and [datetime]::UtcNow -lt $script:liveUpdateMessageUntil){$status.Text=$script:liveUpdateMessage}
 }
 Initialize-LiveUpdate
+if($NativeUiExport){
+    if(!$UiTest){throw 'UI export requires isolated UiTest data'}
+    Add-Type -Path (Join-Path $PSScriptRoot 'NativeUiBridge.cs') -ReferencedAssemblies System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll
+    $bridge=New-Object TGLL.NativeUiBridge($form,$tabs,$grid,[Func[string[]]]{return [string[]]@($grid.Rows|ForEach-Object {[string]$_.Tag.id})},[Func[string]]{return [string]$status.Text})
+    $catalog=$bridge.Handle('{"command":"manager_ui_catalog"}')
+    $parsed=$catalog|ConvertFrom-Json;$frames=@{}
+    foreach($page in $parsed.pages){$request=@{command='manager_ui_frame';page_id=[string]$page.id;account_id=[string]$grid.Rows[0].Tag.id;selected_ids=@();grid_views=@{}};$frames[[string]$page.id]=$bridge.Handle((ConvertTo-Json $request -Depth 8 -Compress))}
+    [IO.File]::WriteAllText([IO.Path]::GetFullPath($NativeUiExport),(ConvertTo-Json @{catalog=$catalog;frames=$frames} -Depth 8 -Compress),(New-Object Text.UTF8Encoding($false)))
+    $form.Dispose();Write-Output ('PASS: exported '+$parsed.pages.Count+' real manager pages using isolated test data.');exit 0
+}
 if ($UiTest) { if ($grid.Columns.Count -ne 14 -or $buttons.Count -ne 7 -or $grid.Rows.Count -ne 1 -or $closeAllButton.Text -ne 'Tắt tất cả') { throw 'UI construction failed' }; if($tabs.TabPages.Count -ne 26 -or $grid.Bounds.Bottom -gt $tabs.Top -or $detailsGroup.Bounds.Right -gt $form.ClientSize.Width){throw 'Compact layout invalid'}; $grid.Rows[0].Cells['pick'].Value=$true; if(@(Get-LaunchRows).Count -ne 1){throw 'Checkbox launch selection failed'}; . (Join-Path $PSScriptRoot 'AutoUiTests.ps1'); . (Join-Path $PSScriptRoot 'ConfigUiTests.ps1'); . (Join-Path $PSScriptRoot 'DungeonUiTests.ps1'); . (Join-Path $PSScriptRoot 'OpenButtonTests.ps1'); . (Join-Path $PSScriptRoot 'InventoryUiTests.ps1'); . (Join-Path $PSScriptRoot 'IzanamiUiTests.ps1'); . (Join-Path $PSScriptRoot 'ArrangeUiTests.ps1'); . (Join-Path $PSScriptRoot 'AutoItemUiTests.ps1'); . (Join-Path $PSScriptRoot 'GiftCodeUiTests.ps1'); . (Join-Path $PSScriptRoot 'MailUiTests.ps1'); . (Join-Path $PSScriptRoot 'QuestUiTests.ps1'); . (Join-Path $PSScriptRoot 'TabPositionUiTests.ps1'); . (Join-Path $PSScriptRoot 'IzanamiQueueTests.ps1'); . (Join-Path $PSScriptRoot 'QuestQueueTests.ps1'); . (Join-Path $PSScriptRoot 'DungeonQueueTests.ps1'); . (Join-Path $PSScriptRoot 'RetryUiTests.ps1'); . (Join-Path $PSScriptRoot 'UiPollingTests.ps1'); . (Join-Path $PSScriptRoot 'LaunchDelayUiTests.ps1'); . (Join-Path $PSScriptRoot 'LiveCountUiTests.ps1'); . (Join-Path $PSScriptRoot 'FarmUiTests.ps1'); . (Join-Path $PSScriptRoot 'LaunchErrorUiTests.ps1'); . (Join-Path $PSScriptRoot 'DailyUiTests.ps1'); . (Join-Path $PSScriptRoot 'SonCapUiTests.ps1'); . (Join-Path $PSScriptRoot 'IzanamiMapUiTests.ps1'); . (Join-Path $PSScriptRoot 'StoneChestUiTests.ps1'); . (Join-Path $PSScriptRoot 'CloakUiTests.ps1'); . (Join-Path $PSScriptRoot 'CloakQueueUiTests.ps1'); . (Join-Path $PSScriptRoot 'CloakParallelUiTests.ps1'); . (Join-Path $PSScriptRoot 'ConfigExtrasUiTests.ps1'); . (Join-Path $PSScriptRoot 'SonCapConfigUiTests.ps1'); . (Join-Path $PSScriptRoot 'SonCapQueueTests.ps1'); . (Join-Path $PSScriptRoot 'SonCapReopenUiTests.ps1'); . (Join-Path $PSScriptRoot 'CloseAllUiTests.ps1'); . (Join-Path $PSScriptRoot 'VitalsUiTests.ps1'); . (Join-Path $PSScriptRoot 'BulkAccountUiTests.ps1'); . (Join-Path $PSScriptRoot 'DistributionTests.ps1'); . (Join-Path $PSScriptRoot 'UpStoppedUiTests.ps1'); . (Join-Path $PSScriptRoot 'ClearUpAllTests.ps1'); . (Join-Path $PSScriptRoot 'MarketUiTests.ps1'); . (Join-Path $PSScriptRoot 'GemCombineUiTests.ps1'); . (Join-Path $PSScriptRoot 'UiPerformanceTests.ps1'); . (Join-Path $PSScriptRoot 'ScrollCompactTests.ps1'); . (Join-Path $PSScriptRoot 'AutoSkillDefaultsTests.ps1'); . (Join-Path $PSScriptRoot 'LargeRefreshTests.ps1'); . (Join-Path $PSScriptRoot 'CharacterNamesUiTests.ps1'); . (Join-Path $PSScriptRoot 'UpFlowUiTests.ps1'); . (Join-Path $PSScriptRoot 'LiveUpdateTests.ps1'); . (Join-Path $PSScriptRoot 'BeastUiTests.ps1'); . (Join-Path $PSScriptRoot 'ActivityTimeoutQueueTests.ps1'); . (Join-Path $PSScriptRoot 'BeastPreferenceUiTests.ps1'); . (Join-Path $PSScriptRoot 'AutoAllUiTests.ps1'); . (Join-Path $PSScriptRoot 'CaptchaUiTests.ps1'); . (Join-Path $PSScriptRoot 'CuongThiUiTests.ps1'); . (Join-Path $PSScriptRoot 'FarmDestinationUiTests.ps1'); Edit-Account $null; $form.Dispose(); Write-Output 'PASS: Windows Forms UI and proxy auto split from paste/host fields, invalid input indicator.'; exit 0 }
 $socketTimer=New-Object Windows.Forms.Timer; $socketTimer.Interval=100
 $socketTimer.Add_Tick({Invoke-ManagerTick})
 $socketTimer.Start()
+if($BackendOnly -and $FrontendPort -ge 1 -and $FrontendPort -le 65535){$script:settings.socketEnabled=$true;$script:settings.socketPort=$FrontendPort}
 try {
     $tokenPath=Join-Path $script:dataDir 'api-token.json'
     if (Test-Path -LiteralPath $tokenPath) {
@@ -599,4 +611,22 @@ try {
 
 } catch { $status.Text='Socket chưa bật: kiểm tra Socket / Proxy. '+$_.Exception.Message }
 [Windows.Forms.Application]::EnableVisualStyles()
-try {$null=$form.ShowDialog()} finally { $socketTimer.Stop(); $socketTimer.Dispose(); [TGLL.AutoLogin]::CancelAll(); [TGLL.NativeBackend]::CancelAll(); Stop-SocketApi; $form.Dispose() }
+$backendTray=$null;$backendContext=$null;$endpointPath=Join-Path $script:dataDir 'frontend-endpoint.json'
+try {
+    if($BackendOnly){
+        $null=$form.Handle;$form.ShowInTaskbar=$false;$script:backendQuit=$false
+        $form.Add_FormClosing({param($sender,$eventArgs)if(!$script:backendQuit){$eventArgs.Cancel=$true;$form.Hide();$form.ShowInTaskbar=$false}})
+        $backendTray=New-Object Windows.Forms.NotifyIcon;$backendTray.Icon=[Drawing.SystemIcons]::Application;$backendTray.Text='QLTK - Bộ điều phối';$backendTray.Visible=$true
+        $menu=New-Object Windows.Forms.ContextMenuStrip
+        $open=$menu.Items.Add('Mở cửa sổ QLTK gốc');$open.add_Click({$form.ShowInTaskbar=$true;$form.Show();$form.Activate()})
+        $quit=$menu.Items.Add('Thoát bộ điều phối');$quit.add_Click({$script:backendQuit=$true;[Windows.Forms.Application]::ExitThread()})
+        $backendTray.ContextMenuStrip=$menu
+        if($script:socketServer){Write-JsonAtomic $endpointPath @{pid=[Diagnostics.Process]::GetCurrentProcess().Id;port=$script:socketServer.Port}}
+        $backendContext=New-Object Windows.Forms.ApplicationContext
+        [Windows.Forms.Application]::Run($backendContext)
+    }else{$null=$form.ShowDialog()}
+} finally {
+    if($backendTray){$backendTray.Visible=$false;$backendTray.Dispose()};if($backendContext){$backendContext.Dispose()}
+    if($BackendOnly -and [IO.File]::Exists($endpointPath)){try{$ep=Read-JsonData $endpointPath;if([int]$ep.pid -eq [Diagnostics.Process]::GetCurrentProcess().Id){[IO.File]::Delete($endpointPath)}}catch{}}
+    $socketTimer.Stop();$socketTimer.Dispose();[TGLL.AutoLogin]::CancelAll();[TGLL.NativeBackend]::CancelAll();Stop-SocketApi;$form.Dispose()
+}

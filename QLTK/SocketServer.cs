@@ -58,7 +58,7 @@ namespace TGLL {
                     catch (IOException) { if (!running) return; continue; }
                     if (b < 0) return;
                     if (b == 10) { ended = true; break; }
-                    if (input.Length >= 32768) { Send(stream, "{\"ok\":false,\"error\":\"request_too_large\"}"); return; }
+                    if (input.Length >= 262144) { Send(stream, "{\"ok\":false,\"error\":\"request_too_large\"}"); return; }
                     input.WriteByte((byte)b);
                 }
                 if (!ended) { Send(stream, "{\"ok\":false,\"error\":\"read_timeout\"}"); return; }

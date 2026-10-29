@@ -2,7 +2,9 @@ name: Test native CSharp preview
 on:
   push:
     paths:
-      - 'QLTK/NativePreview*'
+      - 'QLTK/Native*'
+      - 'QLTK/AccountManager.ps1'
+      - 'QLTK/QltkHost.cs'
       - 'QLTK/SocketApi.ps1'
       - 'scripts/*NativePreview.ps1'
       - 'preview/**'

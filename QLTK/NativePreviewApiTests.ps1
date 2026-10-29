@@ -3,7 +3,7 @@
 $tokens=$null;$errors=$null;$ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'SocketApi.ps1'),[ref]$tokens,[ref]$errors)
 if($errors.Count){throw 'Socket source did not parse'}
 foreach($fn in $ast.EndBlock.Statements | Where-Object {$_ -is [Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -in @('Get-ManagerPreviewSnapshot','Invoke-ManagerPreviewAction','Handle-SocketJson')}){. ([scriptblock]::Create($fn.Extent.Text))}
-$script:socketToken='synthetic-token';$script:accounts=@([pscustomobject]@{id='first';username='test1';secret='MUST-NOT-LEAK'},[pscustomobject]@{id='second';username='test2';secret='MUST-NOT-LEAK'})
+$script:socketSourceRoot=$PSScriptRoot;$script:socketToken='synthetic-token';$script:accounts=@([pscustomobject]@{id='first';username='test1';secret='MUST-NOT-LEAK'},[pscustomobject]@{id='second';username='test2';secret='MUST-NOT-LEAK'})
 $script:accountJobs=@{};$script:autoAllRun=$null;$script:calls=@()
 $cells=@{};foreach($key in @('character','zone','bima','proxy','status','auto','up','visibility')){$cells[$key]=[pscustomobject]@{Value=$(if($key -in @('auto','up')){$false}else{'synthetic'})}}
 $grid=[pscustomobject]@{Rows=@([pscustomobject]@{Tag=$script:accounts[0];Cells=$cells})}
