@@ -85,6 +85,17 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(self.request('/api/item?name=sample.bmp')['label'], '4')
         self.assertEqual(self.image.with_suffix('.label.txt').read_text().strip(), '4')
 
+    def test_cached_math_expression(self):
+        self.image.with_suffix('.ocr.json').write_text(json.dumps({
+            'status': 'needs_review', 'code': None,
+            'candidates': [{'raw': '10x5=?', 'text': '10X5=?', 'valid': False}] * 2,
+        }))
+        item = self.request('/api/item?name=sample.bmp')
+        self.assertEqual(item['code'], '50')
+        self.assertEqual(item['expression'], '10 * 5')
+        self.assertEqual(item['display_code'], '50')
+        self.assertIsNone(item['label'])
+
     def test_single_candidate_is_review_suggestion_not_auto_code(self):
         self.store.reader = lambda path: {'status': 'needs_review', 'code': None, 'candidates': [{'text': 'AB12', 'valid': True, 'method': 'original'}]}
         self.store.scan_one()

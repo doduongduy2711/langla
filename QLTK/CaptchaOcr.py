@@ -6,8 +6,52 @@ import io
 import json
 import re
 import sys
+import unicodedata
 from collections import Counter
 from pathlib import Path
+
+
+def parse_math(raw):
+    """Parse one bounded integer operation; never execute OCR text."""
+    text = re.sub(r'\s+', '', unicodedata.normalize('NFKC', str(raw))).upper()
+    text = text.replace('×', '*').replace('÷', '/').replace('−', '-').replace(':', '/')
+    match = re.fullmatch(r'([0-9O]{1,4})([+\-*/X])([0-9O]{1,4})(?:=\??|\?)?', text)
+    if not match:
+        return None
+    left, operator, right = match.group(1, 2, 3)
+    strong = operator != 'X' or '=' in text or '?' in text
+    if not strong and ('O' in left or 'O' in right):
+        return None
+    a, b = int(left.replace('O', '0')), int(right.replace('O', '0'))
+    operator = '*' if operator == 'X' else operator
+    if operator == '/' and (b == 0 or a % b):
+        return {'strong': strong, 'expression': f'{a} / {b}', 'result': None}
+    value = {'+': lambda: a+b, '-': lambda: a-b, '*': lambda: a*b, '/': lambda: a//b}[operator]()
+    result = str(value)
+    return {'strong': strong, 'expression': f'{a} {operator} {b}', 'result': result if len(result) <= 7 else None}
+
+
+def resolve_candidates(candidates):
+    parsed = [parse_math(c.get('raw', c.get('text', ''))) for c in candidates]
+    if any(parsed):
+        votes = Counter((m['expression'], m['result']) for m in parsed if m and m['result'] is not None)
+        ranked = votes.most_common()
+        (expression, result), count = ranked[0] if ranked else ((None, None), 0)
+        strong = any(m and m['strong'] for m in parsed)
+        expressions = {m['expression'] for m in parsed if m}
+        accepted = strong and count >= 2 and len(expressions) == 1 and len(ranked) == 1
+        for c, m in zip(candidates, parsed):
+            c['valid'] = False
+            if m:
+                c.update(expression=m['expression'], result=m['result'])
+        return {'kind': 'math' if strong else 'ambiguous', 'expression': expression,
+                'math_result': result, 'code': result if accepted else None,
+                'votes': count, 'status': 'ok' if accepted else 'needs_review'}
+    ranked = Counter(c['text'] for c in candidates if c.get('valid')).most_common()
+    top, count = ranked[0] if ranked else (None, 0)
+    accepted = bool(top and count >= 2 and len(ranked) == 1)
+    return {'kind': 'code', 'code': top if accepted else None,
+            'votes': count, 'status': 'ok' if accepted else 'needs_review'}
 
 
 def find_region(rgb, cv2, np):
@@ -77,16 +121,9 @@ def recognize(path: Path, crop=None, length=4, debug_dir=None, keep_case=False, 
         candidates.append({"method": name, "raw": raw, "text": text, "valid": valid})
         if debug_dir:
             prepared.save(debug_dir / (name + ".png"))
-    votes = Counter(c["text"] for c in candidates if c["valid"])
-    ranked = votes.most_common()
-    top, count = ranked[0] if ranked else (None, 0)
-    tied = len(ranked) > 1 and ranked[1][1] == count
-    accepted = bool(top and count >= 2 and not tied and len(ranked) == 1)
     return {
-        "code": top if accepted else None,
-        "status": "ok" if accepted else "needs_review",
+        **resolve_candidates(candidates),
         "region": list(region),
-        "votes": count,
         "attempts": len(candidates),
         "candidates": candidates,
     }
@@ -176,7 +213,7 @@ HTML = r'''<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="view
 </style>
 <header><div><small>QLTK / ẢNH ĐÃ LƯU</small><h1>Kiểm tra kết quả OCR</h1></div><span id="counts">Đang kết nối…</span></header>
 <div class="toolbar"><input id="search" placeholder="Tìm mã OCR hoặc tên ảnh" aria-label="Tìm ảnh"><select id="filter" aria-label="Lọc ảnh"><option value="all">Tất cả ảnh</option><option value="review">OCR chưa đọc được</option><option value="unverified">Chưa duyệt</option><option value="done">Đã duyệt</option></select><label class="upload">Thêm ảnh<input type="file" id="upload" accept="image/png,image/jpeg,image/bmp" multiple hidden></label></div>
-<main><aside class="panel sidebar"><div id="list"></div><div class="pages"><button id="prev">← Trước</button><span id="page"></span><button id="next">Sau →</button></div></aside><section class="panel"><div style="display:flex;justify-content:space-between;gap:10px"><h2 id="title">Chọn một ảnh</h2><span class="badge" id="state">Tự đọc ảnh mới</span></div><div class="actions"><button id="imagePrev" disabled>← Ảnh trước</button><span id="imageIndex" class="muted" style="align-self:center"></span><button id="imageNext" class="primary" disabled>Ảnh tiếp theo →</button></div><div class="stage"><img id="image" alt="Ảnh cần kiểm tra OCR" hidden></div><small id="resultKind">KẾT QUẢ OCR</small><div class="code" id="code">—</div><p class="muted" id="detail">Ảnh mới sẽ tự được đọc, không cần nhập trước.</p><div class="actions"><button class="primary" id="correct" disabled>Đúng · lưu nhãn</button><button id="edit" disabled>Sửa kết quả</button><button id="retry" disabled>Đọc lại OCR</button></div><div class="edit" id="editor" hidden><input id="label" maxlength="8" autocomplete="off" placeholder="Kết quả đúng" aria-label="Mã bốn ký tự hoặc kết quả phép tính"><button class="primary" id="save">Lưu mã đúng</button></div><div id="notice" class="notice" role="status"></div><details><summary>Các kết quả nhận diện</summary><div id="candidates"></div></details><p class="note muted">Bạn chỉ cần nhập khi OCR đọc sai hoặc chưa đọc được. Với ảnh phép tính, nhập kết quả số (ví dụ: 4). Kết quả OCR được lưu riêng; chỉ mã đã được bạn xác nhận mới thành nhãn dùng cho train. Portal chạy trên máy này và không gửi thao tác vào game.</p></section></main><footer id="connection">Chỉ truy cập qua 127.0.0.1 · Không tải dữ liệu lên mạng</footer>
+<main><aside class="panel sidebar"><div id="list"></div><div class="pages"><button id="prev">← Trước</button><span id="page"></span><button id="next">Sau →</button></div></aside><section class="panel"><div style="display:flex;justify-content:space-between;gap:10px"><h2 id="title">Chọn một ảnh</h2><span class="badge" id="state">Tự đọc ảnh mới</span></div><div class="actions"><button id="imagePrev" disabled>← Ảnh trước</button><span id="imageIndex" class="muted" style="align-self:center"></span><button id="imageNext" class="primary" disabled>Ảnh tiếp theo →</button></div><div class="stage"><img id="image" alt="Ảnh cần kiểm tra OCR" hidden></div><small id="resultKind">KẾT QUẢ OCR</small><div class="code" id="code">—</div><p class="muted" id="detail">Ảnh mới sẽ tự được đọc, không cần nhập trước.</p><div class="actions"><button class="primary" id="correct" disabled>Đúng · lưu nhãn</button><button id="edit" disabled>Sửa kết quả</button><button id="retry" disabled>Đọc lại OCR</button></div><div class="edit" id="editor" hidden><input id="label" maxlength="7" autocomplete="off" placeholder="Kết quả đúng" aria-label="Mã bốn ký tự hoặc kết quả phép tính"><button class="primary" id="save">Lưu mã đúng</button></div><div id="notice" class="notice" role="status"></div><details><summary>Các kết quả nhận diện</summary><div id="candidates"></div></details><p class="note muted">Bạn chỉ cần nhập khi OCR đọc sai hoặc chưa đọc được. Với ảnh phép tính, nhập kết quả số (ví dụ: 4). Kết quả OCR được lưu riêng; chỉ mã đã được bạn xác nhận mới thành nhãn dùng cho train. Portal chạy trên máy này và không gửi thao tác vào game.</p></section></main><footer id="connection">Chỉ truy cập qua 127.0.0.1 · Không tải dữ liệu lên mạng</footer>
 <script>
 const TOKEN=__TOKEN__;let rows=[],selected='',page=0,lastSignature='',detailSignature='',busy=false;const $=id=>document.getElementById(id);const names={pending:'Đợi OCR',reading:'Đang đọc',ok:'OCR đã đọc',needs_review:'Cần duyệt',error:'Lỗi OCR',verified:'Đã duyệt'};
 async function api(path,body){let options=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json','X-Portal-Token':TOKEN},body:JSON.stringify(body)};let r=await fetch(path,options),j=await r.json();if(!r.ok)throw Error(r.status===403?'Portal vừa cập nhật. Nhấn F5 rồi lưu lại mã.':(j.error||'Không xử lý được yêu cầu'));return j}
@@ -184,7 +221,7 @@ function message(t,error=false){$('notice').textContent=t;$('notice').className=
 function filtered(){let q=$('search').value.toLowerCase(),f=$('filter').value;return rows.filter(r=>(r.name+' '+(r.code||r.suggestion||'')+' '+(r.label||'')).toLowerCase().includes(q)&&(f==='all'||f==='review'&&['needs_review','error'].includes(r.status)||f==='done'&&r.label||f==='unverified'&&!r.label))}
 function showList(){let all=filtered(),pos=all.findIndex(r=>r.name===selected);$('imagePrev').disabled=!all.length||pos===0;$('imageNext').disabled=!all.length||pos===all.length-1;$('imageIndex').textContent=all.length?(pos<0?'Chọn ảnh':(pos+1)+' / '+all.length):'Không có ảnh';page=Math.min(page,Math.max(0,Math.ceil(all.length/50)-1));let box=$('list');box.replaceChildren();for(let r of all.slice(page*50,page*50+50)){let b=document.createElement('button');b.className='item'+(r.name===selected?' active':'');b.textContent=(r.label||r.code||r.suggestion||'Chưa có mã')+' · '+(names[r.label?'verified':r.status]||r.status);let s=document.createElement('span');s.textContent=r.name;b.append(s);b.onclick=()=>choose(r.name);box.append(b)}if(!all.length)box.textContent='Chưa có ảnh phù hợp.';$('page').textContent=(all.length?page+1:0)+' / '+Math.ceil(all.length/50);$('prev').disabled=page===0;$('next').disabled=(page+1)*50>=all.length}
 function choose(name){if(selected!==name&&$('label').value&& !confirm('Bỏ mã đang nhập để chuyển ảnh?'))return;selected=name;let position=filtered().findIndex(r=>r.name===name);if(position>=0)page=Math.floor(position/50);detailSignature='';$('editor').hidden=true;$('label').value='';message('');showList();showDetail()}
-async function showDetail(){if(!selected)return;try{let r=await api('/api/item?name='+encodeURIComponent(selected));if(r.name!==selected)return;let sig=JSON.stringify(r);if(sig===detailSignature)return;detailSignature=sig;$('title').textContent='Ảnh '+r.name.slice(0,24)+'…';$('image').hidden=false;$('image').src='/image?name='+encodeURIComponent(r.name);$('state').textContent=names[r.label?'verified':r.status]||r.status;$('code').textContent=r.display_code||r.label||r.code||r.suggestion||'—';$('resultKind').textContent=r.label?'KẾT QUẢ ĐÃ DUYỆT':'KẾT QUẢ OCR';$('detail').textContent=r.label?('Đã lưu nhãn đúng: '+r.label+((r.code||r.suggestion)&&r.label!==(r.code||r.suggestion)?' · OCR ban đầu: '+(r.code||r.suggestion):'')):(r.error||(!r.code?(r.suggestion?'Gợi ý từ kết quả nhận diện; chưa đủ đồng thuận. Bạn kiểm tra và bấm Đúng để lưu nhãn.':'OCR chưa có kết quả thống nhất. Bạn có thể nhập mã đúng.'):'Bạn kiểm tra lại ảnh và mã trước khi duyệt.'));$('correct').disabled=!!r.label||!(r.code||r.suggestion)||busy;$('edit').disabled=busy;$('retry').disabled=['reading','pending'].includes(r.status)||busy;if(!r.code&&!r.suggestion&&!$('label').value)$('editor').hidden=false;let c=$('candidates');c.replaceChildren();for(let v of r.candidates||[]){let e=document.createElement('div');e.className='candidate';e.textContent=(v.method||'')+' → '+(v.text||'(trống)');c.append(e)}}catch(e){message(e.message,true)}}
+async function showDetail(){if(!selected)return;try{let r=await api('/api/item?name='+encodeURIComponent(selected));if(r.name!==selected)return;let sig=JSON.stringify(r);if(sig===detailSignature)return;detailSignature=sig;$('title').textContent='Ảnh '+r.name.slice(0,24)+'…';$('image').hidden=false;$('image').src='/image?name='+encodeURIComponent(r.name);$('state').textContent=names[r.label?'verified':r.status]||r.status;$('code').textContent=r.display_code||r.label||r.code||r.suggestion||'—';$('resultKind').textContent=r.label?'KẾT QUẢ ĐÃ DUYỆT':'KẾT QUẢ OCR';$('detail').textContent=r.expression?('Phép tính: '+r.expression+(r.math_result?' = '+r.math_result:''))+(r.label?' · Nhãn đã duyệt: '+r.label:' · Kiểm tra kết quả trước khi duyệt'):r.label?('Đã lưu nhãn đúng: '+r.label+((r.code||r.suggestion)&&r.label!==(r.code||r.suggestion)?' · OCR ban đầu: '+(r.code||r.suggestion):'')):(r.error||(!r.code?(r.suggestion?'Gợi ý từ kết quả nhận diện; chưa đủ đồng thuận. Bạn kiểm tra và bấm Đúng để lưu nhãn.':'OCR chưa có kết quả thống nhất. Bạn có thể nhập mã đúng.'):'Bạn kiểm tra lại ảnh và mã trước khi duyệt.'));$('correct').disabled=!!r.label||!(r.code||r.suggestion)||busy;$('edit').disabled=busy;$('retry').disabled=['reading','pending'].includes(r.status)||busy;if(!r.code&&!r.suggestion&&!$('label').value)$('editor').hidden=false;let c=$('candidates');c.replaceChildren();for(let v of r.candidates||[]){let e=document.createElement('div');e.className='candidate';e.textContent=(v.method||'')+' → '+(v.text||'(trống)');c.append(e)}}catch(e){message(e.message,true)}}
 async function save(code){if(!selected)return;busy=true;try{await api('/api/label',{name:selected,code});$('label').value='';$('editor').hidden=true;message('Đã lưu nhãn đúng: '+code.toUpperCase());detailSignature='';await refresh()}catch(e){message(e.message,true)}finally{busy=false;showDetail()}}
 async function refresh(){try{let j=await api('/api/items');rows=j.items;$('counts').textContent=j.total+' ảnh · '+j.verified+' đã duyệt';let sig=JSON.stringify(rows)+$('filter').value+$('search').value;if(sig!==lastSignature){lastSignature=sig;showList()}if(!selected&&rows.length)choose(rows[0].name);await showDetail();$('connection').textContent='Đang kết nối · Tự đọc ảnh mới · Dữ liệu chỉ lưu trên máy này'}catch(e){$('connection').textContent='Chưa kết nối portal: '+e.message}}
 function moveImage(delta){let all=filtered(),pos=all.findIndex(r=>r.name===selected),next=pos<0?(delta>0?0:all.length-1):pos+delta;if(next>=0&&next<all.length)choose(all[next].name)}
@@ -232,12 +269,16 @@ class Store:
         except (OSError, ValueError):
             pass
         result['name'] = path.name
+        if 'kind' not in result and any(parse_math(c.get('raw', c.get('text', ''))) for c in result.get('candidates', [])):
+            result.update(resolve_candidates(result['candidates']))
         # A best candidate is a review suggestion, never an auto-accepted code or training label.
         ranked = Counter(c.get('text') for c in result.get('candidates', []) if c.get('valid') and re.fullmatch('[A-Z0-9]{4}', str(c.get('text', '')))).most_common()
         result['suggestion'] = ranked[0][0] if ranked and (len(ranked) == 1 or ranked[0][1] > ranked[1][1]) else None
+        if result.get('kind') == 'math':
+            result['suggestion'] = result.get('math_result')
         try:
             label = path.with_suffix('.label.txt').read_text(encoding='ascii').strip().upper()
-            if re.fullmatch(r'(?:[A-Z0-9]{4}|-?[0-9]{1,7})', label):
+            if len(label) <= 7 and re.fullmatch(r'(?:[A-Z0-9]{4}|-?[0-9]{1,7})', label):
                 result['label'] = label
         except OSError:
             pass
@@ -249,7 +290,7 @@ class Store:
     def label(self, name, code):
         path = self.path(name)
         code = str(code).strip().upper()
-        if not re.fullmatch(r'(?:[A-Z0-9]{4}|-?[0-9]{1,7})', code):
+        if len(code) > 7 or not re.fullmatch(r'(?:[A-Z0-9]{4}|-?[0-9]{1,7})', code):
             raise ValueError('Nhập mã 4 chữ/số hoặc kết quả phép tính dạng số (ví dụ: 4).')
         target = path.with_suffix('.label.txt')
         temp = target.with_name(target.name + '.' + secrets.token_hex(5) + '.tmp')

@@ -1,18 +1,18 @@
 ﻿$captchaPage=New-Object Windows.Forms.TabPage;$captchaPage.Text='Giải mã ảnh';$captchaPage.BackColor=$form.BackColor;$tabs.TabPages.Add($captchaPage)
 $captchaAuto=New-Object Windows.Forms.CheckBox;$captchaAuto.Text='Tự đọc, điền và xác nhận mã khi game yêu cầu';$captchaAuto.SetBounds(16,15,620,26)
 $captchaAuto.Checked=if($script:settings.ContainsKey('captchaAutoEnabled')){[bool]$script:settings.captchaAutoEnabled}else{$true};$captchaPage.Controls.Add($captchaAuto)
-$null=Ui-Label 'Áp dụng cho các acc đăng nhập trực tiếp bằng QLTK, kể cả tab ẩn. Đọc từng acc một; mã chưa thống nhất sẽ giữ lại để kiểm tra.' $captchaPage 16 48 635 45
+$null=Ui-Label 'Áp dụng cho các acc đăng nhập trực tiếp bằng QLTK, kể cả tab ẩn. Đọc từng acc một; mã chưa thống nhất được lưu để kiểm tra và thử đổi ảnh.' $captchaPage 16 48 635 45
 $captchaInstall=Ui-NewButton 'Cài bộ đọc mã' {Start-CaptchaInstall};Ui-Place $captchaInstall $captchaPage 16 100 175 28
 $captchaRuntimeHint=Ui-Label '' $captchaPage 205 100 430 45
 $captchaAccountHint=Ui-Label 'Chọn acc để xem trạng thái giải mã.' $captchaPage 16 160 635 65
-$null=Ui-Label 'Máy chưa có bộ đọc: QLTK tự tải ở lần dùng đầu, hoặc bấm Cài ngay. Chỉ xác nhận một lần cho mỗi ảnh mã; ảnh đổi sẽ được đọc lại.' $captchaPage 16 455 635 50
+$null=Ui-Label 'Máy chưa có bộ đọc: QLTK tự tải ở lần dùng đầu, hoặc bấm Cài ngay. OCR chưa đọc được: thử xác nhận mỗi 1,5 giây, tối đa 5 lần/ảnh; ảnh mới tự lưu và đọc lại.' $captchaPage 16 455 635 50
 $captchaSamplesButton=Ui-NewButton 'Mở thư mục ảnh mẫu' {Open-CaptchaSamples};Ui-Place $captchaSamplesButton $captchaPage 16 515 190 28
 $captchaPortalButton=Ui-NewButton 'Mở portal kiểm tra OCR' {Open-OcrPortal};Ui-Place $captchaPortalButton $captchaPage 220 515 250 28
 $null=Ui-Label 'Mỗi ảnh mã mới được lưu trong Data\OCR\samples. Ảnh trùng chỉ lưu một bản; cần gán mã đúng trước khi train.' $captchaPage 16 555 635 45
 $captchaManualGroup=New-Object Windows.Forms.GroupBox;$captchaManualGroup.Text='Nhập kết quả khi OCR chưa đọc được';$captchaManualGroup.SetBounds(16,230,625,220);$captchaPage.Controls.Add($captchaManualGroup)
 $captchaPreview=New-Object Windows.Forms.PictureBox;$captchaPreview.SetBounds(12,25,340,100);$captchaPreview.SizeMode='Zoom';$captchaPreview.BorderStyle='FixedSingle';$captchaManualGroup.Controls.Add($captchaPreview)
-$null=Ui-Label 'Mã đúng (4 chữ/số):' $captchaManualGroup 365 18 235 20
-$captchaManualCode=New-Object Windows.Forms.TextBox;$captchaManualCode.SetBounds(365,40,225,25);$captchaManualCode.MaxLength=4;$captchaManualCode.CharacterCasing='Upper';$captchaManualGroup.Controls.Add($captchaManualCode)
+$null=Ui-Label 'Mã hoặc kết quả phép tính:' $captchaManualGroup 365 18 235 20
+$captchaManualCode=New-Object Windows.Forms.TextBox;$captchaManualCode.SetBounds(365,40,225,25);$captchaManualCode.MaxLength=7;$captchaManualCode.CharacterCasing='Upper';$captchaManualGroup.Controls.Add($captchaManualCode)
 $captchaSaveLabel=Ui-NewButton 'Lưu kết quả' {Save-CaptchaManualResult $false};Ui-Place $captchaSaveLabel $captchaManualGroup 365 75 225 28
 $captchaSaveAndSend=Ui-NewButton 'Lưu và xác nhận' {Save-CaptchaManualResult $true};Ui-Place $captchaSaveAndSend $captchaManualGroup 365 110 225 28
 $captchaReload=Ui-NewButton 'Nạp ảnh đang chờ' {Update-CaptchaManualReview $true};Ui-Place $captchaReload $captchaManualGroup 365 145 225 28

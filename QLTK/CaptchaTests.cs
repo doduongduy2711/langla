@@ -18,6 +18,11 @@ class CaptchaTests {
   C(NativeBackend.IsCurseNotice("Mã xác nhận: Mã xác nhận:"),"live captcha title not detected");
   C(!NativeBackend.IsCurseNotice("Gửi thư thành công"),"ordinary popup detected");
   C(NativeBackend.CaptchaCodeValid("942B")&&!NativeBackend.CaptchaCodeValid("94-B")&&!NativeBackend.CaptchaCodeValid("94B")&&!NativeBackend.CaptchaCodeValid("94 B"),"invalid OCR code accepted");
+  foreach(string value in new[]{"4","50","-3","1234567"})C(NativeBackend.CaptchaCodeValid(value),"numeric result rejected: "+value);
+  foreach(string value in new[]{"-","12345678","12+3","1.5",""})C(!NativeBackend.CaptchaCodeValid(value),"bad numeric result accepted: "+value);
+  NativeBackend.ConfigureCaptcha(true,"missing-python","missing-script",System.IO.Path.GetTempPath());
+  var refresh=new NativeJob(System.Reflection.Assembly.GetExecutingAssembly().Location,"fixture","",null,true){CaptchaUnreadable=true};
+  DateTime refreshNow=DateTime.UtcNow;C(NativeBackend.CanRefreshCaptcha(refresh,refreshNow),"unreadable image not eligible");refresh.CaptchaSubmitAt=refreshNow;C(!NativeBackend.CanRefreshCaptcha(refresh,refreshNow.AddMilliseconds(1499)),"refresh too fast");C(NativeBackend.CanRefreshCaptcha(refresh,refreshNow.AddMilliseconds(1500)),"refresh cadence wrong");refresh.CaptchaEpisodeTries=5;C(!NativeBackend.CanRefreshCaptcha(refresh,refreshNow.AddSeconds(5)),"more than five attempts");refresh.CaptchaEpisodeTries=0;refresh.CaptchaManual=true;C(!NativeBackend.CanRefreshCaptcha(refresh,refreshNow.AddSeconds(5)),"manual result overwritten");refresh.CaptchaManual=false;refresh.CaptchaUnreadable=false;C(!NativeBackend.CanRefreshCaptcha(refresh,refreshNow.AddSeconds(5)),"accepted OCR repeated");
   string bitmap=System.IO.Path.GetTempFileName();try{
    var colors=new CaptchaFrame{Width=2,Height=2,PixelOffset=40,Raw=new byte[]{1,2,3,255,4,5,6,255,7,8,9,255,10,11,12,255}};
    NativeBackend.SaveCaptchaBitmap(colors,bitmap);byte[] bmp=System.IO.File.ReadAllBytes(bitmap);C(bmp[54]==3&&bmp[55]==2&&bmp[56]==1&&bmp[62]==9,"Unity bottom-up RGBA bitmap flipped or wrong colors");
@@ -49,6 +54,10 @@ class CaptchaTests {
    queue();I(r,data+8,0);tick();C(confirms==1,"disabled request submitted");
    queue();L(r,button+0x78,S(r,"Khác"));tick();C(confirms==1,"wrong button label submitted");L(r,button+0x78,label);
    queue();I(r,pixmap+16,1);I(r,pixmap+20,2);tick();C(confirms==1,"changed dimensions submitted");
+   I(r,pixmap+16,2);I(r,pixmap+20,1);
+   int beforeNumericConfirms=confirms,beforeNumericSets=sets;foreach(string value in new[]{"4","50","-3","1234567"}){queue();r.Write(data+64,new byte[8]);r.Write(data+64,Encoding.ASCII.GetBytes(value));int before=confirms;tick();C(confirms==before+1&&entered==value,"numeric native submit failed: "+value);}
+   foreach(string value in new[]{"-","12345678","ABC","12+3"}){queue();r.Write(data+64,new byte[8]);r.Write(data+64,Encoding.ASCII.GetBytes(value));int before=confirms;tick();C(confirms==before,"malformed native numeric accepted: "+value);}
+   confirms=beforeNumericConfirms;sets=beforeNumericSets;
    long stored=r.Allocate(16032),mailList=r.Allocate(32),items=r.Allocate(40);L(r,vector+16,mailList);L(r,mailList+16,items);I(r,mailList+24,1);L(r,items+24,1);L(r,items+32,popup);L(r,popup+0xd0,input);L(r,popup+0xb0,S(r,"Vui lòng giải Capcha có ở dưới game"));I(r,pixmap+16,100);I(r,pixmap+20,40);L(r,pixmap+32,stored);L(r,stored+24,4000);r.Write(stored+32,new byte[16000]);
    long childVector=r.Allocate(32),childList=r.Allocate(32),childItems=r.Allocate(40);L(r,childVector,vectorClass);L(r,childVector+16,childList);L(r,childList+16,childItems);I(r,childList+24,1);L(r,childItems+24,1);L(r,childItems+32,button);L(r,popup+0x50,childVector);
    var snapshot=NativeBackend.ReadCaptchaFrame(r,game);C(snapshot!=null&&snapshot.Width==100&&snapshot.Height==40&&snapshot.Raw.Length==16000,"native captcha pixels not extracted");

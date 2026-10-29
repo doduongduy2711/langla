@@ -32,6 +32,19 @@ with tempfile.TemporaryDirectory() as folder:
         assert result["status"] == "ok"
     model = Model(("942B", "942B", "942B", "9428"))
     assert ocr.recognize(path, engine=model, native_frame=True)["code"] is None, "conflicting codes accepted"
+    for values, expected in [
+        (("10x5=?", "10×5=", "10*5?", "noise"), "50"),
+        (("2+2=?",)*4, "4"),
+        (("2-5=?",)*4, "-3"),
+        (("10/5=?",)*4, "2"),
+        (("10/0=?",)*4, None),
+        (("10/3=?",)*4, None),
+        (("1X23",)*4, None),
+        (("2+2=?", "2+2=?", "2*2=?", "noise"), None),
+    ]:
+        result = ocr.recognize(path, engine=Model(values), native_frame=True)
+        assert result['code'] == expected, (values, result)
+    assert ocr.parse_math('__import__("os")') is None
     screenshot = Image.new("RGB", (500, 300), "black")
     ImageDraw.Draw(screenshot).rectangle((70, 80, 409, 179), fill=(217, 225, 245))
     screenshot.save(path)
