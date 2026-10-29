@@ -1,0 +1,14 @@
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><AssemblyName>QLTK-CSharp-Preview</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion><GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    <PlatformTarget>x64</PlatformTarget><OutputPath>..\dist\native-preview\</OutputPath>
+    <AppConfig>..\QLTK.exe.config</AppConfig>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System"/><Reference Include="System.Core"/><Reference Include="System.Drawing"/>
+    <Reference Include="System.Windows.Forms"/><Reference Include="System.Web.Extensions"/><Reference Include="System.Security"/>
+    <Compile Include="NativePreview.cs"/>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets"/>
+</Project>

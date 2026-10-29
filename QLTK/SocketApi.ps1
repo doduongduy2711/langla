@@ -204,12 +204,43 @@ function Commit-AccountBatch($plan) {
 function Credential-Summary($account) {
     [pscustomobject]@{id=$account.id;username=$account.username;proxy=(Proxy-Summary $account.proxy)}
 }
+function Get-ManagerPreviewSnapshot {
+    # Snapshot cached UI/job values only. Never query game memory/windows here.
+    $items=@(foreach($row in $grid.Rows){
+        $a=$row.Tag;if(!$a){continue};$j=$null
+        if($script:accountJobs.ContainsKey([string]$a.id)){$j=Get-AccountJob $script:accountJobs[[string]$a.id]}
+        [pscustomobject]@{id=[string]$a.id;username=[string]$a.username;character=[string]$row.Cells['character'].Value;zone=[string]$row.Cells['zone'].Value;bima=[string]$row.Cells['bima'].Value;proxy=[string]$row.Cells['proxy'].Value;status=[string]$row.Cells['status'].Value;auto=($row.Cells['auto'].Value -eq $true);up=($row.Cells['up'].Value -eq $true);pid=$(if($j){[int]$j.ProcessId}else{0});job_id=$(if($j){[string]$j.Id}else{''});visibility=[string]$row.Cells['visibility'].Value}
+    })
+    $activity=if($script:autoAllRun -and $script:autoAllRun.active){[string]$script:autoAllRun.message}else{'Auto tất cả đang tắt'}
+    return @{ok=$true;preview_version=1;accounts=$items;activity=$activity}
+}
+function Invoke-ManagerPreviewAction($request) {
+    $action=[string]$request.action
+    if($action -eq 'auto_all_start'){Start-AutoAll;return @{ok=$true;accepted=$true}}
+    if($action -eq 'auto_all_stop'){Stop-AutoAll;return @{ok=$true;accepted=$true}}
+    if($action -notin @('open_selected','close_selected','show_selected','hide_selected')){throw 'invalid_request: thao tác không được hỗ trợ.'}
+    if($request.account_ids -isnot [array] -or $request.account_ids.Count -lt 1 -or $request.account_ids.Count -gt 200){throw 'invalid_request: chọn từ 1 đến 200 tài khoản.'}
+    $index=@{};foreach($a in $script:accounts){$index[[string]$a.id]=$a}
+    $chosen=@{};foreach($id in $request.account_ids){if($id -isnot [string] -or !$index.ContainsKey($id)){throw 'account_not_found: tài khoản không tồn tại.'};$chosen[$id]=$index[$id]}
+    $rows=@{};foreach($row in $grid.Rows){if($row.Tag){$rows[[string]$row.Tag.id]=$row}}
+    $count=0
+    foreach($a in $script:accounts){
+        $id=[string]$a.id;if(!$chosen.ContainsKey($id)){continue}
+        if($action -eq 'open_selected'){Open-Account $a;$count++;continue}
+        if($action -eq 'close_selected'){if($rows.ContainsKey($id)){Close-AccountGame $rows[$id];$count++};continue}
+        $windowPid=Get-AccountWindowPid $a
+        if($windowPid -gt 0 -and [TGLL.ManagedGames]::SetVisible($windowPid,($action -eq 'show_selected'))){$count++}
+    }
+    return @{ok=$true;accepted=$true;count=$count}
+}
 function Handle-SocketJson([string]$json) {
     try { $request=ConvertFrom-Json -InputObject $json -ErrorAction Stop } catch { return '{"ok":false,"error":"invalid_json"}' }
     if ($null -eq $request -or $request -is [array] -or !($request -is [pscustomobject])) { return '{"ok":false,"error":"invalid_request"}' }
     if (!($request.token -is [string]) -or [string]::IsNullOrEmpty($script:socketToken) -or $request.token -cne $script:socketToken) { return '{"ok":false,"error":"unauthorized"}' }
     try {
         switch -CaseSensitive ([string]$request.command) {
+            'manager_snapshot' { $result=Get-ManagerPreviewSnapshot }
+            'manager_action' { $result=Invoke-ManagerPreviewAction $request }
             'ping' { $result=@{ok=$true;version=89;proxy_types=@('http','socks5');login_backend='native';character_number=1;character_backend='native';npc_backend='native_entity_id';npc_capture=$true;dynamic_menu_log=$true;npc_name='Raikage Đệ Tam';npc_action='Nhận chìa khóa';train_backend='native_skill_bar_targeted';train_popup_independent=$true} }
             'game_auto' {
                 if($request.enabled -isnot [bool]){throw 'invalid_request: enabled phải là true/false.'}

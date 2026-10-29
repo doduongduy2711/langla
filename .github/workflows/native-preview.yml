@@ -1,0 +1,31 @@
+name: Test native CSharp preview
+on:
+  push:
+    paths:
+      - 'QLTK/NativePreview*'
+      - 'QLTK/SocketApi.ps1'
+      - 'scripts/*NativePreview.ps1'
+      - 'preview/**'
+      - '.github/workflows/native-preview.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native WinForms behavior and local API checks
+        shell: powershell
+        run: ./scripts/Test-NativePreview.ps1
+      - name: Existing manager regression checks
+        shell: powershell
+        run: powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File QLTK/AccountManager.ps1 -UiTest
+      - name: Build standalone native frontend
+        shell: powershell
+        run: ./scripts/Build-NativePreview.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QLTK-CSharp-Preview
+          path: dist/native-preview/
+          if-no-files-found: error

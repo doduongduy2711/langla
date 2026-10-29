@@ -170,6 +170,12 @@ jobs:
       - name: Verify NET Framework 4.8 launcher
         shell: powershell
         run: ./scripts/Test-Net48Release.ps1 -OutputDirectory (Join-Path $pwd 'dist')
+      - name: Test and build separate CSharp frontend preview
+        shell: powershell
+        run: |
+          ./scripts/Test-NativePreview.ps1
+          ./scripts/Build-NativePreview.ps1 -OutputDirectory (Join-Path $pwd 'dist/native-preview')
+          Compress-Archive -Path dist/native-preview/* -DestinationPath dist/QLTK-CSharp-Preview.zip
       - name: Build standalone OCR portal
         shell: powershell
         run: ./scripts/Build-OcrPortal.ps1 -RuntimeArchive (Join-Path $pwd 'dist/QLTK-ocr-runtime-win64.zip') -OutputDirectory (Join-Path $pwd 'dist')
@@ -178,4 +184,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME dist/QLTK-update.zip dist/QLTK-portable.zip dist/QLTK-net48-launcher.zip dist/QLTK-ocr-runtime-win64.zip dist/OCR-Portal-portable.zip --repo $env:GITHUB_REPOSITORY --title "QLTK $env:GITHUB_REF_NAME" --generate-notes
+          gh release create $env:GITHUB_REF_NAME dist/QLTK-update.zip dist/QLTK-portable.zip dist/QLTK-net48-launcher.zip dist/QLTK-ocr-runtime-win64.zip dist/OCR-Portal-portable.zip dist/QLTK-CSharp-Preview.zip --repo $env:GITHUB_REPOSITORY --title "QLTK $env:GITHUB_REF_NAME" --generate-notes
