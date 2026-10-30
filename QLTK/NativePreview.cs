@@ -87,7 +87,7 @@ namespace TGLL.Preview {
   public DataGridView AccountGrid{get{return grid;}}public string Notice{get{return notice.Text;}}
   public ManagerForm(IManagerConnection service,bool demonstration){
    connection=service;demo=demonstration;
-   Text="QLTK — C# WinForms đầy đủ chức năng";Font=new Font("Segoe UI",9);ClientSize=new Size(1160,900);MinimumSize=new Size(850,650);StartPosition=FormStartPosition.CenterScreen;
+   Text="QLTK C# — Bố cục cũ, menu trên";Font=new Font("Segoe UI",9);ClientSize=new Size(1160,900);MinimumSize=new Size(850,650);StartPosition=FormStartPosition.CenterScreen;
    var layout=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=6,Padding=new Padding(8)};
    layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));foreach(float height in new[]{48,32,28})layout.RowStyles.Add(new RowStyle(SizeType.Absolute,height));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,110));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,42));Controls.Add(layout);
    var tools=new FlowLayoutPanel{Dock=DockStyle.Fill,WrapContents=false,AutoScroll=true};layout.Controls.Add(tools,0,0);
@@ -103,9 +103,9 @@ namespace TGLL.Preview {
    var filtering=new FlowLayoutPanel{Dock=DockStyle.Fill,WrapContents=false};filtering.Controls.Add(new Label{Text="Tìm tài khoản / nhân vật:",AutoSize=true,Padding=new Padding(0,5,0,0)});search.Width=230;filtering.Controls.Add(search);selectedOnly.Text="Chỉ acc đã chọn";selectedOnly.AutoSize=true;filtering.Controls.Add(selectedOnly);summary.AutoSize=true;summary.Padding=new Padding(14,5,0,0);filtering.Controls.Add(summary);layout.Controls.Add(filtering,0,1);
    activity.Dock=DockStyle.Fill;activity.TextAlign=ContentAlignment.MiddleLeft;layout.Controls.Add(activity,0,2);
    grid.Dock=DockStyle.Fill;grid.VirtualMode=true;grid.AllowUserToAddRows=false;grid.AllowUserToDeleteRows=false;grid.AllowUserToResizeRows=false;grid.RowHeadersVisible=false;grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.None;grid.SelectionMode=DataGridViewSelectionMode.FullRowSelect;grid.MultiSelect=false;grid.BackgroundColor=Color.White;grid.BorderStyle=BorderStyle.FixedSingle;grid.RowTemplate.Height=24;
-   string[] names={"#","Chọn","Auto","Up","Tài khoản","Nhân vật","Khu","Bí ma","Mật khẩu","Proxy","Trạng thái","PID","Ẩn/Hiện"};int[] widths={42,48,48,42,130,120,52,66,125,190,260,68,70};
-   for(int n=0;n<names.Length;n++){DataGridViewColumn column=n>=1&&n<=3?(DataGridViewColumn)new DataGridViewCheckBoxColumn():new DataGridViewTextBoxColumn();column.HeaderText=names[n];column.Width=widths[n];column.ReadOnly=n!=1;column.SortMode=DataGridViewColumnSortMode.NotSortable;grid.Columns.Add(column);}
-   grid.CellValueNeeded+=CellNeeded;grid.CellValuePushed+=CellPushed;grid.CurrentCellDirtyStateChanged+=delegate{if(grid.IsCurrentCellDirty)grid.CommitEdit(DataGridViewDataErrorContexts.Commit);};grid.SelectionChanged+=delegate{ShowDetails();};grid.DataError+=delegate(object sender,DataGridViewDataErrorEventArgs e){e.ThrowException=false;};layout.Controls.Add(grid,0,3);
+   string[] names={"#","Chọn","Auto","Up","Tài khoản","Nhân vật","Khu","Bí ma","Mật khẩu","Proxy","Trạng thái","PID","Ẩn/Hiện","Mở","Tắt"};int[] widths={42,48,48,42,130,120,52,66,125,190,260,68,70,60,60};
+   for(int n=0;n<names.Length;n++){DataGridViewColumn column=n>=1&&n<=3?(DataGridViewColumn)new DataGridViewCheckBoxColumn():(n>=13?(DataGridViewColumn)new DataGridViewButtonColumn():new DataGridViewTextBoxColumn());column.HeaderText=names[n];column.Width=widths[n];column.ReadOnly=n!=1;column.SortMode=DataGridViewColumnSortMode.NotSortable;grid.Columns.Add(column);}
+   grid.CellContentClick+=delegate(object sender,DataGridViewCellEventArgs e){if(e.RowIndex>=0&&e.RowIndex<visible.Count&&(e.ColumnIndex==13||e.ColumnIndex==14))RunAction(e.ColumnIndex==13?"open_selected":"close_selected",new[]{visible[e.RowIndex].Id});};grid.CellValueNeeded+=CellNeeded;grid.CellValuePushed+=CellPushed;grid.CurrentCellDirtyStateChanged+=delegate{if(grid.IsCurrentCellDirty)grid.CommitEdit(DataGridViewDataErrorContexts.Commit);};grid.SelectionChanged+=delegate{ShowDetails();};grid.DataError+=delegate(object sender,DataGridViewDataErrorEventArgs e){e.ThrowException=false;};layout.Controls.Add(grid,0,3);
    var info=new GroupBox{Text="Tài khoản đang chọn",Dock=DockStyle.Fill};details.Dock=DockStyle.Fill;details.Padding=new Padding(8);info.Controls.Add(details);layout.Controls.Add(info,0,4);
    InitializeFeaturePages(layout,info);
    notice.Dock=DockStyle.Fill;notice.ForeColor=Color.FromArgb(30,70,120);layout.Controls.Add(notice,0,5);
@@ -115,7 +115,7 @@ namespace TGLL.Preview {
   }
   static void SetupButton(Control parent,Button button,string text,Action action,int width){button.Text=text;button.Width=width;button.Height=32;button.Click+=delegate{action();};parent.Controls.Add(button);}
   static void AddButton(Control parent,string text,Action action,int width){SetupButton(parent,new Button(),text,action,width);}
-  void CellNeeded(object sender,DataGridViewCellValueEventArgs e){if(e.RowIndex<0||e.RowIndex>=visible.Count)return;var r=visible[e.RowIndex];object[] cells={e.RowIndex+1,picked.Contains(r.Id),r.Auto,r.Up,r.Username,r.Character,r.Zone,r.Bima,r.Password,r.Proxy,r.Status,r.Pid>0?r.Pid.ToString():"—",r.Visibility};e.Value=cells[e.ColumnIndex];}
+  void CellNeeded(object sender,DataGridViewCellValueEventArgs e){if(e.RowIndex<0||e.RowIndex>=visible.Count)return;var r=visible[e.RowIndex];object[] cells={e.RowIndex+1,picked.Contains(r.Id),r.Auto,r.Up,r.Username,r.Character,r.Zone,r.Bima,r.Password,r.Proxy,r.Status,r.Pid>0?r.Pid.ToString():"—",r.Visibility,"Mở","Tắt"};e.Value=cells[e.ColumnIndex];}
   void CellPushed(object sender,DataGridViewCellValueEventArgs e){if(e.RowIndex<0||e.RowIndex>=visible.Count)return;if(e.ColumnIndex==2||e.ColumnIndex==3){SetNativeAccountFlag(visible[e.RowIndex],e.ColumnIndex==2?"auto":"up",Object.Equals(e.Value,true));return;}if(e.ColumnIndex!=1)return;string id=visible[e.RowIndex].Id;if(Object.Equals(e.Value,true))picked.Add(id);else picked.Remove(id);UpdateSummary();if(selectedOnly.Checked)BeginInvoke((Action)ApplyFilter);}
   void ApplyFilter(){string query=search.Text.Trim();visible=accounts.Where(r=>(!selectedOnly.Checked||picked.Contains(r.Id))&&(query.Length==0||r.Username.IndexOf(query,StringComparison.OrdinalIgnoreCase)>=0||r.Character.IndexOf(query,StringComparison.OrdinalIgnoreCase)>=0)).ToList();grid.RowCount=visible.Count;grid.Invalidate();UpdateSummary();ShowDetails();}
   void UpdateSummary(){summary.Text="Tài khoản: "+accounts.Count+"   •   Đã chọn: "+picked.Count+"   •   Hiển thị: "+visible.Count;}
@@ -158,6 +158,7 @@ namespace TGLL.Preview {
  }
  public static class Program {
   [STAThread] public static int Main(string[] args){
+   if(args.Length>0&&args[0]=="--apply-update")return FrontendUpdate.Apply(args);
    Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
    bool demo=args.Contains("--demo");string data=null;for(int n=0;n<args.Length-1;n++)if(args[n]=="--data")data=args[n+1];
    try{

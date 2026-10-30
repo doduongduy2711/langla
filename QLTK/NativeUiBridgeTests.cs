@@ -1,4 +1,4 @@
-using System;using System.Collections.Generic;using System.Drawing;using System.IO;using System.Linq;using System.Threading.Tasks;using System.Web.Script.Serialization;using System.Windows.Forms;using TGLL;using TGLL.Preview;
+﻿using System;using System.Collections.Generic;using System.Drawing;using System.IO;using System.Linq;using System.Threading.Tasks;using System.Web.Script.Serialization;using System.Windows.Forms;using TGLL;using TGLL.Preview;
 class NativeUiBridgeTests {
  static readonly JavaScriptSerializer Json=new JavaScriptSerializer{MaxJsonLength=8388608,RecursionLimit=64};
  static void Check(bool value,string message){if(!value)throw new Exception(message);}
@@ -22,7 +22,7 @@ class NativeUiBridgeTests {
   foreach(var raw in pages){var page=Map(raw);var frame=Map(Json.DeserializeObject(Convert.ToString(frames[Text(page,"id")])));Check(JsonValue.Flag(frame,"ok"),"real page failed to export: "+Text(page,"text"));foreach(var node in Nodes(List(JsonValue.Get(frame,"children")))){count++;kinds.Add(Text(node,"kind"));if(Text(node,"kind")=="button")buttons++;}}
   Check(buttons>70&&count>250,"missing original controls/actions");
   using(var form=new ManagerForm(new FixtureConnection(path),false)){
-   form.StartPosition=FormStartPosition.Manual;form.Location=new Point(-15000,-15000);form.ShowInTaskbar=false;form.Show();Pump(100);Check(form.FeaturePageCount==27,"native window missing function tabs");
+   form.StartPosition=FormStartPosition.Manual;form.Location=new Point(-15000,-15000);form.ShowInTaskbar=false;form.Show();Pump(100);Check(form.FeaturePageCount==26,"native window missing function tabs");
    TabControl native=form.Controls.OfType<TableLayoutPanel>().Single().Controls.OfType<TabControl>().Single();
    foreach(TabPage page in native.TabPages){native.SelectedTab=page;Pump(15);var panel=page.Tag as RemoteFeaturePanel;if(panel!=null)Check(panel.Controls.Count>0,"native controls missing: "+page.Text);}
    native.SelectedTab=native.TabPages.Cast<TabPage>().First(p=>p.Text=="Auto Sơn Cáp");Pump(30);

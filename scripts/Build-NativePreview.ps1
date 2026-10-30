@@ -4,7 +4,7 @@ $root=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $output=[IO.Path]::GetFullPath($OutputDirectory);$null=[IO.Directory]::CreateDirectory($output)
 $reference=& (Join-Path $PSScriptRoot 'Get-Net48References.ps1')
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$references=@('mscorlib.dll','System.dll','System.Core.dll','System.Drawing.dll','System.Windows.Forms.dll','System.Web.Extensions.dll','System.Security.dll') | ForEach-Object {'/r:'+(Join-Path $reference $_)}
+$references=@('mscorlib.dll','System.dll','System.Core.dll','System.Drawing.dll','System.Windows.Forms.dll','System.Web.Extensions.dll','System.Security.dll','System.IO.Compression.dll','System.IO.Compression.FileSystem.dll') | ForEach-Object {'/r:'+(Join-Path $reference $_)}
 $exe=Join-Path $output 'QLTK-CSharp-Preview.exe'
 & $compiler /nologo /noconfig /nostdlib+ /target:winexe /platform:x64 /optimize+ ('/out:'+$exe) $references (Join-Path $root 'QLTK/NativePreview.cs') (Join-Path $root 'QLTK/NativeFeaturePages.cs') (Join-Path $root 'QLTK/NativeBootstrap.cs')
 if($LASTEXITCODE -ne 0){throw 'Native WinForms preview compilation failed'}

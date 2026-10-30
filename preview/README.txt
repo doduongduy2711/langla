@@ -18,3 +18,5 @@ Giao diện chính là C#; nghiệp vụ vẫn dùng lại PowerShell trong bộ
 Đây chưa phải bản viết lại toàn bộ nghiệp vụ sang C#.
 Chỉ tải trang đang xem, cập nhật giá trị thay đổi và lấy vùng bảng đang cuộn.
 Không tự gửi lại thao tác khi mất phản hồi. Gói không kèm Data hoặc tài khoản.
+
+Từ v291: nút Cập nhật giao diện tải bản C# mới nhất từ GitHub, kiểm tra SHA-256 rồi mở lại riêng cửa sổ C#. Data, game và bộ điều phối giữ nguyên. Bộ điều phối vẫn cập nhật qua nút Cập nhật QLTK của nó.

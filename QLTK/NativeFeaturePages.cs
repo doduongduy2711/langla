@@ -3,6 +3,7 @@ namespace TGLL.Preview {
  public sealed partial class ManagerForm {
   readonly TabControl featureTabs=new TabControl();readonly Dictionary<string,RemoteFeaturePanel> featurePanels=new Dictionary<string,RemoteFeaturePanel>();
   readonly SemaphoreSlim featureCommands=new SemaphoreSlim(1,1);bool featureSupported,featureBusy,featureDirty,nativeModal;string uiSession="";
+  DateTime globalRefreshAt=DateTime.MinValue;RemoteFeaturePanel globalPanel;
   int backendPid;readonly Button nativeDialog=new Button();
   [System.Runtime.InteropServices.DllImport("user32.dll")]static extern bool AllowSetForegroundWindow(int process);
   readonly HashSet<string> changingFlags=new HashSet<string>();
@@ -13,8 +14,17 @@ namespace TGLL.Preview {
   public int FeaturePageCount{get{return featureTabs.TabPages.Count-1;}}
   void InitializeFeaturePages(TableLayoutPanel layout,Control information){
    layout.RowStyles[3]=new RowStyle(SizeType.Absolute,245);layout.RowStyles[4]=new RowStyle(SizeType.Percent,100);
-   layout.Controls.Remove(information);featureTabs.Dock=DockStyle.Fill;featureTabs.Multiline=true;var overview=new TabPage("Thông tin tài khoản");overview.Controls.Add(information);featureTabs.TabPages.Add(overview);layout.Controls.Add(featureTabs,0,4);featureTabs.SelectedIndexChanged+=delegate{RequestFeatureRefresh();};
-   var tools=layout.GetControlFromPosition(0,0);SetupButton(tools,nativeDialog,"Cửa sổ phụ",FocusNativeDialog,105);
+   layout.Controls.Remove(information);featureTabs.Dock=DockStyle.Fill;featureTabs.Multiline=true;featureTabs.Appearance=TabAppearance.Buttons;var overview=new TabPage("Thông tin tài khoản");overview.Controls.Add(information);featureTabs.TabPages.Add(overview);layout.Controls.Add(featureTabs,0,4);featureTabs.SelectedIndexChanged+=delegate{RequestFeatureRefresh();};
+   var tools=layout.GetControlFromPosition(0,0);layout.Controls.Remove(tools);
+   var header=new Panel{Dock=DockStyle.Fill};tools.Dock=DockStyle.Top;tools.Height=34;tools.Visible=true;header.Controls.Add(tools);
+   globalPanel=new RemoteFeaturePanel("global",SendFeatureEvent,RequestFeatureRefresh){Dock=DockStyle.Fill};
+   header.Controls.Add(globalPanel);globalPanel.BringToFront();tools.BringToFront();layout.Controls.Add(header,0,0);layout.RowStyles[0].Height=159;
+   tools.Controls.Clear();SetupButton(tools,nativeDialog,"Cửa sổ phụ",FocusNativeDialog,105);
+   var update=new Button();SetupButton(tools,update,"Cập nhật giao diện",async delegate{
+    update.Enabled=false;try{notice.Text="Đang kiểm tra bản C# trên GitHub...";string stage=await FrontendUpdate.Download();if(stage==null){notice.Text="Giao diện C# đã là bản mới nhất.";return;}var owner=connection as AutoStartingConnection;if(owner==null)throw new IOException("Chưa chọn Data.");
+     if(MessageBox.Show("Đã tải và kiểm tra bản mới. Mở lại cửa sổ C# ngay? Bộ điều phối và game vẫn chạy.","Cập nhật giao diện",MessageBoxButtons.YesNo)==DialogResult.Yes){FrontendUpdate.Start(stage,owner.DataDirectory);Close();}
+    }catch(Exception e){notice.Text="Chưa cập nhật: "+e.Message;}finally{if(!IsDisposed)update.Enabled=true;}
+   },160);
   }
   async void FocusNativeDialog(){try{if(backendPid>0)AllowSetForegroundWindow(backendPid);await FeatureCall("manager_ui_dialog",null);}catch(Exception error){if(!closing)notice.Text=error.Message;}}
   string FeatureAccount(){return grid.CurrentCell!=null&&grid.CurrentCell.RowIndex<visible.Count?visible[grid.CurrentCell.RowIndex].Id:"";}
@@ -29,7 +39,7 @@ namespace TGLL.Preview {
    try{
     if(uiSession.Length==0){
      var catalog=await FeatureCall("manager_ui_catalog",null);if(closing)return;uiSession=JsonValue.Text(catalog,"ui_session");Int32.TryParse(JsonValue.Text(catalog,"backend_pid"),out backendPid);
-     foreach(var page in JsonValue.Array(JsonValue.Get(catalog,"pages"))){var model=JsonValue.Map(page);string id=JsonValue.Text(model,"id");if(id.Length==0||featurePanels.ContainsKey(id))continue;var tab=new TabPage(JsonValue.Text(model,"text"));var panel=new RemoteFeaturePanel(id,SendFeatureEvent,RequestFeatureRefresh);panel.Dock=DockStyle.Fill;tab.Tag=panel;tab.Controls.Add(panel);featureTabs.TabPages.Add(tab);featurePanels[id]=panel;}
+     foreach(var page in JsonValue.Array(JsonValue.Get(catalog,"pages"))){var model=JsonValue.Map(page);string id=JsonValue.Text(model,"id");if(id.Length==0||featurePanels.ContainsKey(id))continue;if(id=="global"){featurePanels[id]=globalPanel;continue;}var tab=new TabPage(JsonValue.Text(model,"text"));var panel=new RemoteFeaturePanel(id,SendFeatureEvent,RequestFeatureRefresh);panel.Dock=DockStyle.Fill;tab.Tag=panel;tab.Controls.Add(panel);featureTabs.TabPages.Add(tab);featurePanels[id]=panel;}
     }
     var active=featureTabs.SelectedTab==null?null:featureTabs.SelectedTab.Tag as RemoteFeaturePanel;
     if(active!=null){
@@ -41,10 +51,20 @@ namespace TGLL.Preview {
       active.ApplyFrame(frame,context);if(JsonValue.Flag(frame,"modal"))notice.Text="Cửa sổ phụ đang mở: "+JsonValue.Text(frame,"modal_title")+". Hoàn tất cửa sổ đó trước khi đổi cấu hình.";
      }
     }
+    if(globalPanel.ContextAccount!=FeatureAccount()||(DateTime.UtcNow-globalRefreshAt).TotalSeconds>=10){
+    string globalAccount=FeatureAccount();if(globalPanel.ContextAccount!=globalAccount)await globalPanel.CommitForAccountSwitch();
+    var globalContext=FeatureContext("global",globalAccount);var globalFrame=await FeatureCall("manager_ui_frame",globalContext);if(closing)return;
+    if(JsonValue.Text(globalFrame,"ui_session")!=uiSession){ResetFeatures();return;}
+    if(globalAccount==FeatureAccount()){
+     globalFrame["children"]=JsonValue.Array(JsonValue.Get(globalFrame,"children")).Where(raw=>{var n=JsonValue.Map(raw);int y;return Int32.TryParse(JsonValue.Text(n,"y"),out y)&&y<120;}).ToArray();
+     globalPanel.ApplyFrame(globalFrame,globalContext);
+    }
+     globalRefreshAt=DateTime.UtcNow;
+    }
    }catch(Exception error){if(!closing)notice.Text="Chưa nạp được chức năng: "+error.Message;}
    finally{featureBusy=false;if(featureDirty&&!closing)BeginInvoke((Action)RequestFeatureRefresh);}
   }
-  void ResetFeatures(){foreach(var panel in featurePanels.Values)panel.Parent.Dispose();featurePanels.Clear();uiSession="";featureDirty=true;}
+  void ResetFeatures(){foreach(var panel in featurePanels.Values)if(panel!=globalPanel)panel.Parent.Dispose();featurePanels.Clear();uiSession="";globalRefreshAt=DateTime.MinValue;featureDirty=true;}
   async Task<Dictionary<string,object>> SendFeatureEvent(string page,Dictionary<string,object> context,Dictionary<string,object> change){
    await featureCommands.WaitAsync();
    try{
