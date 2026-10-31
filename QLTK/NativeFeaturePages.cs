@@ -26,7 +26,9 @@ namespace TGLL.Preview {
     }catch(Exception e){notice.Text="Chưa cập nhật: "+e.Message;}finally{if(!IsDisposed)update.Enabled=true;}
    },160);
   }
-  async void FocusNativeDialog(){try{if(backendPid>0)AllowSetForegroundWindow(backendPid);await FeatureCall("manager_ui_dialog",null);}catch(Exception error){if(!closing)notice.Text=error.Message;}}
+  [System.Runtime.InteropServices.DllImport("user32.dll")]static extern bool ShowWindow(IntPtr window,int command);
+  [System.Runtime.InteropServices.DllImport("user32.dll")]static extern bool SetWindowPos(IntPtr window,IntPtr after,int x,int y,int width,int height,uint flags);
+  async void FocusNativeDialog(){try{if(backendPid>0)AllowSetForegroundWindow(backendPid);await FeatureCall("manager_ui_dialog",null);if(backendPid>0)using(var process=System.Diagnostics.Process.GetProcessById(backendPid)){process.Refresh();IntPtr window=process.MainWindowHandle;if(window!=IntPtr.Zero){var area=Screen.FromControl(this).WorkingArea;ShowWindow(window,9);SetWindowPos(window,new IntPtr(-1),area.Left+Math.Max(0,(area.Width-440)/2),area.Top+Math.Max(0,(area.Height-495)/2),0,0,0x0041);SetWindowPos(window,new IntPtr(-2),0,0,0,0,0x0043);}}}catch(Exception error){if(!closing)notice.Text=error.Message;}}
   string FeatureAccount(){return grid.CurrentCell!=null&&grid.CurrentCell.RowIndex<visible.Count?visible[grid.CurrentCell.RowIndex].Id:"";}
   Dictionary<string,object> FeatureContext(string page,string account){return new Dictionary<string,object>{{"page_id",page},{"account_id",account},{"ui_session",uiSession},{"selected_all",accounts.Count>0&&picked.Count==accounts.Count},{"selected_ids",picked.Count==accounts.Count?new string[0]:picked.ToArray()}};}
   static Dictionary<string,object> Merge(Dictionary<string,object> left,Dictionary<string,object> right){var result=new Dictionary<string,object>(left);foreach(var pair in right)result[pair.Key]=pair.Value;return result;}
@@ -165,7 +167,11 @@ namespace TGLL.Preview {
     var picture=c as PictureBox;if(picture!=null){string encoded=NodeText(n,"image");if(encoded.Length>0&&Convert.ToString(picture.AccessibleDescription)!=encoded){using(var memory=new MemoryStream(Convert.FromBase64String(encoded)))using(var image=Image.FromStream(memory)){var old=picture.Image;picture.Image=new Bitmap(image);if(old!=null)old.Dispose();}picture.AccessibleDescription=encoded;}}
     var progress=c as ProgressBar;if(progress!=null){progress.Minimum=Int(n,"minimum",0);progress.Maximum=Math.Max(progress.Minimum+1,Int(n,"maximum",100));progress.Value=Math.Max(progress.Minimum,Math.Min(progress.Maximum,Int(n,"value",0)));progress.Style=JsonValue.Flag(n,"marquee")?ProgressBarStyle.Marquee:ProgressBarStyle.Blocks;}
     var grid=c as DataGridView;if(grid!=null)MergeGrid(id,grid,n);
-    if(Value(n,"children")!=null)MergeWidgets(JsonValue.Array(Value(n,"children")));
+        if(Value(n,"children")!=null)MergeWidgets(JsonValue.Array(Value(n,"children")));
+    // Hidden controller tab pages can retain their 200x100 designer size.
+    // Fit native containers to their actual children instead of clipping the form.
+    if(c is Panel){int right=Int(n,"width",100),bottom=Int(n,"height",24);foreach(Control child in c.Controls){right=Math.Max(right,child.Right+12);bottom=Math.Max(bottom,child.Bottom+12);}c.Size=new Size(right,bottom);}
+    if(c is Label&&c.Parent==this)c.Width=Math.Max(Int(n,"width",100),ClientSize.Width-c.Left-20);
    }
   }
   void MergeGrid(string id,DataGridView grid,Dictionary<string,object> node){
