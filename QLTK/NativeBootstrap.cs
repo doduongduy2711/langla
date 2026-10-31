@@ -44,7 +44,7 @@ namespace TGLL.Preview {
 
 namespace TGLL.Preview {
  public static class FrontendUpdate {
-  public const int Version=293;
+  public const int Version=295;
   public static async Task<string> Download(){
    return await Task.Run(()=>{
     ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;

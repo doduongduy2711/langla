@@ -1147,7 +1147,7 @@ namespace TGLL {
         internal string LeaderZoneJob="";internal int LeaderZoneMap=-1,LeaderZoneTarget=-1;internal bool LeaderZoneConfirmed;
         internal string[] TeamJobIds=new string[0];internal DateTime TeamReadAt=DateTime.MinValue,TeamActionAt=DateTime.MinValue;internal int TeamAttempts,TeamAttemptCommand;internal bool TeamFriendRequested;internal string TeamTarget="";internal bool TeamManaged,TeamConfirmed;internal long TeamAcceptedPopup;
         public volatile bool CloseAfterKey,KeyReceiptPending;internal int KeyReceiptBefore=-1,KeyReceiptLastCount=-1;internal DateTime KeyReceiptAt,KeyReceiptPollAt,KeyBaselineAt;internal string KeyReceiptReadError="";public volatile bool QuestQueueOnly,QuestFinished;public volatile bool QuestEnabled,QuestPauseAuto;public volatile int QuestCompleted,QuestRemaining=-1;public volatile string QuestStatus="Tắt";internal CloseBatchOperation QuestAutoCloseOperation;
-        internal bool QuestFaultStopped;internal DateTime QuestSnapshotAt;internal int QuestObservedCount,QuestObservedTotal;
+        internal DateTime QuestReadyWaitAt,ActivityLastRetryAt;internal bool QuestFaultStopped;internal DateTime QuestSnapshotAt;internal int QuestObservedCount,QuestObservedTotal;
         internal DateTime ActivityFaultAt,ActivityVillageAt,ActivityCloseAt,ActivityHealthyAt;internal string ActivityWatchKind="",ActivityProgress="";
         internal bool ActivityRetryIssued;internal volatile bool ActivityRetryPending;
         public volatile bool ActivityTimeoutClosed;public volatile string ActivityWatchStatus="";
@@ -1222,6 +1222,7 @@ namespace TGLL {
         internal static void QuestSend(Remote r,long data,NativeJob j,int command){r.Write(data,BitConverter.GetBytes(command));j.QuestCommand=command;j.QuestInFlight=true;j.QuestRetryAt=DateTime.UtcNow.AddMilliseconds(command==1||command==2?3000:750);Log(j,"quest_command",",\"command\":"+command+",\"phase\":"+j.QuestPhase+",\"remaining\":"+j.QuestRemaining);}
         internal static void PumpQuest(Remote r,long data,NativeJob j){
             if(data==0)return;r.Write(data+116,BitConverter.GetBytes(j.BeastQuestEnabled?1:0));bool soloReady=!j.BeastQuestEnabled||j.BeastSoloReady&&(DateTime.UtcNow-j.TeamReadAt).TotalSeconds<4;bool canRun=soloReady&&(!j.BeastQuestEnabled||j.BeastStartupSandReady&&j.BeastStartupSandPid==j.ProcessId)&&j.QuestEnabled&&!j.CloseRequested&&!j.CancelRequested&&!j.ReceiveFlowActive&&j.GameSettingsReady&&(j.QuestQueueOnly||(!j.ReceiveKeyEnabled&&!j.DungeonHighEnabled&&!j.IzanamiEnabled));
+            if(j.QuestEnabled&&!j.GameSettingsReady){if(j.QuestReadyWaitAt==DateTime.MinValue)j.QuestReadyWaitAt=DateTime.UtcNow;}else if(j.QuestReadyWaitAt!=DateTime.MinValue){if(j.QuestAt!=DateTime.MinValue)j.QuestAt=j.QuestAt.Add(DateTime.UtcNow-j.QuestReadyWaitAt);j.QuestReadyWaitAt=DateTime.MinValue;}
             r.Write(data+4,BitConverter.GetBytes(canRun?1:0));if(!canRun){if(j.BeastQuestEnabled&&j.QuestEnabled&&!j.BeastStartupSandReady){j.TrainEnabled=false;j.QuestPauseAuto=true;if(!j.BeastStartupSandStopped)j.QuestStatus="Linh thú: phù 168 về Làng Cát lần đầu, đợi xác nhận tới làng";}else if(j.BeastQuestEnabled&&j.QuestEnabled&&!soloReady){j.TrainEnabled=false;j.QuestPauseAuto=true;j.QuestAt=DateTime.UtcNow;j.QuestStatus="Linh thú: đợi xác nhận đã rời nhóm cũ để chạy riêng";}if(!j.QuestEnabled&&BitConverter.ToInt32(r.Read(data,4),0)!=99){r.Write(data,BitConverter.GetBytes(r.Ptr(data+72)!=0?6:0));}return;}
             int request=BitConverter.ToInt32(r.Read(data,4),0);
             if(request==99){if(j.QuestBusyAt==DateTime.MinValue)j.QuestBusyAt=DateTime.UtcNow;if((DateTime.UtcNow-j.QuestBusyAt).TotalSeconds>10){r.Write(data,new byte[4]);j.QuestBusyAt=DateTime.MinValue;j.QuestInFlight=false;j.QuestPhase=0;j.QuestRetryAt=DateTime.MinValue;j.QuestBusyRetries++;Log(j,"quest_busy_recovered",",\"retry\":"+j.QuestBusyRetries);if(j.QuestBusyRetries>=3)StopQuest(j,"Lệnh nhiệm vụ lỗi 3 lần; kiểm tra game");else j.QuestStatus="Lệnh bị kẹt; đang thử lại nhiệm vụ";}return;}
@@ -4356,6 +4357,7 @@ namespace TGLL {
                 }
                 if(!FreshActivityVillage(j,now)){
                     j.ActivityWatchStatus="Auto lỗi/chờ quá 10 phút: giữ game, chưa xác nhận ở map làng";
+                    if(kind=="quest"&&j.GameSettingsReady&&UpSessionReady(j)&&!j.ActivityRetryPending&&(j.ActivityLastRetryAt==DateTime.MinValue||(now-j.ActivityLastRetryAt).TotalSeconds>=300)){j.ActivityRetryPending=true;Log(j,"quest_recovery_while_held",",\"map\":"+j.MapId);}
                     return;
                 }
                 if(j.ActivityTimeoutCloseOperation!=null&&!j.ActivityTimeoutCloseOperation.Completed)return;
@@ -4402,7 +4404,7 @@ namespace TGLL {
         }
         internal static bool PrepareActivityRetry(NativeJob j,DateTime now){
             if(!j.ActivityRetryPending||j.CloseRequested||j.CancelRequested)return false;
-            j.ActivityRetryPending=false;string kind=WatchedActivity(j);if(kind.Length==0)return false;
+            j.ActivityRetryPending=false;j.ActivityLastRetryAt=now;string kind=WatchedActivity(j);if(kind.Length==0)return false;
             j.Error="";j.ReplayRequested=false;j.ReceiveFlowActive=false;j.ReceiveKeyRequested=false;j.KeyReceiptPending=false;
             j.PartyReady=false;j.TeamAttempts=0;j.TeamAttemptCommand=0;j.TeamFriendRequested=false;j.TeamConfirmed=false;
             j.ZonePrepared=false;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;
@@ -4434,6 +4436,7 @@ namespace TGLL {
         }
         static void PumpActivityRetry(Remote r,long data,long questData,NativeJob j,Stopwatch npcTimer){
             if(!j.ActivityRetryPending||j.ReconnectRequested)return;
+            if(j.ActivityWatchKind=="quest"&&(!j.GameSettingsReady||!UpSessionReady(j)))return;
             if(WatchedActivity(j)!=j.ActivityWatchKind){j.ActivityRetryPending=false;return;}
             // Run on the session worker, alongside the native commands it resets.
             // A quest command still executing must finish before its buffer can be reused.
