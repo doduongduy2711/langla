@@ -1,4 +1,4 @@
-using System;using System.Collections.Generic;using System.Drawing;using System.Drawing.Imaging;using System.IO;using System.Linq;using System.Reflection;using System.Runtime.CompilerServices;using System.Runtime.InteropServices;using System.Security.Cryptography;using System.Text;using System.Web.Script.Serialization;using System.Windows.Forms;
+﻿using System;using System.Collections.Generic;using System.Drawing;using System.Drawing.Imaging;using System.IO;using System.Linq;using System.Reflection;using System.Runtime.CompilerServices;using System.Runtime.InteropServices;using System.Security.Cryptography;using System.Text;using System.Web.Script.Serialization;using System.Windows.Forms;
 namespace TGLL {
  // Typed adapter to existing controllers. No arbitrary method/script evaluation is exposed.
  public sealed class NativeUiBridge {
@@ -17,7 +17,8 @@ namespace TGLL {
   static int Number(Dictionary<string,object> map,string key,int fallback){int value;return Int32.TryParse(Text(map,key),out value)?value:fallback;}
   static string Hash(string value){using(var sha=SHA256.Create())return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));}
   static void Require(bool value,string message){if(!value)throw new InvalidOperationException(message);}
-  static bool LocalVisible(Control control){var method=typeof(Control).GetMethod("GetState",BindingFlags.Instance|BindingFlags.NonPublic);return method==null||Convert.ToBoolean(method.Invoke(control,new object[]{2}));}
+  static readonly MethodInfo getLocalState=typeof(Control).GetMethod("GetState",BindingFlags.Instance|BindingFlags.NonPublic);
+  static bool LocalVisible(Control control){var method=getLocalState;return method==null||Convert.ToBoolean(method.Invoke(control,new object[]{2}));}
   public NativeUiBridge(Form window,TabControl pages,DataGridView table,Func<string[]> ids,Func<string> statusText){root=window;tabs=pages;accounts=table;accountIds=ids;status=statusText;}
   string Id(Control control){string id;if(names.TryGetValue(control,out id))return id;id="u"+(++next);names[control]=id;controls[id]=control;return id;}
   Control Resolve(string id){Control control;Require(controls.TryGetValue(id,out control)&&!control.IsDisposed,"Điều khiển đã thay đổi; nạp lại tab trước khi thao tác.");return control;}
@@ -76,7 +77,7 @@ namespace TGLL {
   Dictionary<string,object> ReadFrame(Dictionary<string,object> request){
    var frame=Frame(Text(request,"page_id"));bool modal=ModalOpen;if(!modal){Context(request);var tab=frame as TabPage;if(tab!=null&&!Object.ReferenceEquals(tabs.SelectedTab,tab))tabs.SelectedTab=tab;frame.PerformLayout();}
    var views=Map(Get(request,"grid_views"))??new Dictionary<string,object>();
-   object[] children=frame.Controls.Cast<Control>().Reverse().Select(c=>Widget(c,views,0)).Where(c=>c!=null).Cast<object>().ToArray();
+   object[] children=frame.Controls.Cast<Control>().Reverse().Where(c=>!Object.ReferenceEquals(frame,root)||c.Top<120).Select(c=>Widget(c,views,0)).Where(c=>c!=null).Cast<object>().ToArray();
    var ops=operations.Values.Select(o=>new Dictionary<string,object>{{"id",o.Id},{"control_id",o.Control},{"state",o.State},{"error",o.Error}}).ToArray();
    foreach(string id in operations.Where(p=>p.Value.State!="queued"&&p.Value.State!="running"&&(DateTime.UtcNow-p.Value.At).TotalMinutes>5).Select(p=>p.Key).ToArray())operations.Remove(id);
    if(controls.Count>2000)foreach(var pair in controls.Where(p=>p.Value.IsDisposed).ToArray()){controls.Remove(pair.Key);names.Remove(pair.Value);}

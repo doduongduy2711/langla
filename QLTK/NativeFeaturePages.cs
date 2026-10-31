@@ -83,6 +83,7 @@ namespace TGLL.Preview {
   readonly Dictionary<string,string> pendingButtons=new Dictionary<string,string>();readonly Dictionary<string,Dictionary<string,object>> edits=new Dictionary<string,Dictionary<string,object>>();
   readonly HashSet<string> activeEdits=new HashSet<string>();TaskCompletionSource<bool> flushCompletion;
   readonly Dictionary<string,GridData> grids=new Dictionary<string,GridData>();readonly System.Windows.Forms.Timer debounce=new System.Windows.Forms.Timer();
+  string lastFrame="";readonly System.Web.Script.Serialization.JavaScriptSerializer frameJson=new System.Web.Script.Serialization.JavaScriptSerializer{MaxJsonLength=8388608,RecursionLimit=64};
   Dictionary<string,object> context=new Dictionary<string,object>();bool applying,flushing;string structure="",account="";
   public string ContextAccount{get{return account;}}
   public async Task CommitForAccountSwitch(){foreach(var text in widgets.Values.OfType<TextBox>())CaptureText(text);foreach(var grid in widgets.Values.OfType<DataGridView>())grid.EndEdit();Enabled=false;await FlushAsync();}
@@ -96,7 +97,9 @@ namespace TGLL.Preview {
   protected override void Dispose(bool disposing){if(disposing){debounce.Dispose();foreach(var picture in widgets.Values.OfType<PictureBox>())if(picture.Image!=null)picture.Image.Dispose();}base.Dispose(disposing);}
   public Dictionary<string,object> GridViews(){var result=new Dictionary<string,object>();foreach(var pair in widgets){var grid=pair.Value as DataGridView;if(grid==null)continue;result[pair.Key]=new Dictionary<string,object>{{"first",Math.Max(0,grid.FirstDisplayedScrollingRowIndex-10)},{"count",Math.Max(50,grid.DisplayedRowCount(false)+25)}};}return result;}
   public void ApplyFrame(Dictionary<string,object> frame,Dictionary<string,object> requestContext){
-   applying=true;try{
+   string fingerprint=NodeText(requestContext,"account_id")+"|"+frameJson.Serialize(Value(frame,"children"))+"|"+frameJson.Serialize(Value(frame,"operations"))+"|"+JsonValue.Flag(frame,"modal");
+   if(fingerprint==lastFrame&&edits.Count==0&&activeEdits.Count==0&&!flushing){context=new Dictionary<string,object>(requestContext);Enabled=!JsonValue.Flag(frame,"modal");return;}
+   applying=true;SuspendLayout();try{
     string nextAccount=NodeText(requestContext,"account_id"),shape=Shape(JsonValue.Array(Value(frame,"children")));
     if(nextAccount!=account){account=nextAccount;}
     context=new Dictionary<string,object>(requestContext);
@@ -104,7 +107,7 @@ namespace TGLL.Preview {
     if(shape!=structure){foreach(Control c in Controls.Cast<Control>().ToArray())c.Dispose();widgets.Clear();nodes.Clear();grids.Clear();structure=shape;Build(this,JsonValue.Array(Value(frame,"children")));}
     MergeWidgets(JsonValue.Array(Value(frame,"children")));Enabled=!JsonValue.Flag(frame,"modal");
     int right=0,bottom=0;foreach(Control c in Controls){right=Math.Max(right,c.Right+12);bottom=Math.Max(bottom,c.Bottom+12);}AutoScrollMinSize=new Size(right,bottom);
-   }finally{applying=false;}
+   lastFrame=fingerprint;}finally{ResumeLayout(false);applying=false;}
   }
   bool Pending(string id){return activeEdits.Contains(account+"|"+id)||edits.Values.Any(p=>NodeText(p,"control_id")==id&&NodeText(JsonValue.Map(Value(p,"_context")),"account_id")==account);}
   void Queue(string id,Dictionary<string,object> change,bool immediate){if(applying||!Enabled)return;change["control_id"]=id;change["_context"]=new Dictionary<string,object>(context);string key=account+"|"+id+"|"+NodeText(change,"event")+"|"+NodeText(change,"index")+"|"+NodeText(change,"row")+"|"+NodeText(change,"column");edits[key]=change;if(immediate)FlushEdits();else{debounce.Stop();debounce.Start();}}
