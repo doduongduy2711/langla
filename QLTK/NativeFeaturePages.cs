@@ -68,6 +68,12 @@ namespace TGLL.Preview {
   }
   void ResetFeatures(){foreach(var panel in featurePanels.Values)if(panel!=globalPanel)panel.Parent.Dispose();featurePanels.Clear();uiSession="";globalRefreshAt=DateTime.MinValue;featureDirty=true;}
   async Task<Dictionary<string,object>> SendFeatureEvent(string page,Dictionary<string,object> context,Dictionary<string,object> change){
+   string buttonText=JsonValue.Text(change,"button_text");
+   if(page=="global"&&JsonValue.Text(change,"event")=="click"&&(buttonText=="Chọn tất cả"||buttonText=="Bỏ chọn")){
+    picked.Clear();if(buttonText=="Chọn tất cả")foreach(var row in accounts)picked.Add(row.Id);
+    if(selectedOnly.Checked)ApplyFilter();else{grid.InvalidateColumn(1);UpdateSummary();}
+    globalRefreshAt=DateTime.MinValue;RequestFeatureRefresh();return new Dictionary<string,object>{{"ok",true}};
+   }
    await featureCommands.WaitAsync();
    try{
     if(closing)return new Dictionary<string,object>();notice.Text="Đang áp dụng thao tác; giao diện vẫn có thể cuộn và chuyển tab.";
@@ -125,7 +131,7 @@ namespace TGLL.Preview {
    var clickContext=new Dictionary<string,object>(context);
    try{
     foreach(var grid in widgets.Values.OfType<DataGridView>())grid.EndEdit();foreach(var text in widgets.Values.OfType<TextBox>())if(text.Modified)CaptureText(text);
-    await FlushAsync();if(NodeText(clickContext,"account_id")!=account)throw new InvalidOperationException("Tài khoản đã thay đổi; chọn lại thao tác.");var result=await send(PageId,clickContext,new Dictionary<string,object>{{"control_id",id},{"event","click"},{"guards",Guards()}});
+    await FlushAsync();if(NodeText(clickContext,"account_id")!=account)throw new InvalidOperationException("Tài khoản đã thay đổi; chọn lại thao tác.");var result=await send(PageId,clickContext,new Dictionary<string,object>{{"control_id",id},{"event","click"},{"guards",Guards()},{"button_text",NodeText(nodes[id],"text")}});
     string operation=NodeText(result,"operation_id");if(operation.Length>0){pendingButtons[id]=operation;widgets[id].Enabled=false;}refresh();
    }catch{refresh();}
   }
