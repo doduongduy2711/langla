@@ -129,7 +129,7 @@ namespace TGLL.Preview {
    else{accounts.Clear();accounts.AddRange(next);var ids=new HashSet<string>(next.Select(r=>r.Id),StringComparer.Ordinal);picked.IntersectWith(ids);ApplyFilter();}
    if(JsonValue.Get(response,"preview_version")!=null){capable=true;activity.Text=JsonValue.Text(response,"activity");}
    else activity.Text="Đang xem danh sách từ bộ điều phối cũ. Có thể cuộn/tìm kiếm; cập nhật QLTK lên v290 rồi mở lại để bật kênh C#.";
-   lastSuccess=DateTime.Now;featureSupported=Convert.ToInt32(JsonValue.Get(response,"ui_version")??0)>=2;nativeModal=JsonValue.Flag(response,"modal");grid.Columns[8].Visible=JsonValue.Flag(response,"show_passwords");UpdateButtons();UpdateSummary();RequestFeatureRefresh();
+   lastSuccess=DateTime.Now;featureSupported=Convert.ToInt32(JsonValue.Get(response,"ui_version")??0)>=2;bool modalNow=JsonValue.Flag(response,"modal");if(modalNow&&!nativeModal)FocusNativeDialog();nativeModal=modalNow;grid.Columns[8].Visible=JsonValue.Flag(response,"show_passwords");UpdateButtons();UpdateSummary();RequestFeatureRefresh();
   }
   public async void PollNow(){
    if(polling||closing||connection==null)return;polling=true;

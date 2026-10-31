@@ -69,7 +69,7 @@ namespace TGLL.Preview {
    await featureCommands.WaitAsync();
    try{
     if(closing)return new Dictionary<string,object>();notice.Text="Đang áp dụng thao tác; giao diện vẫn có thể cuộn và chuyển tab.";
-    if(backendPid>0)AllowSetForegroundWindow(backendPid);var result=await FeatureCall("manager_ui_event",Merge(context,change));if(!closing){notice.Text=JsonValue.Text(result,"operation_id").Length>0?"Đã xếp thao tác; đợi trạng thái hoặc hoàn tất cửa sổ phụ nếu có.":"Đã áp dụng thay đổi.";RequestFeatureRefresh();}return result;
+    if(backendPid>0)AllowSetForegroundWindow(backendPid);var result=await FeatureCall("manager_ui_event",Merge(context,change));if(!closing){notice.Text=JsonValue.Text(result,"operation_id").Length>0?"Đã xếp thao tác; đợi trạng thái hoặc hoàn tất cửa sổ phụ nếu có.":"Đã áp dụng thay đổi.";RequestFeatureRefresh();if(JsonValue.Text(change,"event")=="click"){await Task.Delay(150);if(!closing)FocusNativeDialog();}}return result;
    }catch(Exception error){if(!closing){notice.Text="Chưa áp dụng: "+error.Message;RequestFeatureRefresh();}throw;}
    finally{featureCommands.Release();}
   }
