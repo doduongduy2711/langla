@@ -1,5 +1,5 @@
 ﻿$cuongThiPage=New-Object Windows.Forms.TabPage;$cuongThiPage.Text='Auto Cương Thi';$cuongThiPage.BackColor=$form.BackColor;$cuongThiPage.AutoScroll=$true;$tabs.TabPages.Add($cuongThiPage)
-$null=Ui-Label 'Có Cương Thi sống trong map và HP từ 10 triệu trở lên: bật treo. HP dưới 10 triệu, quái chết hoặc chưa đọc được HP: tắt treo.' $cuongThiPage 16 16 650 50
+$null=Ui-Label 'Có Cương Thi sống trong map và HP từ ngưỡng đã nhập trở lên: bật treo. HP dưới ngưỡng đã nhập, quái chết hoặc chưa đọc được HP: tắt treo.' $cuongThiPage 16 16 650 50
 $null=Ui-Label 'Chọn map/khu riêng bên dưới. QLTK đến đúng vị trí và khu trước khi săn; không cần bật Up ở Auto bãi quái. Nếu có nhiều Cương Thi, lấy HP thấp nhất.' $cuongThiPage 16 76 650 55
 $script:cuongThiLoading=$false;$script:cuongThiShownAccount=''
 $cuongThiCheck=New-Object Windows.Forms.CheckBox;$cuongThiCheck.Text='Bật Auto Cương Thi cho tài khoản đang chọn';$cuongThiCheck.SetBounds(16,140,650,27);$cuongThiPage.Controls.Add($cuongThiCheck)
@@ -69,3 +69,12 @@ function Update-CuongThiUi {
 $cuongThiMove.Add_CheckedChanged({Enable-CuongThiDestinationControls})
 $cuongThiCheck.Add_CheckedChanged({if($script:cuongThiLoading -or !$grid.SelectedRows.Count){return};try{Set-CuongThiPreference $grid.SelectedRows[0] $cuongThiCheck.Checked}catch{$status.Text=$_.Exception.GetBaseException().Message};Update-CuongThiUi})
 $grid.Add_SelectionChanged({Update-CuongThiUi});Update-CuongThiUi
+
+$null=Ui-Label 'Dừng treo khi HP dưới (mặc định 20 triệu):' $cuongThiPage 16 580 330 26
+$cuongThiHp=New-Object Windows.Forms.NumericUpDown
+$cuongThiHp.Minimum=1;$cuongThiHp.Maximum=2000000000;$cuongThiHp.Increment=1000000;$cuongThiHp.ThousandsSeparator=$true
+$cuongThiHp.Value=20000000
+if($script:settings.PSObject.Properties['cuongThiStopHp'] -and [long]$script:settings.cuongThiStopHp -ge 1 -and [long]$script:settings.cuongThiStopHp -le 2000000000){$cuongThiHp.Value=[decimal]$script:settings.cuongThiStopHp}
+[TGLL.NativeBackend]::CuongThiStopHp=[long]$cuongThiHp.Value
+$cuongThiHp.SetBounds(350,580,200,26);$cuongThiPage.Controls.Add($cuongThiHp)
+$cuongThiHp.Add_ValueChanged({[TGLL.NativeBackend]::CuongThiStopHp=[long]$cuongThiHp.Value;$script:settings | Add-Member NoteProperty cuongThiStopHp ([long]$cuongThiHp.Value) -Force;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}})

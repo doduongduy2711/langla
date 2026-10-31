@@ -14,7 +14,7 @@ $script:socketToken=''
 function Normalize-Proxy($value) {
     if ($null -eq $value) { return $null }
     if ($value -is [string]) {
-        $text=$value.Trim();$protocol='http';if($text -match '^(http|socks5)://'){$protocol=$Matches[1];$text=$text.Substring($Matches[0].Length)}
+        $text=$value.Trim();if(!$text.Length){return $null};$protocol='http';if($text -match '^(http|socks5)://'){$protocol=$Matches[1];$text=$text.Substring($Matches[0].Length)}
         $parts=$text.Split([char[]]':',4)
         if ($parts.Count -notin @(2,4)) {throw 'proxy_invalid: dùng host:port hoặc host:port:username:password.'}
         $userName=''; $password=''
@@ -41,7 +41,7 @@ function Protect-Proxy($proxy) {
     [pscustomobject]@{type=$proxy.type;host=$proxy.host;port=$proxy.port;username=$proxy.username;secret=$secret}
 }
 function Read-Proxy($account) {
-    if ($null -eq $account.proxy) { return $null }
+    if ($null -eq $account.proxy -or ($account.proxy -is [string] -and [string]::IsNullOrWhiteSpace($account.proxy)) -or ($account.proxy -isnot [string] -and [string]::IsNullOrWhiteSpace([string]$account.proxy.host))) { return $null }
     $password=''; if ($account.proxy.secret) { $password=Unprotect-Password $account.proxy.secret }
     Normalize-Proxy ([pscustomobject]@{type=$account.proxy.type;host=$account.proxy.host;port=$account.proxy.port;username=$account.proxy.username;password=$password})
 }

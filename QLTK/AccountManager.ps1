@@ -265,7 +265,7 @@ function Edit-Account($existing) {
         try {
             if ($quickProxy.Text.Trim().Length) {$null=Normalize-Proxy $quickProxy.Text}
             elseif ($ph.Text.Trim().Length) {$null=Normalize-Proxy ([pscustomobject]@{type='http';host=$ph.Text;port=$pp.Text;username=$pu.Text;password=$ps.Text})}
-            elseif ($pu.Text.Length -or $ps.Text.Length) {throw 'Nhập host proxy hoặc xóa username/password proxy.'}
+            else {$pu.Clear();$ps.Clear()}
         } catch {Show-Error $_.Exception.Message;return}
         $dialog.DialogResult='OK'
     }); $dialog.Controls.Add($ok); $dialog.AcceptButton=$ok
