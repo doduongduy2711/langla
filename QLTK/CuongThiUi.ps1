@@ -66,7 +66,13 @@ function Update-CuongThiUi {
  }
  if($cuongThiReport.Text -ne $text){$cuongThiReport.Text=$text}
 }
-$cuongThiMove.Add_CheckedChanged({Enable-CuongThiDestinationControls})
+function Set-CuongThiMoveFromUi {
+ Enable-CuongThiDestinationControls
+ if($script:cuongThiLoading -or !$cuongThiMove.Checked -or !$grid.SelectedRows.Count){return}
+ try{Set-CuongThiPreference $grid.SelectedRows[0] $true;Update-CuongThiUi}
+ catch{$cuongThiInputHint.Text=$_.Exception.GetBaseException().Message}
+}
+$cuongThiMove.Add_CheckedChanged({Set-CuongThiMoveFromUi})
 $cuongThiCheck.Add_CheckedChanged({if($script:cuongThiLoading -or !$grid.SelectedRows.Count){return};try{Set-CuongThiPreference $grid.SelectedRows[0] $cuongThiCheck.Checked}catch{$status.Text=$_.Exception.GetBaseException().Message};Update-CuongThiUi})
 $grid.Add_SelectionChanged({Update-CuongThiUi});Update-CuongThiUi
 
