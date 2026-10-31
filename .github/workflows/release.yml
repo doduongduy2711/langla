@@ -1,7 +1,7 @@
 name: Build and release QLTK
 on:
   push:
-    tags: ['v*']
+    tags: ['v*', 'csharp-v*']
   workflow_dispatch:
 permissions:
   contents: write
@@ -13,7 +13,7 @@ jobs:
       - name: Validate release tag
         shell: powershell
         run: |
-          if ($env:GITHUB_REF_NAME -notmatch '^v([1-9][0-9]{0,8})$') { throw 'Run this workflow on a version tag such as v209' }
+          if ($env:GITHUB_REF_NAME -notmatch '^(?:csharp-)?v([1-9][0-9]{0,8})$') { throw 'Run this workflow on a version tag such as v209' }
           "QLTK_VERSION=$($Matches[1])" >> $env:GITHUB_ENV
       - name: Windows Forms regression checks
         shell: powershell
@@ -202,5 +202,5 @@ jobs:
             $asset=@($release.assets | Where-Object {$_.name -eq $name})
             if($asset.Count -ne 1 -or $asset[0].size -ne (Get-Item (Join-Path 'dist' $name)).Length){throw ('Asset size mismatch: '+$name)}
           }
-          gh release edit $env:GITHUB_REF_NAME --draft=false --repo $env:GITHUB_REPOSITORY
+          if($env:GITHUB_REF_NAME -like 'csharp-v*'){gh release edit $env:GITHUB_REF_NAME --draft=false --latest=false --repo $env:GITHUB_REPOSITORY}else{gh release edit $env:GITHUB_REF_NAME --draft=false --repo $env:GITHUB_REPOSITORY}
           if($LASTEXITCODE -ne 0){throw 'Could not publish verified release'}

@@ -19,10 +19,10 @@ namespace TGLL.Preview {
    var header=new Panel{Dock=DockStyle.Fill};tools.Dock=DockStyle.Top;tools.Height=34;tools.Visible=true;header.Controls.Add(tools);
    globalPanel=new RemoteFeaturePanel("global",SendFeatureEvent,RequestFeatureRefresh){Dock=DockStyle.Fill};
    header.Controls.Add(globalPanel);globalPanel.BringToFront();tools.BringToFront();layout.Controls.Add(header,0,0);layout.RowStyles[0].Height=159;
-   tools.Controls.Clear();SetupButton(tools,nativeDialog,"Cửa sổ phụ",FocusNativeDialog,105);
-   var update=new Button();SetupButton(tools,update,"Cập nhật giao diện",async delegate{
+   tools.Controls.Clear();SetupButton(tools,nativeDialog,"Mở hộp thoại",FocusNativeDialog,105);
+   var update=new Button();SetupButton(tools,update,"Cập nhật C#",async delegate{
     update.Enabled=false;try{notice.Text="Đang kiểm tra bản C# trên GitHub...";string stage=await FrontendUpdate.Download();if(stage==null){notice.Text="Giao diện C# đã là bản mới nhất.";return;}var owner=connection as AutoStartingConnection;if(owner==null)throw new IOException("Chưa chọn Data.");
-     if(MessageBox.Show("Đã tải và kiểm tra bản mới. Mở lại cửa sổ C# ngay? Bộ điều phối và game vẫn chạy.","Cập nhật giao diện",MessageBoxButtons.YesNo)==DialogResult.Yes){FrontendUpdate.Start(stage,owner.DataDirectory);Close();}
+     if(MessageBox.Show("Đã tải bản C# mới. Cần đóng các game trước khi cập nhật cả giao diện và bộ điều phối. Tiếp tục mở lại QLTK C#?","Cập nhật C#",MessageBoxButtons.YesNo)==DialogResult.Yes){FrontendUpdate.Start(stage,owner.DataDirectory);Close();}
     }catch(Exception e){notice.Text="Chưa cập nhật: "+e.Message;}finally{if(!IsDisposed)update.Enabled=true;}
    },160);
   }
@@ -48,7 +48,7 @@ namespace TGLL.Preview {
      if(JsonValue.Text(frame,"ui_session")!=uiSession){ResetFeatures();return;}
      if(Object.ReferenceEquals(featureTabs.SelectedTab.Tag,active)&&account==FeatureAccount()){
       if(!JsonValue.Flag(frame,"modal")&&JsonValue.Text(frame,"account_id")!=account){RequestFeatureRefresh();return;}
-      active.ApplyFrame(frame,context);if(JsonValue.Flag(frame,"modal"))notice.Text="Cửa sổ phụ đang mở: "+JsonValue.Text(frame,"modal_title")+". Hoàn tất cửa sổ đó trước khi đổi cấu hình.";
+      active.ApplyFrame(frame,context);if(JsonValue.Flag(frame,"modal"))notice.Text="Mở hộp thoại đang mở: "+JsonValue.Text(frame,"modal_title")+". Hoàn tất cửa sổ đó trước khi đổi cấu hình.";
      }
     }
     if(globalPanel.ContextAccount!=FeatureAccount()||(DateTime.UtcNow-globalRefreshAt).TotalSeconds>=10){
