@@ -16,9 +16,9 @@ namespace TGLL.Preview {
    layout.RowStyles[3]=new RowStyle(SizeType.Absolute,245);layout.RowStyles[4]=new RowStyle(SizeType.Percent,100);
    layout.Controls.Remove(information);featureTabs.Dock=DockStyle.Fill;featureTabs.Multiline=true;featureTabs.Appearance=TabAppearance.Buttons;var overview=new TabPage("Thông tin tài khoản");overview.Controls.Add(information);featureTabs.TabPages.Add(overview);layout.Controls.Add(featureTabs,0,4);featureTabs.SelectedIndexChanged+=delegate{RequestFeatureRefresh();};
    var tools=layout.GetControlFromPosition(0,0);layout.Controls.Remove(tools);
-   var header=new Panel{Dock=DockStyle.Fill};tools.Dock=DockStyle.Top;tools.Height=34;tools.Visible=true;header.Controls.Add(tools);
+   var header=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=2,Margin=Padding.Empty,Padding=Padding.Empty};header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));header.RowStyles.Add(new RowStyle(SizeType.Absolute,38));header.RowStyles.Add(new RowStyle(SizeType.Percent,100));tools.Dock=DockStyle.Fill;tools.Margin=Padding.Empty;tools.Visible=true;header.Controls.Add(tools,0,0);
    globalPanel=new RemoteFeaturePanel("global",SendFeatureEvent,RequestFeatureRefresh){Dock=DockStyle.Fill};
-   header.Controls.Add(globalPanel);globalPanel.BringToFront();tools.BringToFront();layout.Controls.Add(header,0,0);layout.RowStyles[0].Height=159;
+   globalPanel.Margin=Padding.Empty;header.Controls.Add(globalPanel,0,1);layout.Controls.Add(header,0,0);layout.RowStyles[0].Height=169;
    tools.Controls.Clear();SetupButton(tools,nativeDialog,"Mở hộp thoại",FocusNativeDialog,105);
    var update=new Button();SetupButton(tools,update,"Cập nhật C#",async delegate{
     update.Enabled=false;try{notice.Text="Đang kiểm tra bản C# trên GitHub...";string stage=await FrontendUpdate.Download();if(stage==null){notice.Text="Giao diện C# đã là bản mới nhất.";return;}var owner=connection as AutoStartingConnection;if(owner==null)throw new IOException("Chưa chọn Data.");
