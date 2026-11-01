@@ -299,7 +299,7 @@ function Resize-UiLayout {
     $bottom.SetBounds(6,($h-93),($w-12),63)
     $bw=[int][Math]::Floor(($bottom.Width-30)/6)
     for($i=0;$i -lt $bottomButtons.Count;$i++){Ui-Place $bottomButtons[$i] $bottom (($i%6)*($bw+6)) ([int][Math]::Floor($i/6)*31) $bw 27}
-    $status.SetBounds(8,($h-27),($w-16),24);$status.Anchor='Bottom,Left,Right'
+    $status.SetBounds(8,($h-27),($w-126),24);$status.Anchor='Bottom,Left,Right';if($tabMenuButton){$tabMenuButton.SetBounds(($w-112),($h-28),104,25)}
     }finally{$form.ResumeLayout()}
 }
 $form.Add_Resize({Resize-UiLayout});$grid.Add_SelectionChanged({Update-UiSummary})

@@ -170,12 +170,9 @@ jobs:
       - name: Verify NET Framework 4.8 launcher
         shell: powershell
         run: ./scripts/Test-Net48Release.ps1 -OutputDirectory (Join-Path $pwd 'dist')
-      - name: Test and build separate CSharp frontend preview
+      - name: Check tab visibility menu
         shell: powershell
-        run: |
-          ./scripts/Test-NativePreview.ps1
-          ./scripts/Build-NativePreview.ps1 -OutputDirectory (Join-Path $pwd 'dist/native-preview')
-          Compress-Archive -Path dist/native-preview/* -DestinationPath dist/QLTK-CSharp-Preview.zip
+        run: ./scripts/Test-TabMenu.ps1
       - name: Build standalone OCR portal
         shell: powershell
         run: ./scripts/Build-OcrPortal.ps1 -RuntimeArchive (Join-Path $pwd 'dist/QLTK-ocr-runtime-win64.zip') -OutputDirectory (Join-Path $pwd 'dist')
@@ -186,7 +183,7 @@ jobs:
         run: |
           gh release create $env:GITHUB_REF_NAME --draft --repo $env:GITHUB_REPOSITORY --title "QLTK $env:GITHUB_REF_NAME" --generate-notes
           if($LASTEXITCODE -ne 0){throw 'Could not create draft release'}
-          $assets=@('QLTK-update.zip','QLTK-portable.zip','QLTK-net48-launcher.zip','QLTK-ocr-runtime-win64.zip','OCR-Portal-portable.zip','QLTK-CSharp-Preview.zip')
+          $assets=@('QLTK-update.zip','QLTK-portable.zip','QLTK-net48-launcher.zip','QLTK-ocr-runtime-win64.zip','OCR-Portal-portable.zip')
           foreach($name in $assets){
             $uploaded=$false
             for($attempt=1;$attempt -le 3;$attempt++){

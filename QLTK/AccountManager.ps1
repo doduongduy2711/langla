@@ -580,6 +580,7 @@ function Update-ManagerStatus([bool]$changesOnly=$false) {
     if($script:liveUpdateMessageUntil -and [datetime]::UtcNow -lt $script:liveUpdateMessageUntil){$status.Text=$script:liveUpdateMessage}
 }
 Initialize-LiveUpdate
+. (Join-Path $PSScriptRoot 'TabMenuUi.ps1')
 if($NativeUiExport){
     if(!$UiTest){throw 'UI export requires isolated UiTest data'}
     Add-Type -Path (Join-Path $PSScriptRoot 'NativeUiBridge.cs') -ReferencedAssemblies System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll,System.Web.Extensions.dll
