@@ -1,5 +1,16 @@
 ﻿using System;using System.Drawing;using System.Reflection;using System.Windows.Forms;using System.Windows.Forms.VisualStyles;
 namespace TGLL {
+ public sealed class AccountPrivacy {
+  readonly DataGridView grid;bool enabled;
+  public AccountPrivacy(DataGridView grid){this.grid=grid;grid.CellFormatting+=FormatCell;}
+  public bool Enabled {get{return enabled;}set{if(enabled==value)return;enabled=value;foreach(string name in new[]{"username","character","proxy"})if(grid.Columns.Contains(name))grid.InvalidateColumn(grid.Columns[name].Index);}}
+  public string Format(string column,string value){
+   if(!enabled||(column!="username"&&column!="character"&&column!="proxy")||String.IsNullOrEmpty(value)||value=="—"||value=="Không dùng")return value;
+   if(value.Length<=2)return "***";
+   int edge=value.Length>4?2:1;return value.Substring(0,edge)+"***"+value.Substring(value.Length-edge);
+  }
+  void FormatCell(object sender,DataGridViewCellFormattingEventArgs e){if(!enabled||e.RowIndex<0||e.ColumnIndex<0)return;string name=grid.Columns[e.ColumnIndex].Name;if(name!="username"&&name!="character"&&name!="proxy")return;e.Value=Format(name,Convert.ToString(e.Value));e.FormattingApplied=true;}
+ }
  public sealed class ResponsiveGrid : DataGridView {
   public ResponsiveGrid(){DoubleBuffered=true;AutoSizeRowsMode=DataGridViewAutoSizeRowsMode.None;}
   protected override void WndProc(ref Message message){

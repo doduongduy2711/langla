@@ -277,7 +277,9 @@ function Update-UiSummary {
     $summaryLabel.Text="Tài khoản: $total  |  Đang mở: $active`r`nĐang chờ: $waiting  |  Lỗi: $failed`r`nĐã chọn: $(@($grid.Rows | Where-Object {$_.Cells['pick'].Value -eq $true}).Count)"
     if(!$grid.SelectedRows.Count){$detailsLabel.Text='Chọn một tài khoản trong bảng.';return}
     $row=$grid.SelectedRows[0];$a=$row.Tag
-    $detailsLabel.Text="[QLTK] $($a.username)`r`nTrạng thái: $($row.Cells['status'].Value)`r`nProxy: $($row.Cells['proxy'].Value)`r`nĐăng nhập trực tiếp: $($autoLoginCheck.Checked)`r`nNhân vật: số 1"
+    $displayAccount=[string]$a.username;$displayProxy=[string]$row.Cells['proxy'].Value
+    if($script:accountPrivacy){$displayAccount=$script:accountPrivacy.Format('username',$displayAccount);$displayProxy=$script:accountPrivacy.Format('proxy',$displayProxy)}
+    $detailsLabel.Text="[QLTK] $displayAccount`r`nTrạng thái: $($row.Cells['status'].Value)`r`nProxy: $displayProxy`r`nĐăng nhập trực tiếp: $($autoLoginCheck.Checked)`r`nNhân vật: số 1"
     if($script:accountJobs.ContainsKey([string]$a.id)){
         $j=Get-AccountJob $script:accountJobs[[string]$a.id]
         $detailsLabel.Text+="`r`nPID: $($j.ProcessId)`r`nBước: $($j.Stage)"
@@ -293,7 +295,7 @@ function Resize-UiLayout {
     $form.SuspendLayout()
     try {
     $top.SetBounds(6,6,340,106);$basic.SetBounds(350,3,200,109);$options.SetBounds(556,3,($w-562),109)
-    $autoReconnect.Width=[Math]::Max(250,$options.Width-24)
+    $autoReconnect.Width=220
     $gridHeight=[Math]::Max(180,[Math]::Min(320,[int](($h-380)*0.75)));$tabTop=118+$gridHeight+8
     $grid.SetBounds(6,118,($w-12),$gridHeight)
     $tabs.SetBounds(6,$tabTop,($w-268),($h-$tabTop-101));$detailsGroup.SetBounds(($w-256),$tabTop,250,($h-$tabTop-101))
