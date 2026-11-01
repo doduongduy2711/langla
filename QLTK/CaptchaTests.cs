@@ -23,6 +23,16 @@ class CaptchaTests {
   NativeBackend.ConfigureCaptcha(true,"missing-python","missing-script",System.IO.Path.GetTempPath());
   var refresh=new NativeJob(System.Reflection.Assembly.GetExecutingAssembly().Location,"fixture","",null,true){CaptchaUnreadable=true};
   DateTime refreshNow=DateTime.UtcNow;C(NativeBackend.CanRefreshCaptcha(refresh,refreshNow),"unreadable image not eligible");refresh.CaptchaSubmitAt=refreshNow;C(!NativeBackend.CanRefreshCaptcha(refresh,refreshNow.AddMilliseconds(1499)),"refresh too fast");C(NativeBackend.CanRefreshCaptcha(refresh,refreshNow.AddMilliseconds(1500)),"refresh cadence wrong");refresh.CaptchaEpisodeTries=5;C(!NativeBackend.CanRefreshCaptcha(refresh,refreshNow.AddSeconds(5)),"more than five attempts");refresh.CaptchaEpisodeTries=0;refresh.CaptchaManual=true;C(!NativeBackend.CanRefreshCaptcha(refresh,refreshNow.AddSeconds(5)),"manual result overwritten");refresh.CaptchaManual=false;refresh.CaptchaUnreadable=false;C(!NativeBackend.CanRefreshCaptcha(refresh,refreshNow.AddSeconds(5)),"accepted OCR repeated");
+  var waiting=new NativeJob(System.Reflection.Assembly.GetExecutingAssembly().Location,"fixture-confirm-wait","",null,true){State="opened",CaptchaFrame=new CaptchaFrame{Popup=1,Image=2,Hash=3},CurseActive=true,CurseReadAt=DateTime.UtcNow,CaptchaManual=true,CaptchaCode="AB12",CaptchaEpisodeTries=1,CaptchaSubmitAt=refreshNow};
+  waiting.CaptchaAttemptKey=waiting.CaptchaFrame.Key;
+  C(!NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddMilliseconds(9999))&&waiting.CaptchaAttemptKey!="","retried before response deadline");
+  C(NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddSeconds(10))&&waiting.CaptchaAttemptKey==""&&waiting.CaptchaManual&&waiting.CaptchaCode=="AB12","completed callback did not schedule one bounded retry");
+  waiting.CaptchaAttemptKey=waiting.CaptchaFrame.Key;waiting.CaptchaSubmitTimedOut=false;waiting.CaptchaEpisodeTries=2;
+  C(NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddSeconds(10))&&waiting.CaptchaAttemptKey==waiting.CaptchaFrame.Key&&!waiting.CaptchaManual,"second callback retried indefinitely");
+  C(NativeBackend.GetCaptchaReview(waiting).CanSubmit,"manual correction remained locked after response timeout");
+  C(NativeBackend.QueueManualCaptcha(waiting,waiting.CaptchaFrame.Key,"CD34")&&!waiting.CaptchaSubmitTimedOut,"manual correction did not reset timeout");
+  waiting.CaptchaAttemptKey=waiting.CaptchaFrame.Key;waiting.CaptchaSubmitTimedOut=false;
+  C(NativeBackend.CheckCaptchaSubmitWait(waiting,2,2,refreshNow.AddSeconds(60))&&!waiting.CaptchaSubmitTimedOut&&waiting.CaptchaAttemptKey==waiting.CaptchaFrame.Key,"running callback was overwritten");
   string bitmap=System.IO.Path.GetTempFileName();try{
    var colors=new CaptchaFrame{Width=2,Height=2,PixelOffset=40,Raw=new byte[]{1,2,3,255,4,5,6,255,7,8,9,255,10,11,12,255}};
    NativeBackend.SaveCaptchaBitmap(colors,bitmap);byte[] bmp=System.IO.File.ReadAllBytes(bitmap);C(bmp[54]==3&&bmp[55]==2&&bmp[56]==1&&bmp[62]==9,"Unity bottom-up RGBA bitmap flipped or wrong colors");
