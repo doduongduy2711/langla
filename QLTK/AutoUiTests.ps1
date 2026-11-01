@@ -62,6 +62,6 @@ $script:accounts+=@($second);Refresh-Grid;Enable-AllAuto
 if(@($grid.Rows | Where-Object {$_.Cells['auto'].Value -eq $true}).Count -ne 2){throw 'Auto all failed'}
 $grid.ClearSelection();$grid.Rows[1].Selected=$true;Update-GameSettingsUi
 if($script:gameSettingControls.Count){throw 'Account selection leaked setting controls'}
-if($autoAllButton.Text -ne 'Bật auto tất cả' -or $bottomButtons.Count -ne 12 -or $autoAllButton.Bounds.Right -gt $bottom.Width){throw 'Auto all layout failed'}
+if($autoAllButton.Text -ne 'Bật auto tất cả' -or $bottomButtons.Count -ne 5 -or $autoAllButton.Bounds.Right -gt $bottom.Width){throw 'Auto all layout failed'}
 $script:accounts=@($script:accounts[0]);Refresh-Grid
 Write-Output 'PASS: combined idle/train Auto, selected skills, pending/NPC/resume/untick, all-account toggle, four setting tabs, account isolation, saved choices, native queue and validation.'

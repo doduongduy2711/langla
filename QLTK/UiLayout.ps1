@@ -216,7 +216,8 @@ $detailsLabel=Ui-Label '' $detailsGroup 12 22 260 224;$detailsLabel.Anchor='Top,
 $bottom=New-Object Windows.Forms.Panel;$form.Controls.Add($bottom)
 $bottomOpen=Ui-NewButton 'Mở đã chọn' {$bulkOpen.PerformClick()}
 $bottomEdit=Ui-NewButton 'Sửa đã chọn' {$buttons[1].PerformClick()}
-$bottomButtons=@($bottomOpen,$cancelButton,$replayNpcButton,$npcIdsButton,$menuLogButton,$buttons[3],$buttons[4],$buttons[5],$bottomEdit)
+foreach($b in @($bottomOpen,$cancelButton,$replayNpcButton,$buttons[3],$buttons[4],$buttons[5],$bottomEdit)){$b.Visible=$false}
+$bottomButtons=@($npcIdsButton,$menuLogButton)
 $buttons[3].Text='Copy username';$buttons[4].Text='Copy password'
 foreach($b in $topButtons+$bottomButtons+@($clearUpAllButton,$importShortcut,$editShortcut,$proxyEdit,$proxySettings,$logShortcut,$npcShortcut)) {$b.Font=$form.Font;$b.ForeColor=[Drawing.Color]::FromArgb(0,35,75);$b.UseVisualStyleBackColor=$true}
 function Get-OpenGamePids {return [TGLL.ManagedGames]::RunningProcessIds()}
@@ -297,8 +298,9 @@ function Resize-UiLayout {
     $grid.SetBounds(6,118,($w-12),$gridHeight)
     $tabs.SetBounds(6,$tabTop,($w-268),($h-$tabTop-101));$detailsGroup.SetBounds(($w-256),$tabTop,250,($h-$tabTop-101))
     $bottom.SetBounds(6,($h-93),($w-12),63)
-    $bw=[int][Math]::Floor(($bottom.Width-30)/6)
-    for($i=0;$i -lt $bottomButtons.Count;$i++){Ui-Place $bottomButtons[$i] $bottom (($i%6)*($bw+6)) ([int][Math]::Floor($i/6)*31) $bw 27}
+    $columns=[Math]::Max(1,[Math]::Min(6,$bottomButtons.Count))
+    $bw=[int][Math]::Floor(($bottom.Width-6*($columns-1))/$columns)
+    for($i=0;$i -lt $bottomButtons.Count;$i++){Ui-Place $bottomButtons[$i] $bottom (($i%$columns)*($bw+6)) ([int][Math]::Floor($i/$columns)*31) $bw 27}
     $status.SetBounds(8,($h-27),($w-126),24);$status.Anchor='Bottom,Left,Right';if($tabMenuButton){$tabMenuButton.SetBounds(($w-112),($h-28),104,25)}
     }finally{$form.ResumeLayout()}
 }
