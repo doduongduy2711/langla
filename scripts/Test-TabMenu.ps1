@@ -24,10 +24,19 @@ $tabs.SelectedTab=$train;$script:managerTabItems['Train quái'].PerformClick()
 if($tabs.TabPages.Contains($train) -or $train.IsDisposed -or !$child.Checked -or !$tabs.SelectedTab){throw 'Hiding selected page destroyed state or selection'}
 $saved=Read-JsonData $script:tabVisibilityPath
 if(@($saved.hidden) -notcontains 'Train quái' -or @($saved.hidden) -notcontains 'Auto Cương Thi'){throw 'Changes not persisted'}
-foreach($page in $script:managerTabPages | Select-Object -Skip 4){Set-ManagerTabVisible $page $false}
-if($tabs.TabPages.Count -ne 4 -or !$tabMenuButton.Enabled){throw 'Basic pages/menu inaccessible after hiding all activities'}
-foreach($page in $script:managerTabPages | Select-Object -Skip 4){Set-ManagerTabVisible $page $true}
+foreach($page in $script:managerTabPages){Set-ManagerTabVisible $page $false}
+if($tabs.TabPages.Count -ne 0 -or !$tabMenuButton.Enabled){throw 'Menu inaccessible after hiding every tab'}
+foreach($page in $script:managerTabPages){Set-ManagerTabVisible $page $true}
 if(($tabs.TabPages|ForEach-Object {$_.Text}) -join '|' -ne ($titles -join '|')){throw 'Tab ordering changed'}
+if($script:managerTabItems.Count -ne $titles.Count){throw 'Menu missing tabs'}
+$closing=[Windows.Forms.ToolStripDropDown].GetMethod('OnClosing',[Reflection.BindingFlags]'Instance,NonPublic')
+foreach($reason in @('AppClicked','AppFocusChange','Keyboard')){
+    $event=New-Object Windows.Forms.ToolStripDropDownClosingEventArgs ([Windows.Forms.ToolStripDropDownCloseReason]::$reason)
+    $arguments=New-Object object[] 1;$arguments[0]=$event.PSObject.BaseObject;$null=$closing.Invoke($tabMenu,$arguments)
+    if($event.Cancel -or !$tabMenu.AutoClose){throw ('Menu will not close: '+$reason)}
+}
+$event=New-Object Windows.Forms.ToolStripDropDownClosingEventArgs ([Windows.Forms.ToolStripDropDownCloseReason]::ItemClicked)
+$arguments=New-Object object[] 1;$arguments[0]=$event.PSObject.BaseObject;$null=$closing.Invoke($tabMenu,$arguments);if(!$event.Cancel){throw 'Checkbox click should allow more selections'}
 $form.Dispose();$tabMenu.Dispose()
 Write-Output 'PASS: stored visibility, checkbox clicks, selected-page fallback, preserved controls, all-hidden recovery and original ordering.'
 

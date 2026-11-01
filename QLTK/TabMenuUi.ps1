@@ -9,7 +9,6 @@ function Save-ManagerTabVisibility {
     Write-JsonAtomic $script:tabVisibilityPath @{hidden=$hidden}
 }
 function Set-ManagerTabVisible([Windows.Forms.TabPage]$page,[bool]$visible,[bool]$save=$true) {
-    if($script:managerTabPages[0..3] -contains $page){return}
     $tabs.SuspendLayout()
     try {
         if(!$visible -and $tabs.TabPages.Contains($page)){$tabs.TabPages.Remove($page)}
@@ -24,10 +23,11 @@ function Set-ManagerTabVisible([Windows.Forms.TabPage]$page,[bool]$visible,[bool
     if($save){Save-ManagerTabVisibility}
 }
 $tabMenu=New-Object Windows.Forms.ContextMenuStrip
-$tabMenu.AutoClose=$false
+$tabMenu.AutoClose=$true
+$tabMenu.Add_Closing({param($sender,$eventArgs)if($eventArgs.CloseReason -eq [Windows.Forms.ToolStripDropDownCloseReason]::ItemClicked){$eventArgs.Cancel=$true}})
 $tabMenu.ShowCheckMargin=$true
 $tabMenu.ShowImageMargin=$false
-foreach($page in $script:managerTabPages | Select-Object -Skip 4){
+foreach($page in $script:managerTabPages){
     $entry=New-Object Windows.Forms.ToolStripMenuItem
     $entry.Text=$page.Text;$entry.Tag=$page;$entry.CheckOnClick=$true;$entry.Checked=$true
     $entry.Add_CheckedChanged({param($sender,$eventArgs)
@@ -48,7 +48,7 @@ $tabMenuButton.BringToFront()
 if(!$UiTest -and (Test-Path -LiteralPath $script:tabVisibilityPath)){
     try{
         $preferences=Read-JsonData $script:tabVisibilityPath
-        foreach($page in $script:managerTabPages | Select-Object -Skip 4){if(@($preferences.hidden) -contains $page.Text){Set-ManagerTabVisible $page $false $false}}
+        foreach($page in $script:managerTabPages){if(@($preferences.hidden) -contains $page.Text){Set-ManagerTabVisible $page $false $false}}
     }catch{$status.Text='Không đọc được lựa chọn tab; đang hiển thị các tab có sẵn.'}
 }
 $form.Add_FormClosed({$tabMenu.Dispose();foreach($page in $script:managerTabPages){if(!$page.IsDisposed){$page.Dispose()}}})
