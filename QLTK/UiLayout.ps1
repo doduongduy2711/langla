@@ -63,7 +63,7 @@ function Set-GameWindowsVisible([bool]$visible) {
     } catch {Show-Error 'Không đổi được trạng thái cửa sổ game.'}
 }
 $upAllButton=Ui-NewButton 'Chọn Up all' {Start-FarmAllOpen}
-$topButtons=@($bulkOpen,$buttons[0],$buttons[2],$refreshButton,$closeAllButton,$buttons[1],$selectAll,$clearAll,$buttons[6],$sortButton,$settingsButton,$socketButton,$hideGamesButton,$showGamesButton,$upAllButton,$bulkAccountButton)
+$topButtons=@($bulkOpen,$buttons[0],$buttons[2],$refreshButton,$closeAllButton,$buttons[1],$selectAll,$clearAll,$sortButton,$settingsButton,$hideGamesButton,$showGamesButton,$upAllButton,$bulkAccountButton)
 for($i=0;$i -lt $topButtons.Count;$i++) {Ui-Place $topButtons[$i] $top (($i%4)*85) ([int][Math]::Floor($i/4)*26) 81 23}
 $basic=Ui-Group 'Thông tin cơ bản' $form
 $summaryLabel=Ui-Label '' $basic 12 19 190 57
@@ -198,7 +198,7 @@ foreach($name in @('Tài khoản','Đăng nhập / NPC','Proxy / Socket','Nhật
 $accountHelp=Ui-Label "Chọn tài khoản trong bảng để sửa hoặc xem thông tin bên phải.`r`nĐánh dấu cột Chọn để mở nhiều tài khoản cùng lúc." $tabs.TabPages[0] 16 18 625 42
 $manageGroup=Ui-Group 'Danh sách tài khoản' $tabs.TabPages[0];$manageGroup.SetBounds(14,73,650,113);$manageGroup.Anchor='Top,Left,Right'
 $null=Ui-Label "Nhập CSV với cột username,password,proxy.`r`nProxy có thể dán dạng host:port:username:password." $manageGroup 14 22 615 38
-$importShortcut=Ui-NewButton 'Nhập list / CSV' {$buttons[6].PerformClick()};Ui-Place $importShortcut $manageGroup 14 68 130 27
+$importShortcut=$buttons[6];$importShortcut.Text='Nhập list / CSV';Ui-Place $importShortcut $manageGroup 14 68 130 27
 $editShortcut=Ui-NewButton 'Sửa tài khoản' {$buttons[1].PerformClick()};Ui-Place $editShortcut $manageGroup 155 68 130 27
 $null=Ui-Label 'Lưu cục bộ • mật khẩu được mã hóa theo tài khoản Windows hiện tại.' $tabs.TabPages[0] 16 203 640 25
 $flowGroup=Ui-Group 'Khi mở game' $tabs.TabPages[1];$flowGroup.SetBounds(14,15,650,128);$flowGroup.Anchor='Top,Left,Right'
@@ -207,7 +207,7 @@ $null=Ui-Label 'Các bước tự động không cần chuột hay giữ cửa s
 $proxyGroup=Ui-Group 'Proxy theo từng tài khoản' $tabs.TabPages[2];$proxyGroup.SetBounds(14,15,650,160);$proxyGroup.Anchor='Top,Left,Right'
 $null=Ui-Label "Dán proxy trong cửa sổ Thêm / Sửa để tự tách host, port và thông tin xác thực.`r`nHỗ trợ HTTP có hoặc không có username/password.`r`nĐể trống proxy nếu muốn dùng kết nối trực tiếp." $proxyGroup 14 23 610 64
 $proxyEdit=Ui-NewButton 'Sửa proxy đã chọn' {$buttons[1].PerformClick()};Ui-Place $proxyEdit $proxyGroup 14 100 155 28
-$proxySettings=Ui-NewButton 'Socket / Proxy' {$socketButton.PerformClick()};Ui-Place $proxySettings $proxyGroup 182 100 145 28
+$proxySettings=$socketButton;$proxySettings.Text='Socket / Proxy';Ui-Place $proxySettings $proxyGroup 182 100 145 28
 $logHelp=Ui-Label "Chọn tài khoản đã mở rồi dùng Xem ID NPC hoặc Log menu.`r`nNhấp đúp ô Trạng thái bị lỗi để xem hướng dẫn xử lý." $tabs.TabPages[3] 16 20 635 44
 $logShortcut=Ui-NewButton 'Xem log menu' {$menuLogButton.PerformClick()};Ui-Place $logShortcut $tabs.TabPages[3] 16 84 150 29
 $npcShortcut=Ui-NewButton 'Xem ID NPC' {$npcIdsButton.PerformClick()};Ui-Place $npcShortcut $tabs.TabPages[3] 178 84 150 29
