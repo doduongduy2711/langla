@@ -6,7 +6,7 @@ $cloakChoice=New-Object Windows.Forms.ComboBox;$cloakChoice.DropDownStyle='DropD
 foreach($o in $script:cloakOffers){$null=$cloakChoice.Items.Add($o)};$cloakChoice.SelectedIndex=3
 $null=Ui-Label 'Số lượng / acc' $cloakPage 16 89 140 25
 $cloakQuantity=New-Object Windows.Forms.NumericUpDown;$cloakQuantity.Minimum=1;$cloakQuantity.Maximum=100;$cloakQuantity.Value=1;$cloakQuantity.SetBounds(165,87,120,27);$cloakPage.Controls.Add($cloakQuantity)
-$null=Ui-Label 'Số acc mở cùng lúc' $cloakPage 300 89 158 25
+$null=Ui-Label 'Số tài khoản tối đa' $cloakPage 300 89 158 25
 $cloakMax=New-Object Windows.Forms.NumericUpDown;$cloakMax.Minimum=1;$cloakMax.Maximum=10000;$cloakMax.Value=6;$cloakMax.SetBounds(465,87,85,27);$cloakPage.Controls.Add($cloakMax)
 if($script:settings.ContainsKey('cloakMaxOnline')){$cloakMax.Value=[Math]::Max(1,[Math]::Min(10000,[int]$script:settings.cloakMaxOnline))}
 function Save-CloakQueueSettings {$script:settings.cloakMaxOnline=[int]$cloakMax.Value;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}}
@@ -81,6 +81,7 @@ function Test-CloakMemberRunning($m){$j=Get-CloakMemberJob $m;return ($null -ne 
 function Begin-CloakMemberClose($m){return [TGLL.NativeBackend]::BeginCloseBatch([string[]]@($m.job))}
 function Start-CloakQueue {
  if(@($script:beastBatches | Where-Object {$_.state -ne 'done'}).Count){throw 'Dừng hàng chờ linh thú trước.'}
+ if($script:chestRun -and $script:chestRun.active){throw 'Dừng hàng rương trước.'}
  if($script:cloakRun -and $script:cloakRun.active){throw 'Dừng lượt mua áo hiện tại trước.'}
  foreach($b in @($script:questBatches)+@($script:izanamiBatches)+@($script:dungeonBatches)){if($b.state -ne 'done'){throw 'Dừng các hàng chờ hoạt động trước khi mua áo.'}}
  if($script:distributionRun -and $script:distributionRun.active){throw 'Dừng chia đồ trước khi mua áo.'};if($script:mailRun -and $script:mailRun.active){throw 'Dừng gom đồ trước khi mua áo.'}
@@ -125,6 +126,7 @@ function Sync-CloakQueueMember($run,$m) {
  if(!$j.CloakEnabled){$m.state='blocked';$m.status=$j.CloakStatus+' • giữ game và lượt để kiểm tra'}
 }
 function Sync-CloakQueue {
+ if(Get-Command Sync-StoneChestQueue -ErrorAction SilentlyContinue){Sync-StoneChestQueue}
  if(!$script:cloakRun -or !$script:cloakRun.active){return}
  $run=$script:cloakRun
  foreach($m in $run.members){Sync-CloakQueueMember $run $m}

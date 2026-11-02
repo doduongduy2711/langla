@@ -39,7 +39,7 @@ function Save-StoneChestUi {
     $a=$grid.SelectedRows[0].Tag;$a | Add-Member NoteProperty stoneChestQuantity ([int]$chestQuantity.Value) -Force;$a | Add-Member NoteProperty stoneChestOpenAfter $chestOpen.Checked -Force
     if(!$UiTest){Save-Accounts}
 }
-function Start-StoneChestSelected([bool]$useOnly){
+function Start-StoneChestDirectSelected([bool]$useOnly){
     $rows=@(Get-LaunchRows);if(!$rows.Count){$status.Text='Tích Chọn các tài khoản cần mua/mở rương.';return}
     $quantity=[int]$chestQuantity.Value;$openAfter=$chestOpen.Checked;$started=0;$errors=New-Object Collections.Generic.List[string]
     foreach($row in $rows){

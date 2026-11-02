@@ -9,11 +9,15 @@ $null=Ui-Label 'Mỗi acc gửi cách (giây)' $mailPage 310 94 180 24
 $mailDelay=New-Object Windows.Forms.NumericUpDown;$mailDelay.Minimum=1;$mailDelay.Maximum=3600;$mailDelay.Value=5;$mailDelay.SetBounds(310,120,95,26);$mailPage.Controls.Add($mailDelay)
 $mailStart=Ui-NewButton 'Bắt đầu gom đồ' {try{Start-MailCollection}catch{Show-Error $_.Exception.Message}};$mailStart.SetBounds(310,148,145,27);$mailPage.Controls.Add($mailStart)
 $mailStop=Ui-NewButton 'Dừng' {Stop-MailCollection};$mailStop.SetBounds(462,148,90,27);$mailPage.Controls.Add($mailStop)
+$null=Ui-Label 'Số tài khoản tối đa' $mailPage 14 174 170 24
+$mailMax=New-Object Windows.Forms.NumericUpDown;$mailMax.Minimum=1;$mailMax.Maximum=10000;$mailMax.Value=1;$mailMax.SetBounds(190,173,90,25);$mailPage.Controls.Add($mailMax)
+if($script:settings.ContainsKey('mailMaxOnline')){$mailMax.Value=[Math]::Max(1,[Math]::Min(10000,[int]$script:settings.mailMaxOnline))}
+$mailMax.Add_ValueChanged({$script:settings.mailMaxOnline=[int]$mailMax.Value;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}})
 $script:inboxApplied='';$script:inboxWanted=$false
-$mailInboxCheck=New-Object Windows.Forms.CheckBox;$mailInboxCheck.Text='Acc nhận: Nhận tất cả và Xóa đã đọc';$mailInboxCheck.SetBounds(14,177,460,24);$mailPage.Controls.Add($mailInboxCheck);$mailInboxCheck.Checked=$true
-$mailInboxStatus=Ui-Label 'Nhận thư: Tắt' $mailPage 14 204 650 24
-$mailHint=Ui-Label 'Mở từng acc từ dòng 2; gửi xong sẽ tắt và mở acc kế tiếp. Giữ acc dòng 1 online. Chỉ gửi đồ không khóa.' $mailPage 14 230 650 30
-$mailReport=New-Object Windows.Forms.TextBox;$mailReport.Multiline=$true;$mailReport.ReadOnly=$true;$mailReport.ScrollBars='Vertical';$mailReport.SetBounds(14,264,650,60);$mailReport.Anchor='Top,Bottom,Left,Right';$mailPage.Controls.Add($mailReport)
+$mailInboxCheck=New-Object Windows.Forms.CheckBox;$mailInboxCheck.Text='Acc nhận: Nhận tất cả và Xóa đã đọc';$mailInboxCheck.SetBounds(14,202,620,24);$mailPage.Controls.Add($mailInboxCheck);$mailInboxCheck.Checked=$true
+$mailInboxStatus=Ui-Label 'Nhận thư: Tắt' $mailPage 14 229 650 24
+$mailHint=Ui-Label 'Mở acc đã chọn theo giới hạn; không gửi tiếp thì tắt để nhường lượt. Giữ acc dòng 1 online. Chỉ gửi đồ không khóa.' $mailPage 14 255 650 30
+$mailReport=New-Object Windows.Forms.TextBox;$mailReport.Multiline=$true;$mailReport.ReadOnly=$true;$mailReport.ScrollBars='Vertical';$mailReport.SetBounds(14,289,650,60);$mailReport.Anchor='Top,Bottom,Left,Right';$mailPage.Controls.Add($mailReport)
 if($script:settings.ContainsKey('mailItems')){$mailItems.Text=[string]$script:settings.mailItems}
 if($script:settings.ContainsKey('mailSeconds')){$mailDelay.Value=[Math]::Max(1,[Math]::Min(3600,[int]$script:settings.mailSeconds))}
 if($script:settings.ContainsKey('mailNamedRecipient')){$mailNamedRecipient.Text=[string]$script:settings.mailNamedRecipient}
@@ -43,6 +47,7 @@ function Get-MailReceiverName {
     return [string]$grid.Rows[0].Cells['character'].Value
 }
 function Start-MailCollection {
+ if($script:chestRun -and $script:chestRun.active){throw 'Dừng hàng rương trước.'}
  if(@($script:beastBatches | Where-Object {$_.state -ne 'done'}).Count){throw 'Dừng hàng chờ linh thú trước.'}if($script:distributionRun -and $script:distributionRun.active){throw 'Dừng auto chia đồ trước.'}
     if($script:cloakRun -and $script:cloakRun.active){throw 'Dừng hàng mua áo trước khi gom đồ.'}
     if($script:mailRun -and $script:mailRun.active){throw 'Dừng lượt gom đồ hiện tại trước khi bắt đầu lượt mới.'}
@@ -110,17 +115,27 @@ function Sync-MailReceiver {
 }
 function Sync-MailCollection {
     Sync-MailReceiver
-    if($script:mailRun -and $script:mailRun.namedRecipient){$mailInboxStatus.Text='Nhận thư: nhân vật chỉ định tự nhận trong game'}
     if(!$script:mailRun -or !$script:mailRun.active){return}
-    while($script:mailRun.cursor -lt $script:mailRun.senders.Count -and $script:mailRun.senders[$script:mailRun.cursor].state -eq 'done'){$script:mailRun.cursor++}
+    foreach($m in $script:mailRun.senders){if($m.state -ne 'waiting'){Sync-MailCollectionMember $m}}
+    $script:mailRun.cursor=@($script:mailRun.senders | Where-Object {$_.state -eq 'done'}).Count
     if($script:mailRun.cursor -ge $script:mailRun.senders.Count){$script:mailRun.active=$false;return}
-    $member=$script:mailRun.senders[$script:mailRun.cursor]
-    if($member.state -eq 'blocked'){return}
+    if(!(Test-MailReceiverReady)){return}
+    $occupied=@($script:mailRun.senders | Where-Object {$_.state -notin @('waiting','done')}).Count
+    $budget=[int]$launchConcurrency.Value
+    foreach($m in $script:mailRun.senders){
+        if($occupied -ge [int]$mailMax.Value -or $budget -le 0){break}
+        if($m.state -ne 'waiting'){continue}
+        Sync-MailCollectionMember $m;$occupied++;$budget--
+    }
+}
+function Sync-MailCollectionMember($member) {
+    if($member.state -eq 'blocked'){if($member.started -and $member.job){$held=Get-MailMemberJob $member;if($held -and !$held.MailEnabled -and !$held.MailBusy -and (Test-MailMemberRunning $member)){try{$member.closeOperation=Begin-MailMemberClose $member;$member.state='closing';$member | Add-Member NoteProperty stoppedWithoutCompletion $true -Force;$member.status='Không gửi tiếp; đang tắt game'}catch{}}};return}
     if($member.state -eq 'closing'){
+        if($script:accountJobs.ContainsKey($member.id) -and $script:accountJobs[$member.id] -ne $member.job){$member.state='blocked';$member.status='Phiên game đã thay đổi; giữ lượt để kiểm tra';return}
         if(!$member.closeOperation.Completed){return}
         if($member.closeOperation.Failed -or $member.closeOperation.Error){$member.state='blocked';$member.status='Chưa tắt được game; giữ hàng chờ để kiểm tra';return}
         if(Test-MailMemberRunning $member){$member.status='Đợi game tắt hẳn';return}
-        $member.state='done';$member.status='Đã gửi xong và tắt game';return
+        $member.state='done';$member.status=if($member.stoppedWithoutCompletion){'Đã dừng gửi và tắt game'}else{'Đã gửi xong và tắt game'};return
     }
     if(!(Test-MailReceiverReady)){$member.status='Đợi acc nhận online đúng nhân vật';return}
     if($member.state -eq 'waiting'){
@@ -132,6 +147,7 @@ function Sync-MailCollection {
     if($null -eq $j -or ($script:accountJobs.ContainsKey($member.id) -and $script:accountJobs[$member.id] -ne $member.job)){$member.state='blocked';$member.status='Phiên game đã đổi; kiểm tra thư trước khi bắt đầu lại';return}
     if($j.CloseRequested -or $j.CancelRequested -or $j.State -in @('failed','closed','cancelled','reconnecting')){$member.state='blocked';$member.status='Game lỗi/thoát trước khi gom xong; giữ hàng chờ';return}
     if($member.state -eq 'launching'){
+        if(!$script:mailRun.namedRecipient -and @($script:mailRun.senders | Where-Object {($_.state -eq 'running' -or $_.state -eq 'blocked') -and $_ -ne $member -and $_.started}).Count){$member.status='Đã mở; chờ lượt gửi về acc nhận';return}
         if(!$j.GameSettingsReady -or [string]::IsNullOrWhiteSpace($j.CharacterName)){return}
         if($j.CharacterName -eq $script:mailRun.recipient){$member.state='done';$member.status='Bỏ qua: trùng nhân vật nhận';return}
         try{[TGLL.NativeBackend]::ConfigureMail($j.Id,$script:mailRun.recipient,[int[]]@($script:mailRun.items | ForEach-Object {$_.id}),[int[]]@($script:mailRun.items | ForEach-Object {$_.quantity}),($script:mailRun.seconds*1000),$(if($script:mailRun.receiverId){[string]$script:accountJobs[$script:mailRun.receiverId]}else{''}));$member.state='running';$member.started=$true;$member.status='Đang gom đồ'}catch{$member.state='blocked';$member.status=[string]$_.Exception.Message}
@@ -145,9 +161,9 @@ function Sync-MailCollection {
 function Update-MailUi {
     $active=$script:mailRun -and $script:mailRun.active;$mailStart.Enabled=!$active;$mailItems.Enabled=!$active;$mailDelay.Enabled=!$active;$mailNamedCheck.Enabled=!$active;$mailNamedRecipient.Enabled=(!$active -and $mailNamedCheck.Checked);$mailInboxCheck.Enabled=!$mailNamedCheck.Checked
     $mailStart.Text=$(if($mailNamedCheck.Checked){'Bắt đầu gửi thư'}else{'Bắt đầu gom đồ'})
-    $mailHint.Text=$(if($mailNamedCheck.Checked){'Gửi từ các acc tích Chọn; mở từng acc, gửi xong tắt rồi mở acc kế tiếp. Chỉ gửi đồ không khóa.'}else{'Chỉ mở acc tích Chọn từ dòng 2 để gom về acc dòng 1; gửi xong tắt rồi mở acc kế tiếp. Giữ acc dòng 1 online.'})
+    $mailHint.Text=$(if($mailNamedCheck.Checked){'Gửi từ các acc tích Chọn; mở theo giới hạn, không gửi tiếp thì tắt để nhường lượt. Chỉ gửi đồ không khóa.'}else{'Mở acc tích Chọn từ dòng 2 theo giới hạn để gom về dòng 1. Giữ acc dòng 1 online.'})
     if($script:mailRun){
-        $mailReceiver.Text='Người nhận: '+$script:mailRun.recipient+' • Đã xong: '+$script:mailRun.cursor+'/'+$script:mailRun.senders.Count+' • Mỗi lượt 1 acc'
+        $mailReceiver.Text='Người nhận: '+$script:mailRun.recipient+' • Đã xong: '+$script:mailRun.cursor+'/'+$script:mailRun.senders.Count+' • Giới hạn acc gửi: '+[int]$mailMax.Value
         $lines=@(foreach($sender in $script:mailRun.senders){$text=$sender.status
             if($sender.started -and $sender.job){$j=Get-AccountJob $sender.job;if($null -ne $j){$text=$sender.status+' • '+$j.MailLetters+' thư / '+$j.MailQuantity+' món';if($sender.state -eq 'running'){$text=$j.MailStatus+' • '+$j.MailLetters+' thư / '+$j.MailQuantity+' món'};if($script:accountJobs.ContainsKey($sender.id) -and $script:accountJobs[$sender.id] -ne $sender.job){$text+=' • Phiên game đã đổi, không tự gửi lại'}}}
             $sender.username+': '+$text})
@@ -156,7 +172,7 @@ function Update-MailUi {
 }
 function Resize-MailUi {
     $mailReceiver.Width=[Math]::Max(200,$mailPage.ClientSize.Width-28);$mailHint.Width=[Math]::Max(200,$mailPage.ClientSize.Width-28)
-    $mailReport.SetBounds(14,264,[Math]::Max(200,$mailPage.ClientSize.Width-28),[Math]::Max(35,$mailPage.ClientSize.Height-277))
+    $mailReport.SetBounds(14,289,[Math]::Max(200,$mailPage.ClientSize.Width-28),[Math]::Max(35,$mailPage.ClientSize.Height-302))
 }
 $mailInboxCheck.Add_CheckedChanged({$script:inboxWanted=$mailInboxCheck.Checked;if($script:inboxWanted){$script:inboxApplied=''};if(!$script:inboxWanted -and $script:inboxApplied){[TGLL.NativeBackend]::ConfigureInbox($script:inboxApplied,$false);$script:inboxApplied='';$mailInboxStatus.Text='Nhận thư: Tắt'}else{Sync-MailReceiver}})
 $mailPage.AutoScroll=$true;$mailPage.Add_Resize({Resize-MailUi});$mailItems.Add_TextChanged({Save-MailSettings});$mailDelay.Add_ValueChanged({Save-MailSettings})
