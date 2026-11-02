@@ -4528,10 +4528,15 @@ namespace TGLL {
   internal static bool CanRefreshCaptcha(NativeJob j,DateTime now){return CaptchaEnabled&&j.CaptchaUnreadable&&!j.CaptchaManual&&!j.CaptchaPending&&!j.CloseRequested&&!j.CancelRequested&&!j.ReconnectRequested&&j.CaptchaEpisodeTries<5&&(now-j.CaptchaSubmitAt).TotalMilliseconds>=1500;}
   internal static bool CheckCaptchaSubmitWait(NativeJob j,int state,int result,DateTime now){
    if(state!=0){j.CaptchaStatus=(now-j.CaptchaSubmitAt).TotalSeconds>=10?"Lệnh xác nhận chưa chạy xong; đang đợi client":"Đang điền và xác nhận mã";return true;}
+   if(j.CaptchaUnreadable&&j.CaptchaEpisodeTries>=5&&(now-j.CaptchaSubmitAt).TotalMilliseconds>=1500){
+    j.CaptchaGeneration++;j.CaptchaUnreadable=false;j.CaptchaManual=false;j.CaptchaSubmitTimedOut=false;j.CaptchaCode="";j.CaptchaReadKey="";j.CaptchaAttemptKey="";j.CaptchaEpisodeTries=0;
+    j.CaptchaStatus="Đã xác nhận 5 lần; đọc lại ảnh để nhập mã tiếp";Log(j,"captcha_refresh_cycle_complete","");return true;
+   }
    if(!j.CaptchaUnreadable&&(now-j.CaptchaSubmitAt).TotalSeconds>=10){
     if(!j.CaptchaSubmitTimedOut){j.CaptchaSubmitTimedOut=true;Log(j,"captcha_submit_timeout",",\"result\":"+result+",\"attempt\":"+j.CaptchaEpisodeTries);}
-    if(j.CaptchaEpisodeTries<2){j.CaptchaAttemptKey="";j.CaptchaStatus="Chưa có phản hồi sau 10 giây; thử xác nhận lại một lần";}
-    else{j.CaptchaManual=false;if(CaptchaEnabled&&j.CaptchaEpisodeTries<5){j.CaptchaUnreadable=true;j.CaptchaStatus="Mã chưa được chấp nhận sau 2 lần; thử xác nhận để đổi ảnh";}else j.CaptchaStatus="Chưa có phản hồi sau 2 lần xác nhận; có thể nhập mã và gửi lại";}
+    j.CaptchaManual=false;
+    if(CaptchaEnabled){j.CaptchaUnreadable=true;j.CaptchaEpisodeTries=0;j.CaptchaCode="";j.CaptchaStatus="Hộp mã chưa đóng; xác nhận 5 lần rồi đọc mã tiếp";}
+    else j.CaptchaStatus="Chưa có phản hồi; tự động đang tắt, có thể nhập mã và gửi lại";
     return true;
    }
    string status=result==2?"Đã gọi xác nhận; chưa xác nhận game đã nhận":"Ảnh/ô nhập đã thay đổi; chưa xác nhận";
@@ -4547,10 +4552,9 @@ namespace TGLL {
     j.CurseActive=true;j.CurseReadAt=now;
     if(j.CaptchaFrame==null||j.CaptchaFrame.Key!=frame.Key){j.CaptchaGeneration++;j.CaptchaFrame=frame;j.CaptchaUnreadable=false;j.CaptchaSubmitTimedOut=false;j.CaptchaSubmitAt=DateTime.MinValue;j.CaptchaCode="";j.CaptchaManual=false;j.CaptchaReadKey="";j.CaptchaAttemptKey="";j.CaptchaEpisodeTries=0;j.CaptchaSamplePath="";QueueCaptchaSample(j,frame);Log(j,"captcha_detected",",\"image_hash\":"+Quote(frame.Hash.ToString("x8"))+",\"width\":"+frame.Width+",\"height\":"+frame.Height+",\"pixel_offset\":"+frame.PixelOffset+",\"button_action\":190");}else j.CaptchaFrame=frame;
     if(!CaptchaEnabled&&!j.CaptchaManual){j.CaptchaStatus="Tự giải mã đang tắt; ảnh đã đưa vào hàng lưu";return;}if(j.CaptchaAttemptKey==frame.Key){int state=BitConverter.ToInt32(r.Read(j.CaptchaData,4),0),result=BitConverter.ToInt32(r.Read(j.CaptchaData+4,4),0);if(CheckCaptchaSubmitWait(j,state,result,now))return;
-     if(state!=0||!CanRefreshCaptcha(j,now)){if(j.CaptchaUnreadable&&j.CaptchaEpisodeTries>=5)j.CaptchaStatus="Đã xác nhận 5 lần; chờ game đổi ảnh hoặc nhập tay";return;}j.CaptchaAttemptKey="";
+     if(state!=0||!CanRefreshCaptcha(j,now)){if(j.CaptchaUnreadable&&j.CaptchaEpisodeTries>=5)j.CaptchaStatus="Đã xác nhận 5 lần; chờ client hoàn tất để đọc mã tiếp";return;}j.CaptchaAttemptKey="";
     }
     if(j.CaptchaUnreadable&&!j.CaptchaManual){if(!CanRefreshCaptcha(j,now))return;j.CaptchaCode="0000";}
-    if(j.CaptchaEpisodeTries>=2&&!j.CaptchaManual&&!j.CaptchaUnreadable){j.CaptchaStatus="Đã thử 2 mã; cần kiểm tra game trước khi thử thêm";return;}
     if(!j.CaptchaManual&&(!File.Exists(captchaPython)||!File.Exists(captchaScript))){CaptchaNeedsRuntime=true;j.CaptchaStatus="Cần cài bộ đọc ở tab Giải mã ảnh";return;}
     if(CaptchaCodeValid(j.CaptchaCode)){
      if(BitConverter.ToInt32(r.Read(j.CaptchaData,4),0)!=0)return;

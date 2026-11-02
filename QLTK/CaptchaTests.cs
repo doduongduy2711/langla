@@ -26,12 +26,14 @@ class CaptchaTests {
   var waiting=new NativeJob(System.Reflection.Assembly.GetExecutingAssembly().Location,"fixture-confirm-wait","",null,true){State="opened",CaptchaFrame=new CaptchaFrame{Popup=1,Image=2,Hash=3},CurseActive=true,CurseReadAt=DateTime.UtcNow,CaptchaManual=true,CaptchaCode="AB12",CaptchaEpisodeTries=1,CaptchaSubmitAt=refreshNow};
   waiting.CaptchaAttemptKey=waiting.CaptchaFrame.Key;
   C(!NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddMilliseconds(9999))&&waiting.CaptchaAttemptKey!="","retried before response deadline");
-  C(NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddSeconds(10))&&waiting.CaptchaAttemptKey==""&&waiting.CaptchaManual&&waiting.CaptchaCode=="AB12","completed callback did not schedule one bounded retry");
-  waiting.CaptchaAttemptKey=waiting.CaptchaFrame.Key;waiting.CaptchaSubmitTimedOut=false;waiting.CaptchaEpisodeTries=2;
-  C(NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddSeconds(10))&&waiting.CaptchaAttemptKey==waiting.CaptchaFrame.Key&&!waiting.CaptchaManual,"second callback retried indefinitely");
-  C(waiting.CaptchaUnreadable&&NativeBackend.CanRefreshCaptcha(waiting,refreshNow.AddSeconds(10)),"unaccepted OCR never entered bounded image refresh");
-  waiting.CaptchaEpisodeTries=5;C(!NativeBackend.CanRefreshCaptcha(waiting,refreshNow.AddSeconds(10)),"refresh exceeded five total attempts");waiting.CaptchaEpisodeTries=2;
-  NativeBackend.ConfigureCaptcha(false,"missing-python","missing-script",System.IO.Path.GetTempPath());waiting.CaptchaUnreadable=false;
+  C(NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddSeconds(10))&&waiting.CaptchaUnreadable&&!waiting.CaptchaManual&&waiting.CaptchaEpisodeTries==0,"failed code did not start a fresh five-confirmation batch");
+  C(NativeBackend.CanRefreshCaptcha(waiting,refreshNow.AddSeconds(10)),"refresh not eligible after failed code");
+  for(int cycle=0;cycle<20;cycle++){
+   waiting.CaptchaUnreadable=true;waiting.CaptchaEpisodeTries=5;waiting.CaptchaAttemptKey=waiting.CaptchaFrame.Key;waiting.CaptchaReadKey=waiting.CaptchaFrame.Key;waiting.CaptchaCode="0000";
+   C(!NativeBackend.CanRefreshCaptcha(waiting,refreshNow.AddSeconds(10)),"more than five requests in one batch");
+   C(NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddSeconds(10))&&!waiting.CaptchaUnreadable&&waiting.CaptchaEpisodeTries==0&&waiting.CaptchaAttemptKey==""&&waiting.CaptchaReadKey==""&&waiting.CaptchaCode=="","refresh batch failed to return to OCR or reached a global retry limit");
+  }
+  NativeBackend.ConfigureCaptcha(false,"missing-python","missing-script",System.IO.Path.GetTempPath());waiting.CaptchaUnreadable=false;waiting.CaptchaAttemptKey=waiting.CaptchaFrame.Key;
   NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddSeconds(10));C(!waiting.CaptchaUnreadable,"disabled OCR unexpectedly refreshed image");
   NativeBackend.ConfigureCaptcha(true,"missing-python","missing-script",System.IO.Path.GetTempPath());
   C(NativeBackend.GetCaptchaReview(waiting).CanSubmit,"manual correction remained locked after response timeout");
