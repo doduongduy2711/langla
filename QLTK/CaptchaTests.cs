@@ -29,6 +29,11 @@ class CaptchaTests {
   C(NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddSeconds(10))&&waiting.CaptchaAttemptKey==""&&waiting.CaptchaManual&&waiting.CaptchaCode=="AB12","completed callback did not schedule one bounded retry");
   waiting.CaptchaAttemptKey=waiting.CaptchaFrame.Key;waiting.CaptchaSubmitTimedOut=false;waiting.CaptchaEpisodeTries=2;
   C(NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddSeconds(10))&&waiting.CaptchaAttemptKey==waiting.CaptchaFrame.Key&&!waiting.CaptchaManual,"second callback retried indefinitely");
+  C(waiting.CaptchaUnreadable&&NativeBackend.CanRefreshCaptcha(waiting,refreshNow.AddSeconds(10)),"unaccepted OCR never entered bounded image refresh");
+  waiting.CaptchaEpisodeTries=5;C(!NativeBackend.CanRefreshCaptcha(waiting,refreshNow.AddSeconds(10)),"refresh exceeded five total attempts");waiting.CaptchaEpisodeTries=2;
+  NativeBackend.ConfigureCaptcha(false,"missing-python","missing-script",System.IO.Path.GetTempPath());waiting.CaptchaUnreadable=false;
+  NativeBackend.CheckCaptchaSubmitWait(waiting,0,2,refreshNow.AddSeconds(10));C(!waiting.CaptchaUnreadable,"disabled OCR unexpectedly refreshed image");
+  NativeBackend.ConfigureCaptcha(true,"missing-python","missing-script",System.IO.Path.GetTempPath());
   C(NativeBackend.GetCaptchaReview(waiting).CanSubmit,"manual correction remained locked after response timeout");
   C(NativeBackend.QueueManualCaptcha(waiting,waiting.CaptchaFrame.Key,"CD34")&&!waiting.CaptchaSubmitTimedOut,"manual correction did not reset timeout");
   waiting.CaptchaAttemptKey=waiting.CaptchaFrame.Key;waiting.CaptchaSubmitTimedOut=false;

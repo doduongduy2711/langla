@@ -4531,7 +4531,7 @@ namespace TGLL {
    if(!j.CaptchaUnreadable&&(now-j.CaptchaSubmitAt).TotalSeconds>=10){
     if(!j.CaptchaSubmitTimedOut){j.CaptchaSubmitTimedOut=true;Log(j,"captcha_submit_timeout",",\"result\":"+result+",\"attempt\":"+j.CaptchaEpisodeTries);}
     if(j.CaptchaEpisodeTries<2){j.CaptchaAttemptKey="";j.CaptchaStatus="Chưa có phản hồi sau 10 giây; thử xác nhận lại một lần";}
-    else{j.CaptchaManual=false;j.CaptchaStatus="Chưa có phản hồi sau 2 lần xác nhận; có thể nhập mã và gửi lại";}
+    else{j.CaptchaManual=false;if(CaptchaEnabled&&j.CaptchaEpisodeTries<5){j.CaptchaUnreadable=true;j.CaptchaStatus="Mã chưa được chấp nhận sau 2 lần; thử xác nhận để đổi ảnh";}else j.CaptchaStatus="Chưa có phản hồi sau 2 lần xác nhận; có thể nhập mã và gửi lại";}
     return true;
    }
    string status=result==2?"Đã gọi xác nhận; chưa xác nhận game đã nhận":"Ảnh/ô nhập đã thay đổi; chưa xác nhận";
