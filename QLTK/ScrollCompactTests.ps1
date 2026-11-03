@@ -9,6 +9,8 @@ try {
  [Threading.Thread]::Sleep(300);Invoke-ManagerTick
  if($script:scrollSync -ne 1 -or $script:scrollPaint -ne 1 -or $script:uiRefreshPending){throw 'Deferred pass did not resume promptly after scroll stopped'}
  if($grid -isnot [TGLL.ResponsiveGrid] -or $inventoryGrid -isnot [TGLL.ResponsiveGrid] -or $marketResultsGrid -isnot [TGLL.ResponsiveGrid]){throw 'Native scroll tracking missing'}
+ $script:uiDragging=$true;Resize-UiLayout;if(!$script:uiLayoutPending){throw 'Resize layout not deferred during window move'}
+ $script:uiDragging=$false;Resize-UiLayout;if($script:uiLayoutPending){throw 'Deferred layout not applied after move'}
  foreach($size in @((New-Object Drawing.Size(900,640)),(New-Object Drawing.Size(1100,800)))){
   $form.ClientSize=$size;Resize-UiLayout
   if($grid.Bottom -ge $tabs.Top -or $tabs.Right -ge $detailsGroup.Left -or $detailsGroup.Right -gt $form.ClientSize.Width -or $options.Right -gt $form.ClientSize.Width -or $tabs.Height -lt 100){throw 'Compact layout overlaps or clips panels'}

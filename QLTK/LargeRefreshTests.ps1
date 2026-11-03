@@ -1,4 +1,4 @@
-﻿$lrCount=$grid.Rows.Count;$lrMappings=$script:accountJobs;$lrPhase=$script:largeRefreshPhase;$lrCursor=$script:autoSyncCursor;$lrDrag=$script:uiDragging;$lrTicks=$script:uiTicks
+﻿$lrPending=$script:uiRefreshPending;$lrCount=$grid.Rows.Count;$lrMappings=$script:accountJobs;$lrPhase=$script:largeRefreshPhase;$lrCursor=$script:autoSyncCursor;$lrDrag=$script:uiDragging;$lrTicks=$script:uiTicks
 $lrNames=@($script:largeRefreshTasks)+@('Get-AccountJob','Get-AccountAutoSkills','Sync-TrainPriority','Update-AccountCharacter','Sync-AutoRows','Sync-FarmUpRow','Poll-SocketRequests','Retry-FailedAccounts','Pump-SonCapQueue','Pump-IzanamiQueue','Pump-QuestQueue','Pump-DungeonQueue','Update-AccountVisibility')
 $lrOriginal=@{};foreach($n in $lrNames){$lrOriginal[$n]=(Get-Item ('Function:\'+$n)).ScriptBlock}
 try {
@@ -18,7 +18,7 @@ try {
  $script:largeRefreshPhase=0;$script:uiDragging=$true
  foreach($n in $script:lrCalls.Keys.Clone()){$script:lrCalls[$n]=0}
  for($i=0;$i -lt 12;$i++){Invoke-ManagerTick}
- if($script:lrCalls['Sync-AutoRows'] -ne 12 -or $script:lrCalls['Sync-Distribution'] -ne 1 -or $script:lrCalls['Update-UiSummary'] -ne 0){throw 'Dragging stopped business work or repainted large table'}
+ if($script:lrCalls['Poll-SocketRequests'] -ne 12 -or $script:lrCalls['Sync-AutoRows'] -ne 0 -or $script:lrCalls['Sync-Distribution'] -ne 0 -or $script:lrCalls['Update-UiSummary'] -ne 0){throw 'Dragging did not yield queue scans or repainted large table'}
  foreach($n in $lrNames){Set-Item ('Function:\'+$n) $lrOriginal[$n]}
  $script:lrVisible=0;function Update-AccountVisibility($row){$script:lrVisible++}
  $null=$form.Handle;$null=$grid.Handle;$script:uiDragging=$false;Update-UiSummary
@@ -34,9 +34,9 @@ try {
  Set-AutoCell $closedRow $true;Sync-AutoRows
  if($closedRow.Cells['auto'].Value){throw 'Stale activity flags prevented closed-row short circuit'}
  Write-Output 'PASS: closed game rows skip skill/config work while retaining separate Up synchronization.'
- Write-Output 'PASS: 96-account timer phases yield between scans, Auto/Up batches cover rows in order, socket/queues unchanged, dragging retains automation, summary refresh limited to visible rows.'
+ Write-Output 'PASS: 96-account timer phases yield between scans, Auto/Up batches cover rows in order, socket/queues unchanged, dragging yields queue scans but retains socket, summary refresh limited to visible rows.'
 }finally {
  foreach($n in $lrNames){Set-Item ('Function:\'+$n) $lrOriginal[$n]}
  while($grid.Rows.Count -gt $lrCount){$grid.Rows.RemoveAt($grid.Rows.Count-1)}
- $script:accountJobs=$lrMappings;$script:largeRefreshPhase=$lrPhase;$script:autoSyncCursor=$lrCursor;$script:uiDragging=$lrDrag;$script:uiTicks=$lrTicks
+ $script:accountJobs=$lrMappings;$script:largeRefreshPhase=$lrPhase;$script:autoSyncCursor=$lrCursor;$script:uiDragging=$lrDrag;$script:uiTicks=$lrTicks;$script:uiRefreshPending=$lrPending
 }

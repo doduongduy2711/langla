@@ -502,6 +502,7 @@ Refresh-Grid
 . (Join-Path $PSScriptRoot 'LiveUpdate.ps1')
 function Invoke-ManagerTick {
     Poll-SocketRequests
+    if($script:uiDragging){$script:uiRefreshPending=$true;return}
     if($script:closingAll){return}
     Initialize-GitHubUpdate
     Sync-CaptchaRuntime

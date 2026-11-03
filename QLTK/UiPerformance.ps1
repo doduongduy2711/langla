@@ -3,7 +3,7 @@
 foreach($panel in @($top,$bottom,$tabs,$detailsGroup)){[TGLL.UiPerformance]::Buffer($panel)}
 [TGLL.UiPerformance]::Buffer($inventoryGrid);[TGLL.UiPerformance]::Buffer($marketResultsGrid)
 $form.Add_ResizeBegin({$script:uiDragging=$true})
-$form.Add_ResizeEnd({$script:uiDragging=$false})
+$form.Add_ResizeEnd({$script:uiDragging=$false;$script:uiRefreshPending=$true;if($script:uiLayoutPending){Resize-UiLayout}})
 function Test-ManagerStatusChanged($row,$job) {
     if(!('TGLL.ManagerStatusCache' -as [type])){
         $cacheSource=Join-Path $PSScriptRoot 'ManagerStatusCache.cs';if(!(Test-Path -LiteralPath $cacheSource)){return $true}

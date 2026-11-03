@@ -1,4 +1,4 @@
-$perfSavedTab=$tabs.SelectedTab;$perfSavedTicks=$script:uiTicks;$perfSavedDrag=$script:uiDragging
+﻿$perfSavedTab=$tabs.SelectedTab;$perfSavedTicks=$script:uiTicks;$perfSavedDrag=$script:uiDragging
 $perfNames=@('Update-SonCapUi','Update-StoneChestUi','Update-MarketUi','Update-CloakUi','Update-TrainUi','Update-FarmUi','Update-InventoryUi','Update-IzanamiUi','Update-AutoItemUi','Update-QuestUi','Update-GiftUi','Update-MailUi','Update-DistributionUi')
 $perfBusiness=@('Poll-SocketRequests','Retry-FailedAccounts','Pump-SonCapQueue','Pump-IzanamiQueue','Pump-QuestQueue','Pump-DungeonQueue','Sync-IzanamiTeams','Sync-DailyPriorityPreferences','Sync-SonCapPreferences','Sync-CloakQueue','Sync-AutoRows','Sync-AutoItemPreferences','Sync-QuestPreferences','Sync-GiftPreferences','Sync-MailCollection','Sync-Distribution','Update-UiSummary')
 $perfOriginal=@{};foreach($n in ($perfNames+$perfBusiness)){$perfOriginal[$n]=(Get-Item ('Function:\'+$n)).ScriptBlock}
@@ -12,12 +12,12 @@ try {
  foreach($n in $perfBusiness){Set-Item ('Function:\'+$n) {$script:perfBusinessCalls++}}
  function Update-UiSummary {$script:perfSummaryCalls++}
  $script:uiDragging=$true;$script:uiTicks=9;foreach($n in $perfNames){$script:perfCounts[$n]=0};Invoke-ManagerTick
- if($script:perfBusinessCalls -lt 10 -or $script:perfSummaryCalls -ne 0 -or @($perfNames | Where-Object {$script:perfCounts[$_] -ne 0}).Count){throw 'Dragging must retain automation and defer paint refresh'}
+ if($script:perfBusinessCalls -ne 1 -or $script:perfSummaryCalls -ne 0 -or @($perfNames | Where-Object {$script:perfCounts[$_] -ne 0}).Count){throw 'Dragging must retain socket only and defer queue/paint work'}
  $script:uiDragging=$false;$script:uiTicks=9;Invoke-ManagerTick
  if($script:perfSummaryCalls -ne 1 -or $script:perfCounts['Update-TrainUi'] -ne 1){throw 'Rendering did not resume after drag'}
  $bufferProperty=[Windows.Forms.Control].GetProperty('DoubleBuffered',[Reflection.BindingFlags]'Instance,NonPublic')
  if(!$bufferProperty.GetValue($form,$null) -or !$bufferProperty.GetValue($grid,$null) -or !$bufferProperty.GetValue($marketResultsGrid,$null)){throw 'Double buffering missing'}
- Write-Output 'PASS: visible-tab-only refresh, immediate tab switch, queue/preference/socket work during drag, rendering resumes afterward, form/account/market double buffering.'
+ Write-Output 'PASS: visible-tab-only refresh, immediate tab switch, socket retained while queue/preference work yields during drag, rendering resumes afterward, form/account/market double buffering.'
 }finally{foreach($n in $perfOriginal.Keys){Set-Item ('Function:\'+$n) $perfOriginal[$n]};$script:uiTicks=$perfSavedTicks;$script:uiDragging=$perfSavedDrag;$tabs.SelectedTab=$perfSavedTab}
 
 # Compare the former per-cell PowerShell handler to the compiled handler on the same synthetic table.

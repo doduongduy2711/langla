@@ -291,6 +291,8 @@ function Update-UiSummary {
     } finally {$script:summaryWindowSnapshot=$null}
 }
 function Resize-UiLayout {
+    if($script:uiDragging){$script:uiLayoutPending=$true;return}
+    $script:uiLayoutPending=$false
     $w=$form.ClientSize.Width;$h=$form.ClientSize.Height
     $form.SuspendLayout()
     try {
