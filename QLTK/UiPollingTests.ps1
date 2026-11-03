@@ -19,9 +19,9 @@ try {
         Invoke-ManagerTick
         if(($script:pollCounts.beast+$script:pollCounts.soncap+$script:pollCounts.dungeon+$script:pollCounts.izanami+$script:pollCounts.quest-$beforeQueues) -gt 1){throw 'Multiple activity queues still execute on the same timer tick'}
     }
-    foreach($queueName in @('beast','soncap','dungeon','izanami','quest')){if($script:pollCounts[$queueName] -ne 20){throw 'Queue cadence changed'}}
-    if($script:pollCounts.socket -ne 100 -or $script:pollCounts.izanami -ne 20 -or $script:pollCounts.quest -ne 20 -or $script:pollCounts.retry -ne 10 -or $script:pollCounts.ui -ne 4 -or $script:pollCounts.izanamiUi -ne 4 -or $script:pollCounts.questUi -ne 4){throw ('Unexpected UI/automation cadence: '+($script:pollCounts | ConvertTo-Json -Compress))}
-    Write-Output 'PASS: actual 100 timer ticks: socket 100; queue scans 20; UI paints 4; retry scans 10. Fast socket polling preserved.'
+    foreach($queueName in @('beast','soncap','dungeon','izanami','quest')){if($script:pollCounts[$queueName] -ne 10){throw 'Queue cadence changed'}}
+    if($script:pollCounts.socket -ne 100 -or $script:pollCounts.izanami -ne 10 -or $script:pollCounts.quest -ne 10 -or $script:pollCounts.retry -ne 10 -or $script:pollCounts.ui -ne 4 -or $script:pollCounts.izanamiUi -ne 4 -or $script:pollCounts.questUi -ne 4){throw ('Unexpected UI/automation cadence: '+($script:pollCounts | ConvertTo-Json -Compress))}
+    Write-Output 'PASS: actual 100 timer ticks: socket 100; queue scans 10; UI paints 4; retry scans 10. Fast socket polling preserved.'
 }finally {
     foreach($n in $pollFunctions.Keys){Set-Item ('Function:\'+$n) $pollFunctions[$n]}
     $script:uiNextPaintTicks=$pollSavedCadence;$script:uiPaintClock=$pollSavedClock

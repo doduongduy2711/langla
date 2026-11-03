@@ -14,12 +14,12 @@ function Test-ManagerStatusChanged($row,$job) {
     if($script:farmUpRequests.ContainsKey($key) -and $job -and $script:farmUpRequests[$key].BlockedJob -eq $job.Id){$extra=[string]$row.Cells['up'].ToolTipText}
     return [TGLL.ManagerStatusCache]::Changed($key,$job,$row,$extra)
 }
-function Test-ScheduledUiRefresh([string]$key) {
+function Test-ScheduledUiRefresh([string]$key,[int]$intervalTicks=30) {
     # 30 manager ticks = about 3 seconds. Manual refreshes bypass this gate.
     if(!$script:uiNextPaintTicks -or $script:uiTicks -lt $script:uiPaintClock){$script:uiNextPaintTicks=@{}}
     $script:uiPaintClock=$script:uiTicks
     if($script:uiNextPaintTicks.ContainsKey($key) -and $script:uiTicks -lt $script:uiNextPaintTicks[$key]){return $false}
-    $script:uiNextPaintTicks[$key]=$script:uiTicks+30
+    $script:uiNextPaintTicks[$key]=$script:uiTicks+$intervalTicks
     return $true
 }
 function Update-ActiveTabUi {
@@ -49,14 +49,19 @@ $tabs.Add_SelectedIndexChanged({Update-ActiveTabUi})
 # A large list must yield back to the WinForms message pump between expensive scans.
 $script:largeRefreshPhase=0;$script:autoSyncCursor=0
 $script:largeRefreshTasks=@('Sync-IzanamiTeams','Sync-DailyPriorityPreferences','Sync-SonCapPreferences','Sync-CloakQueue','Sync-AutoItemPreferences','Sync-QuestPreferences','Sync-GiftPreferences','Sync-MailCollection','Sync-Distribution','Update-ActiveTabUi','Update-UiSummary','Update-ManagerStatus')
-# Keep each queue on its 500 ms cadence, but put it on a separate UI timer tick.
+# Queue scheduling runs once per second; native recovery/close checks retain their 500 ms cadence.
 function Invoke-ActivityQueuePhase {
- switch($script:uiTicks % 5){
+ switch($script:uiTicks % 10){
   0 {Invoke-UiTimedStep 'Pump-DungeonQueue';[TGLL.NativeBackend]::PulseSonCapLimitClose()}
   1 {Invoke-UiTimedStep 'Pump-BeastQueue';Invoke-UiTimedStep 'Pump-AutoAll'}
   2 {Invoke-UiTimedStep 'Pump-SonCapQueue';[TGLL.NativeBackend]::PulseActivityWatchdog()}
   3 {Invoke-UiTimedStep 'Pump-IzanamiQueue';[TGLL.NativeBackend]::PulseIzanamiRounds()}
   4 {Invoke-UiTimedStep 'Pump-QuestQueue';[TGLL.NativeBackend]::PulseQuestAutoClose()}
+  5 {[TGLL.NativeBackend]::PulseSonCapLimitClose()}
+  6 {Invoke-UiTimedStep 'Pump-AutoAll'}
+  7 {[TGLL.NativeBackend]::PulseActivityWatchdog()}
+  8 {[TGLL.NativeBackend]::PulseIzanamiRounds()}
+  9 {[TGLL.NativeBackend]::PulseQuestAutoClose()}
  }
 }
 function Invoke-UiTimedStep([string]$stepName){
@@ -85,6 +90,7 @@ function Invoke-LargeManagerRefresh {
     $script:largeRefreshPhase=($script:largeRefreshPhase+1)%$script:largeRefreshTasks.Count
     if($task -like 'Update-*' -and ([TGLL.UiPerformance]::IsScrolling -or $script:uiDragging -or $form.WindowState -eq [Windows.Forms.FormWindowState]::Minimized)){return}
     if($task -like 'Update-*' -and !(Test-ScheduledUiRefresh $task)){return}
+    if($task -in @('Sync-SonCapPreferences','Sync-IzanamiTeams') -and !(Test-ScheduledUiRefresh ('preferences:'+$task) 50)){return}
     if($task -eq 'Update-ManagerStatus'){Update-ManagerStatus $true;return}
     Invoke-UiTimedStep $task
 }
