@@ -47,6 +47,8 @@ function Reset-QuestQueue {
     $script:questQueuePaused=$true;$script:questBatches=@();$script:questWaiting=@{}
 }
 function Pump-QuestQueue {
+    $processReads=[TGLL.ManagedGames]::BeginProcessReadScope()
+    try{
     if($script:questQueuePaused -or !$script:questBatches.Count){return}
     $script:questAccountIndex=@{};foreach($a in $script:accounts){$script:questAccountIndex[[string]$a.id]=$a}
     foreach($batch in $script:questBatches){
@@ -115,12 +117,28 @@ function Pump-QuestQueue {
     if(!$submitted){break}
     }
     Update-QuestQueueStatus
+    }finally{$processReads.Dispose()}
 }
 function Update-QuestQueueStatus {
-    $script:questWaiting=@{};foreach($b in $script:questBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){$script:questWaiting[$m.id]=$m}}}
-    $active=0;$waiting=0;$done=0;foreach($b in $script:questBatches){if($b.state -eq 'waiting'){$waiting+=$b.members.Count}elseif($b.state -eq 'done'){$done+=$b.members.Count}else{$active+=(Get-ActivityReservedCount $b);$waiting+=@($b.members | Where-Object {Test-ActivityMemberYielded $_}).Count}}
-    $questQueueHint.Text="Đang giữ lượt: $active / $([int]$questMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
-    $errors=@($script:questBatches | Where-Object {$_.error});if($errors.Count){$questQueueHint.Text+="`r`n"+$errors[0].error}
-    if(!$script:questWaiting.Count){return}
-    foreach($row in $grid.Rows){if($script:questWaiting.ContainsKey([string]$row.Tag.id)){if($row.Cells['status'].Value -ne 'Chờ lượt nhiệm vụ'){$row.Cells['status'].Value='Chờ lượt nhiệm vụ'};if(!$row.Cells['open'].Tag){Update-AccountOpen $row}}}
+    $waitingIndex=@{};$active=0;$waiting=0;$done=0;$firstError=''
+    foreach($b in $script:questBatches){
+        if(!$firstError -and $b.error){$firstError=[string]$b.error}
+        if($b.state -eq 'waiting'){
+            $waiting+=$b.members.Count
+            foreach($m in $b.members){$waitingIndex[[string]$m.id]=$m}
+        }elseif($b.state -eq 'done'){$done+=$b.members.Count}
+        else{
+            foreach($m in $b.members){
+                $yielded=$m.PSObject.Properties['slotYielded'] -and $m.slotYielded
+                $exited=$m.PSObject.Properties['queueExited'] -and $m.queueExited
+                if($yielded){$waiting++}elseif(!$exited){$active++}
+            }
+        }
+    }
+    $script:questWaiting=$waitingIndex
+    $text="Đang giữ lượt: $active / $([int]$questMax.Value) • Hàng chờ: $waiting • Đã đóng: $done"
+    if($firstError){$text+="`r`n"+$firstError}
+    if($questQueueHint.Text -ne $text){$questQueueHint.Text=$text}
+    if(!$waitingIndex.Count){return}
+    foreach($row in $grid.Rows){if($waitingIndex.ContainsKey([string]$row.Tag.id)){if($row.Cells['status'].Value -ne 'Chờ lượt nhiệm vụ'){$row.Cells['status'].Value='Chờ lượt nhiệm vụ'};if(!$row.Cells['open'].Tag){Update-AccountOpen $row}}}
 }
