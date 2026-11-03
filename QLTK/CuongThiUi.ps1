@@ -74,7 +74,7 @@ function Set-CuongThiMoveFromUi {
 }
 $cuongThiMove.Add_CheckedChanged({Set-CuongThiMoveFromUi})
 $cuongThiCheck.Add_CheckedChanged({if($script:cuongThiLoading -or !$grid.SelectedRows.Count){return};try{Set-CuongThiPreference $grid.SelectedRows[0] $cuongThiCheck.Checked}catch{$status.Text=$_.Exception.GetBaseException().Message};Update-CuongThiUi})
-$grid.Add_SelectionChanged({Update-CuongThiUi});Update-CuongThiUi
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $cuongThiPage){Update-CuongThiUi}});Update-CuongThiUi
 
 $null=Ui-Label 'Dừng treo khi HP dưới (mặc định 20 triệu):' $cuongThiPage 16 580 330 26
 $cuongThiHp=New-Object Windows.Forms.NumericUpDown

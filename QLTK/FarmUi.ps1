@@ -202,6 +202,6 @@ $dailyPriority.Add_CheckedChanged({$script:settings.dailyPriority=$dailyPriority
 $farmHint=Ui-Label 'Chọn map/làng, X/Y và khu rồi Bắt đầu đã chọn. Khu -1 dùng khu của bãi đã lưu hoặc chọn khu ít người; khu từ 0 trở lên là khu cố định.' $farmPage 16 378 625 50
 function Update-FarmUi {if(!$grid.SelectedRows.Count){return};$a=$grid.SelectedRows[0].Tag;if($null -eq $a -or !$a.id){return};if(!$script:accountJobs.ContainsKey($a.id)){return};$j=Get-AccountJob $script:accountJobs[$a.id];if($j -and $j.PSObject.Properties['FarmStatus']){$farmHint.Text=$a.username+' • Level nhân vật '+$j.CharacterLevel+"`r`n"+$j.FarmStatus}}
 Show-FarmSpots
-$grid.Add_SelectionChanged({Update-FarmUi})
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $farmPage){Update-FarmUi}})
 
 Restore-UpRequests

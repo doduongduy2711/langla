@@ -33,4 +33,4 @@ function Update-QuestUi {
     }finally{$script:loadingQuest=$false}
 }
 $questCheck.Add_CheckedChanged({if($script:loadingQuest -or !$grid.SelectedRows.Count){return};$a=$grid.SelectedRows[0].Tag;if($null -eq $a){return};$a | Add-Member NoteProperty autoQuest $questCheck.Checked -Force;if(!$UiTest){Save-Accounts};Sync-QuestPreferences;Update-QuestUi})
-$grid.Add_SelectionChanged({Update-QuestUi});Update-QuestUi
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $questPage){Update-QuestUi}});Update-QuestUi

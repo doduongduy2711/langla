@@ -73,4 +73,4 @@ function Save-AutoItemUi {
 }
 $itemId.Add_TextChanged({Remember-AutoItemDraft});$itemOnce.Add_TextChanged({Remember-AutoItemDraft})
 $itemEnabled.Add_CheckedChanged({Save-AutoItemUi});$itemId.Add_Leave({Save-AutoItemUi});$itemOnce.Add_Leave({Save-AutoItemUi});$itemInterval.Add_ValueChanged({Save-AutoItemUi})
-$grid.Add_SelectionChanged({Update-AutoItemUi});Update-AutoItemUi
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $itemPage){Update-AutoItemUi}});Update-AutoItemUi

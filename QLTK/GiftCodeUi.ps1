@@ -46,4 +46,4 @@ function Set-GiftSelected([bool]$enabled) {
     }catch{$status.Text=$_.Exception.Message}
 }
 $giftEnabled.Add_CheckedChanged({Save-GiftUi});$giftCodes.Add_Leave({Save-GiftUi});$giftStart.Add_Click({Set-GiftSelected $true});$giftStop.Add_Click({Set-GiftSelected $false})
-$grid.Add_SelectionChanged({Update-GiftUi});Update-GiftUi
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $giftPage){Update-GiftUi}});Update-GiftUi

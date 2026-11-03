@@ -68,4 +68,4 @@ function Start-MarketSelected([bool]$sell){
 }
 $marketSellRules.Add_TextChanged({Save-MarketUi});$marketScanRules.Add_TextChanged({Save-MarketUi});$marketAutoBuy.Add_CheckedChanged({Save-MarketUi});$marketMaxBuys.Add_ValueChanged({Save-MarketUi});$marketBudget.Add_ValueChanged({Save-MarketUi})
 $marketSellButton.Add_Click({Start-MarketSelected $true});$marketScanButton.Add_Click({Start-MarketSelected $false});$marketStopButton.Add_Click({foreach($row in @(Get-LaunchRows)){$id=[string]$row.Tag.id;if($script:accountJobs.ContainsKey($id)){[TGLL.NativeBackend]::StopMarket($script:accountJobs[$id])}};Update-MarketUi})
-$grid.Add_SelectionChanged({Update-MarketUi});Update-MarketUi
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $marketPage){Update-MarketUi}});Update-MarketUi

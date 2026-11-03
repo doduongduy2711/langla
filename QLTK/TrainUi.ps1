@@ -68,4 +68,4 @@ $skillChoice.Add_ItemCheck({
     if($grid.SelectedRows.Count){$key=[string]$grid.SelectedRows[0].Tag.id;$script:trainSelections[$key]=@($ids.ToArray());if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key];if($j.TrainEnabled){if(!$ids.Count){[TGLL.NativeBackend]::StopTraining($j.Id)}else{try{[TGLL.NativeBackend]::StartTraining($j.Id,[int[]]$ids.ToArray())}catch{$status.Text=$_.Exception.Message}}}}}
     try{Save-TrainPreferences}catch{$status.Text='Chưa lưu được lựa chọn chiêu.'}
 })
-$grid.Add_SelectionChanged({Update-TrainUi})
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $trainPage){Update-TrainUi}})

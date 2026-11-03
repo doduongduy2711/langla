@@ -136,7 +136,7 @@ $receiveKey.Add_CheckedChanged({
     }catch{$status.Text=$a.username+': '+$_.Exception.Message}
     Update-DungeonUi
 })
-$grid.Add_SelectionChanged({Update-DungeonUi})
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $dungeonPage){Update-DungeonUi}})
 $dungeonHigh.Add_CheckedChanged({
     if($script:loadingDungeon -or !$grid.SelectedRows.Count){return}
     $a=$grid.SelectedRows[0].Tag;$enabled=$dungeonHigh.Checked

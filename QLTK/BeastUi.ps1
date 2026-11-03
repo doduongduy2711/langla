@@ -140,6 +140,6 @@ function Update-BeastUi {
  }finally{$script:loadingBeast=$false}
 }
 $beastCheck.Add_CheckedChanged({if($script:loadingBeast -or !$grid.SelectedRows.Count){return};try{Set-BeastPreference $grid.SelectedRows[0] $beastCheck.Checked}catch{Show-Error $_.Exception.Message}})
-$grid.Add_SelectionChanged({Update-BeastUi});Update-BeastUi
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $beastPage){Update-BeastUi}});Update-BeastUi
 
 function Assert-BeastAccountsAvailable($accounts){foreach($a in $accounts){foreach($b in $script:beastBatches){if($b.state -ne 'done' -and @($b.members | Where-Object {$_.id -eq [string]$a.id}).Count){throw 'Acc đang trong hàng chờ linh thú; dừng hàng chờ đó trước.'}}}}

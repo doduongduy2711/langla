@@ -1,5 +1,5 @@
 ﻿$script:uiDragging=$false;$script:uiRefreshPending=$false
-[TGLL.UiPerformance]::Buffer($form)
+# Buffer individual paint surfaces; buffering the root form copies its entire client area.
 foreach($panel in @($top,$bottom,$tabs,$detailsGroup)){[TGLL.UiPerformance]::Buffer($panel)}
 [TGLL.UiPerformance]::Buffer($inventoryGrid);[TGLL.UiPerformance]::Buffer($marketResultsGrid)
 $form.Add_ResizeBegin({$script:uiDragging=$true})
@@ -26,6 +26,7 @@ function Update-ActiveTabUi {
     if([TGLL.UiPerformance]::IsScrolling -or $script:uiDragging -or $form.WindowState -eq [Windows.Forms.FormWindowState]::Minimized){return}
     $selected=$tabs.SelectedTab
     if($script:gameSettingPages -contains $selected){Update-GameSettingsUi}
+    elseif($selected -eq $dungeonPage){Update-DungeonUi}
     elseif($selected -eq $soncapPage){Update-SonCapUi}
     elseif($selected -eq $chestPage){Update-StoneChestUi}
     elseif($selected -eq $marketPage){Update-MarketUi}

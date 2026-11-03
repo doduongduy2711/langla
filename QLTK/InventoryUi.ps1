@@ -49,5 +49,5 @@ function Update-InventoryUi {
 }
 $inventoryFilter.Add_SelectedIndexChanged({$script:inventoryViewKey='';Update-InventoryUi})
 $inventorySearch.Add_TextChanged({$script:inventoryViewKey='';Update-InventoryUi})
-$grid.Add_SelectionChanged({Update-InventoryUi;if($tabs.SelectedTab -eq $inventoryPage){Request-InventoryUi}})
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $inventoryPage){Update-InventoryUi;Request-InventoryUi}})
 $tabs.Add_SelectedIndexChanged({if($tabs.SelectedTab -eq $inventoryPage){Resize-InventoryUi;Update-InventoryUi;Request-InventoryUi}})

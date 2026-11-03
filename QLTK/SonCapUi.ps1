@@ -51,7 +51,7 @@ $null=Ui-Label 'Từng acc hết quái sống → xác nhận → tắt treo →
 $soncapHint=Ui-Label '' $soncapPage 16 505 635 85
 $soncapGroupSize.Add_ValueChanged({if($script:loadingSonCap){return};try{Save-SonCapConfig;Sync-SonCapPreferences}catch{Show-Error $_.Exception.Message}})
 $soncapCheck.Add_CheckedChanged({if(!$script:loadingSonCap -and $grid.SelectedRows.Count){try{Save-SonCapConfig;Set-SonCapPreference $grid.SelectedRows[0] $soncapCheck.Checked;Update-SonCapUi}catch{Show-Error $_.Exception.Message}}})
-$grid.Add_SelectionChanged({Update-SonCapUi})
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $soncapPage){Update-SonCapUi}})
 $soncapQueueHint=Ui-Label '' $soncapPage 16 460 635 40
 . (Join-Path $PSScriptRoot 'SonCapQueue.ps1')
 function Sync-SonCapTeams {

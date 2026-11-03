@@ -8,6 +8,16 @@ try {
  if($script:perfCounts['Update-MarketUi'] -ne 1 -or @($perfNames | Where-Object {$_ -ne 'Update-MarketUi' -and $script:perfCounts[$_] -ne 0}).Count){throw 'Hidden tabs still refresh'}
  $tabs.SelectedTab=$trainPage;foreach($n in $perfNames){$script:perfCounts[$n]=0};Update-ActiveTabUi
  if($script:perfCounts['Update-TrainUi'] -ne 1 -or $script:perfCounts['Update-MarketUi'] -ne 0){throw 'Tab switch does not update current pane'}
+ # A real row change must refresh only the visible pane, not every hidden feature.
+ if($grid.Rows.Count -gt 1){
+  $selectionBefore=$grid.CurrentCell
+  try{
+   $grid.CurrentCell=$grid.Rows[0].Cells['username']
+   foreach($n in $perfNames){$script:perfCounts[$n]=0}
+   $grid.CurrentCell=$grid.Rows[1].Cells['username']
+   if($script:perfCounts['Update-TrainUi'] -ne 1 -or @($perfNames | Where-Object {$_ -ne 'Update-TrainUi' -and $script:perfCounts[$_] -ne 0}).Count){throw 'Account selection refreshed hidden panes'}
+  }finally{$grid.CurrentCell=$selectionBefore}
+ }
  $script:perfBusinessCalls=0;$script:perfSummaryCalls=0
  foreach($n in $perfBusiness){Set-Item ('Function:\'+$n) {$script:perfBusinessCalls++}}
  function Update-UiSummary {$script:perfSummaryCalls++}
@@ -16,8 +26,8 @@ try {
  $script:uiDragging=$false;$script:uiTicks=9;Invoke-ManagerTick
  if($script:perfSummaryCalls -ne 1 -or $script:perfCounts['Update-TrainUi'] -ne 1){throw 'Rendering did not resume after drag'}
  $bufferProperty=[Windows.Forms.Control].GetProperty('DoubleBuffered',[Reflection.BindingFlags]'Instance,NonPublic')
- if(!$bufferProperty.GetValue($form,$null) -or !$bufferProperty.GetValue($grid,$null) -or !$bufferProperty.GetValue($marketResultsGrid,$null)){throw 'Double buffering missing'}
- Write-Output 'PASS: visible-tab-only refresh, immediate tab switch, socket retained while queue/preference work yields during drag, rendering resumes afterward, form/account/market double buffering.'
+ if($bufferProperty.GetValue($form,$null) -or !$bufferProperty.GetValue($grid,$null) -or !$bufferProperty.GetValue($marketResultsGrid,$null)){throw 'Expected buffered grids without root form buffering'}
+ Write-Output 'PASS: visible-tab-only refresh, immediate tab switch, socket retained while queue/preference work yields during drag, rendering resumes afterward, account/market buffering without whole-form copying.'
 }finally{foreach($n in $perfOriginal.Keys){Set-Item ('Function:\'+$n) $perfOriginal[$n]};$script:uiTicks=$perfSavedTicks;$script:uiDragging=$perfSavedDrag;$tabs.SelectedTab=$perfSavedTab}
 
 # Compare the former per-cell PowerShell handler to the compiled handler on the same synthetic table.

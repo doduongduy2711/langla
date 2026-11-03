@@ -70,7 +70,7 @@ function Read-CloakPrices {
 function Stop-CloakSelected {foreach($row in @(Get-LaunchRows)){$key=[string]$row.Tag.id;if($script:accountJobs.ContainsKey($key)){[TGLL.NativeBackend]::StopCloakPurchase($script:accountJobs[$key])}};Update-CloakUi}
 $cloakChoice.Add_SelectedIndexChanged({Save-CloakUi});$cloakQuantity.Add_ValueChanged({Save-CloakUi})
 $cloakBuy.Add_Click({Start-CloakSelected});$cloakRead.Add_Click({Read-CloakPrices});$cloakStop.Add_Click({Stop-CloakSelected})
-$grid.Add_SelectionChanged({Update-CloakUi});Update-CloakUi
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $cloakPage){Update-CloakUi}});Update-CloakUi
 $script:cloakRun=$null;$script:cloakLaunchingAccountId=''
 $cloakEquipClose=New-Object Windows.Forms.CheckBox;$cloakEquipClose.Text='Mua xong mặc áo và tắt game • chạy acc đã chọn theo giới hạn';$cloakEquipClose.Checked=$true;$cloakEquipClose.SetBounds(16,213,640,27);$cloakPage.Controls.Add($cloakEquipClose)
 $cloakBuy.Top=247;$cloakRead.Top=247;$cloakStop.Top=247;$cloakHint.Top=291

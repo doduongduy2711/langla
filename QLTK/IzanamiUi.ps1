@@ -76,5 +76,5 @@ $izanamiCheck.Add_CheckedChanged({
     }catch{$status.Text=$a.username+': '+$_.Exception.Message}
     Update-IzanamiUi
 })
-$grid.Add_SelectionChanged({Update-IzanamiUi})
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $izanamiPage){Update-IzanamiUi}})
 Update-IzanamiUi

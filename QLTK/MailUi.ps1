@@ -177,4 +177,4 @@ function Resize-MailUi {
 $mailInboxCheck.Add_CheckedChanged({$script:inboxWanted=$mailInboxCheck.Checked;if($script:inboxWanted){$script:inboxApplied=''};if(!$script:inboxWanted -and $script:inboxApplied){[TGLL.NativeBackend]::ConfigureInbox($script:inboxApplied,$false);$script:inboxApplied='';$mailInboxStatus.Text='Nhận thư: Tắt'}else{Sync-MailReceiver}})
 $mailPage.AutoScroll=$true;$mailPage.Add_Resize({Resize-MailUi});$mailItems.Add_TextChanged({Save-MailSettings});$mailDelay.Add_ValueChanged({Save-MailSettings})
 $mailNamedCheck.Add_CheckedChanged({Save-MailSettings;Update-MailUi});$mailNamedRecipient.Add_TextChanged({Save-MailSettings;Update-MailUi})
-$grid.Add_SelectionChanged({Update-MailUi});Resize-MailUi;Update-MailUi
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $mailPage){Update-MailUi}});Resize-MailUi;Update-MailUi

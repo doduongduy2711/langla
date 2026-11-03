@@ -32,4 +32,4 @@ function Update-GemCombineUi {
 $gemStart.Add_Click({$rows=@(Get-LaunchRows);foreach($row in $rows){Set-GemCombinePreference $row $true};$status.Text='Đã chọn tự ghép đá 12 cho '+$rows.Count+' acc; tự chạy khi vào game.';Update-GemCombineUi})
 $gemStop.Add_Click({foreach($row in @(Get-LaunchRows)){Set-GemCombinePreference $row $false};Update-GemCombineUi})
 $gemCheck.Add_CheckedChanged({if($script:gemLoading -or !$grid.SelectedRows.Count){return};Set-GemCombinePreference $grid.SelectedRows[0] $gemCheck.Checked;Update-GemCombineUi})
-$grid.Add_SelectionChanged({Update-GemCombineUi});Update-GemCombineUi
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $gemPage){Update-GemCombineUi}});Update-GemCombineUi

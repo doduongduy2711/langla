@@ -59,4 +59,4 @@ function Stop-StoneChestSelected {
 }
 $chestQuantity.Add_ValueChanged({Save-StoneChestUi});$chestOpen.Add_CheckedChanged({Save-StoneChestUi})
 $chestBuy.Add_Click({Start-StoneChestSelected $false});$chestUse.Add_Click({Start-StoneChestSelected $true});$chestStop.Add_Click({Stop-StoneChestSelected})
-$grid.Add_SelectionChanged({Update-StoneChestUi});Update-StoneChestUi
+$grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $chestPage){Update-StoneChestUi}});Update-StoneChestUi
