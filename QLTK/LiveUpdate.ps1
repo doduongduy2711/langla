@@ -123,7 +123,7 @@ function Get-UpdateRepository {
 }
 function Initialize-GitHubUpdate {
     if($script:githubUpdateTimer){return}
-    $script:githubUpdateTimer=New-Object Windows.Forms.Timer;$script:githubUpdateTimer.Interval=200
+    $script:githubUpdateTimer=New-Object Windows.Forms.Timer;$script:githubUpdateTimer.Interval=200;if($form -is [TGLL.SmoothManagerForm]){$form.WatchTimer($script:githubUpdateTimer)}
     $script:githubUpdateTimer.Add_Tick({Pump-GitHubUpdate})
     $menu=New-Object Windows.Forms.ContextMenuStrip
     $entry=$menu.Items.Add('Nguồn cập nhật GitHub...');$entry.Add_Click({Show-UpdateRepositoryDialog})

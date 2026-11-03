@@ -111,7 +111,7 @@ $captchaAuto.Add_CheckedChanged({Save-CaptchaPreference})
 Apply-CaptchaOptions;Update-CaptchaUi
 
 $script:ocrPortalProcess=$null;$script:ocrPortalOpening=$false
-$ocrPortalTimer=New-Object Windows.Forms.Timer;$ocrPortalTimer.Interval=500
+$ocrPortalTimer=New-Object Windows.Forms.Timer;$ocrPortalTimer.Interval=500;$form.WatchTimer($ocrPortalTimer)
 function Get-OcrPortalHealth {try{return Invoke-RestMethod -Uri 'http://127.0.0.1:47662/health' -TimeoutSec 1 -ErrorAction Stop}catch{return $null}}
 function Open-OcrPortal {
  if($UiTest -or $script:ocrPortalOpening){return}

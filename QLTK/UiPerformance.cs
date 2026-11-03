@@ -1,5 +1,25 @@
 ﻿using System;using System.Drawing;using System.Reflection;using System.Windows.Forms;using System.Windows.Forms.VisualStyles;
 namespace TGLL {
+ public class SmoothManagerForm : Form {
+  readonly System.Collections.Generic.List<Timer> watchedTimers=new System.Collections.Generic.List<Timer>();
+  readonly System.Collections.Generic.List<Timer> pausedTimers=new System.Collections.Generic.List<Timer>();
+  bool moving,deferredResize;
+  public void WatchTimer(Timer timer){if(timer!=null&&!watchedTimers.Contains(timer))watchedTimers.Add(timer);}
+  internal void BeginUserMove(){
+   if(moving)return;moving=true;deferredResize=false;SuspendLayout();
+   foreach(Timer timer in watchedTimers)if(timer.Enabled){pausedTimers.Add(timer);timer.Stop();}
+  }
+  internal void EndUserMove(){
+   if(!moving)return;moving=false;ResumeLayout(false);
+   try{if(deferredResize){deferredResize=false;base.OnResize(EventArgs.Empty);}}
+   finally{foreach(Timer timer in pausedTimers){try{if(!IsDisposed&&!Disposing)timer.Start();}catch(ObjectDisposedException){}}pausedTimers.Clear();}
+  }
+  protected override void OnResize(EventArgs e){if(moving){deferredResize=true;return;}base.OnResize(e);}
+  protected override void WndProc(ref Message message){
+   if(message.Msg==0x231)BeginUserMove();
+   try{base.WndProc(ref message);}finally{if(message.Msg==0x232)EndUserMove();}
+  }
+ }
  public sealed class AccountPrivacy {
   readonly DataGridView grid;bool enabled;
   public AccountPrivacy(DataGridView grid){this.grid=grid;grid.CellFormatting+=FormatCell;}

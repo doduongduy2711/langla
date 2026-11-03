@@ -25,7 +25,7 @@ $selectAll=Ui-NewButton 'Chọn tất cả' {foreach($r in $grid.Rows){$r.Cells[
 $clearAll=Ui-NewButton 'Bỏ chọn' {foreach($r in $grid.Rows){$r.Cells['pick'].Value=$false};Update-UiSummary}
 $refreshButton=Ui-NewButton 'Cập nhật QLTK' {Invoke-LiveUpdate}
 $script:arrangeOperation=$null
-$arrangeTimer=New-Object Windows.Forms.Timer;$arrangeTimer.Interval=100
+$arrangeTimer=New-Object Windows.Forms.Timer;$arrangeTimer.Interval=100;$form.WatchTimer($arrangeTimer)
 $sortButton=Ui-NewButton 'Sắp xếp' {
     if($null -ne $script:arrangeOperation -and !$script:arrangeOperation.Completed){return}
     try {

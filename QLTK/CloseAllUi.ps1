@@ -1,5 +1,5 @@
 ﻿$script:closeAllOperation=$null;$script:closingAll=$false
-$closeAllTimer=New-Object Windows.Forms.Timer;$closeAllTimer.Interval=100
+$closeAllTimer=New-Object Windows.Forms.Timer;$closeAllTimer.Interval=100;$form.WatchTimer($closeAllTimer)
 function Begin-CloseAllOperation {return [TGLL.NativeBackend]::BeginCloseAllGames()}
 function Start-CloseAllUi {
  if($script:closingAll){return}
