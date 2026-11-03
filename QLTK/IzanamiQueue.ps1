@@ -55,6 +55,8 @@ function Reset-IzanamiQueue {
     $script:izanamiQueuePaused=$true;$script:izanamiBatches=@();$script:izanamiWaiting=@{}
 }
 function Pump-IzanamiQueue {
+    $processReads=[TGLL.ManagedGames]::BeginProcessReadScope()
+    try{
     Sync-IzanamiCompletedClose
     if($script:izanamiQueuePaused -or !$script:izanamiBatches.Count){return}
     $script:izanamiAccountIndex=@{};foreach($a in $script:accounts){$script:izanamiAccountIndex[[string]$a.id]=$a}
@@ -119,16 +121,19 @@ function Pump-IzanamiQueue {
         foreach($m in $batch.members){$script:izanamiWaiting.Remove($m.id)}
     }
     # Submit at most one account per timer tick; native login still runs six at a time.
+    $submittedAny=$false
     for($launchBudget=0;$launchBudget -lt [int]$launchConcurrency.Value;$launchBudget++){
     $submitted=$false
     foreach($batch in @(Get-ActivityLaunchBatches $script:izanamiBatches)){
         $member=Get-ActivityLaunchMember $batch
-        if($member){$submitted=$true;try{Start-IzanamiMember $member;if(Test-ActivityRetryPriority $batch $member){$null=[TGLL.NativeBackend]::PrioritizeLaunch([string]$member.job)}}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Izanami $batch $member $script:izanamiAccountIndex};Sync-IzanamiTeams;break}
+        if($member){$submitted=$true;$submittedAny=$true;try{Start-IzanamiMember $member;if(Test-ActivityRetryPriority $batch $member){$null=[TGLL.NativeBackend]::PrioritizeLaunch([string]$member.job)}}catch{$batch.state='blocked';$batch.error=[string]$_.Exception.Message;Handle-ActivityLaunchError Izanami $batch $member $script:izanamiAccountIndex};break}
         if(@($batch.members | Where-Object {Test-ActivityMemberYielded $_}).Count -eq 0){$batch.state='running'}
     }
     if(!$submitted){break}
     }
+    if($submittedAny){Sync-IzanamiTeams}
     Update-IzanamiQueueStatus
+    }finally{$processReads.Dispose()}
 }
 function Update-IzanamiQueueStatus {
     $script:izanamiWaiting=@{};foreach($b in $script:izanamiBatches){if($b.state -eq 'waiting'){foreach($m in $b.members){$script:izanamiWaiting[$m.id]=$m}}}

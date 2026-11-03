@@ -83,6 +83,15 @@ namespace TGLL {
         internal static readonly object Gate=new object();
         sealed class Identity {internal int Id;internal long Started;internal string Path;}
         static readonly Dictionary<int,Identity> games=new Dictionary<int,Identity>();
+        [ThreadStatic] static HashSet<Identity> processReadScope;
+        sealed class ProcessReadScope : IDisposable {
+            readonly HashSet<Identity> previous;bool disposed;
+            internal ProcessReadScope(){previous=processReadScope;processReadScope=new HashSet<Identity>();}
+            public void Dispose(){if(disposed)return;disposed=true;processReadScope=previous;}
+        }
+        // A positive observation may only retain a slot until this queue pass ends.
+        // New registrations have a new identity; other threads always read fresh.
+        public static IDisposable BeginProcessReadScope(){return new ProcessReadScope();}
         public static void Register(Process process,string target) {
             string path=System.IO.Path.GetFullPath(target);
             // MainModule may expose an incomplete loader entry at process startup.
@@ -230,7 +239,8 @@ namespace TGLL {
         }
         public static bool IsRunning(int pid){
             lock(Gate){Identity game;if(!games.TryGetValue(pid,out game))return false;
-                try{using(Process p=Process.GetProcessById(pid)){return Matches(p,game);}}catch{return false;}
+                if(processReadScope!=null&&processReadScope.Contains(game))return true;
+                try{using(Process p=Process.GetProcessById(pid)){bool live=Matches(p,game);if(live&&processReadScope!=null)processReadScope.Add(game);return live;}}catch{return false;}
             }
         }
         public static bool SetVisible(int pid,bool visible){
