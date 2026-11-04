@@ -2,11 +2,11 @@
 $oldMarketProperty=$marketTestAccount.PSObject.Properties['marketConfig'];$oldMarket=$null;if($null -ne $oldMarketProperty){$oldMarket=$oldMarketProperty.Value}
 try {
  $grid.ClearSelection();$grid.Rows[0].Selected=$true
- $marketSellRules.Text="277,5,100`r`n498,1,200";$marketScanRules.Text='277,80';$marketAutoBuy.Checked=$true;$marketMaxBuys.Value=3;$marketBudget.Value=500;Save-MarketUi
+ $marketSellRules.Text="277,5,100`r`n498,1,200";$marketScanRules.Text='277,80';$marketAutoBuy.Checked=$true;$marketMaxBuys.Value=3;$marketBudget.Value=500;$marketMaxSells.Value=7;Save-MarketUi
  $p=Get-MarketPreference $marketTestAccount
- if($p.sell -notmatch '498,1,200' -or $p.scan -ne '277,80' -or !$p.buy -or $p.maxBuys -ne 3 -or $p.budget -ne 500){throw 'Market preferences lost'}
- Update-MarketUi;if($marketSellRules.Text -notmatch '277,5,100' -or $marketMaxBuys.Value -ne 3){throw 'Market UI roundtrip failed'}
- Copy-AccountConfig;$copied=$script:copiedAccountConfig | ConvertFrom-Json;if($copied.marketConfig.maxBuys -ne 3 -or $copied.marketConfig.budget -ne 500){throw 'Market config clipboard missing'}
+ if($p.sell -notmatch '498,1,200' -or $p.scan -ne '277,80' -or !$p.buy -or $p.maxBuys -ne 3 -or $p.budget -ne 500 -or $p.maxSells -ne 7){throw 'Market preferences lost'}
+ Update-MarketUi;if($marketSellRules.Text -notmatch '277,5,100' -or $marketMaxBuys.Value -ne 3 -or $marketMaxSells.Value -ne 7){throw 'Market UI roundtrip failed'}
+ Copy-AccountConfig;$copied=$script:copiedAccountConfig | ConvertFrom-Json;if($copied.marketConfig.maxBuys -ne 3 -or $copied.marketConfig.budget -ne 500 -or $copied.marketConfig.maxSells -ne 7){throw 'Market config clipboard missing'}
  if($marketPage.Text -ne 'Auto chợ' -or !$marketPage.AutoScroll -or !$marketReport.ReadOnly -or $tabs.TabPages.Count -ne 26){throw 'Market layout failed'}
  $fixture=@([pscustomobject]@{account='acc1';itemId=428;name='Rương ngọc khảm';quantity=500;price=14000000;seller='Seller';listingId=502044},[pscustomobject]@{account='acc2';itemId=8;name='Đá cấp 9';quantity=1;price=45555;seller='Other';listingId=502067})
  Set-MarketResultTable $fixture

@@ -3854,7 +3854,7 @@ namespace TGLL {
  public sealed class MarketSnapshot { public long Panel,Array;public int Page,Category,Filter;public MarketListing[] Items; }
  public sealed partial class NativeJob {
   public bool MarketEnabled,MarketBuying;internal bool MarketHeadless;internal long MarketQueryPanel;internal int MarketQueryFilter,MarketQueryCategory;internal bool MarketDrained=true;public string MarketStatus="";public MarketListing[] MarketResults=new MarketListing[0];
-  public int MarketBought,MarketSold;public long MarketSpent;
+  public int MarketBought,MarketSold;internal int MarketMaxSells=1;public long MarketSpent;
   internal MarketRule[] MarketRules;internal int MarketMode,MarketPhase,MarketRuleIndex,MarketPage,MarketMaxBuys;
   internal long MarketBudget,MarketBeforeSilver,MarketBeforeCount,MarketArray,MarketFirstId;
   internal DateTime MarketAt,MarketNext;internal MarketListing MarketTarget;internal InventoryItem MarketItem;
@@ -3921,15 +3921,18 @@ namespace TGLL {
    }
    if(r.Ptr(fc+(own?0x2b8:0x2c0))!=array||r.Ptr(fc+0x90)!=panel)throw new Exception("market_changed");return new MarketSnapshot{Panel=panel,Array=array,Page=page,Filter=filter,Category=category,Items=found.ToArray()};
   }
-  public static void StartMarket(string id,string rules,bool sell,bool buy,int maxBuys,long budget){
+  public static void StartMarket(string id,string rules,bool sell,bool buy,int maxBuys,long budget){StartMarket(id,rules,sell,buy,maxBuys,budget,1);}
+  public static void StartMarket(string id,string rules,bool sell,bool buy,int maxBuys,long budget,int maxSells){
+   if(sell&&(maxSells<1||maxSells>100000))throw new Exception("Nhập số lần rao từ 1 đến 100000.");
    NativeJob j=Get(id);if(j==null)throw new Exception("Acc chưa mở.");MarketRule[] parsed=ParseMarketRules(rules,sell);if(!j.GameSettingsReady||j.CharacterName.Length==0)throw new Exception("Đợi nhân vật vào game xong trước khi chạy Auto chợ.");if(buy&&(maxBuys<1||budget<1))throw new Exception("Nhập giới hạn số lần mua và tổng bạc.");
    lock(j){if(j.MarketEnabled||!j.MarketDrained)throw new Exception("Auto chợ đang chạy hoặc đang đợi lệnh cũ kết thúc.");if(j.MailEnabled||j.MailBusy||j.InboxEnabled||j.InboxBusy||j.GiftEnabled||j.ChestEnabled||j.CloakEnabled||j.SonCapEnabled||j.IzanamiEnabled||j.DailyActive||j.QuestEnabled)throw new Exception("Dừng hoạt động khác trước khi chạy Auto chợ.");
-    j.MarketRules=parsed;j.MarketHeadless=!sell;j.MarketMode=sell?2:1;j.MarketBuying=buy&&!sell;j.MarketMaxBuys=maxBuys;j.MarketBudget=budget;j.MarketBought=j.MarketSold=0;j.MarketSpent=0;j.MarketRuleIndex=j.MarketPage=j.MarketPhase=0;j.MarketFirstId=0;j.MarketSeen.Clear();j.MarketPageStarts.Clear();j.MarketResults=new MarketListing[0];j.MarketNext=DateTime.MinValue;j.MarketStatus="Đợi đọc dữ liệu Chợ";j.MarketEnabled=true;}
+    j.MarketRules=parsed;j.MarketHeadless=!sell;j.MarketMode=sell?2:1;j.MarketBuying=buy&&!sell;j.MarketMaxBuys=maxBuys;j.MarketMaxSells=maxSells;j.MarketBudget=budget;j.MarketBought=j.MarketSold=0;j.MarketSpent=0;j.MarketRuleIndex=j.MarketPage=j.MarketPhase=0;j.MarketFirstId=0;j.MarketSeen.Clear();j.MarketPageStarts.Clear();j.MarketResults=new MarketListing[0];j.MarketNext=DateTime.MinValue;j.MarketStatus="Đợi đọc dữ liệu Chợ";j.MarketEnabled=true;}
   }
   public static void StopMarket(string id){var j=Get(id);if(j==null)return;lock(j){j.MarketEnabled=false;j.MarketStatus="Đã dừng. Nếu vừa gửi lệnh, kiểm tra túi/Chợ trước khi chạy lại.";}}
   static void MarketHalt(NativeJob j,string text){j.MarketEnabled=false;j.MarketStatus=text;Log(j,"market_stopped",",\"status\":"+Quote(text));}
   static long MarketCount(InventorySnapshot bag,int id){return bag.Items.Where(x=>x.TemplateId==id).Sum(x=>(long)Math.Max(1,x.Quantity));}
   static void MarketQueue(Remote r,long d,MarketSnapshot s,int command,int page=0){r.Write(d+16,BitConverter.GetBytes(s.Panel));r.Write(d+80,BitConverter.GetBytes(s.Filter));r.Write(d+84,BitConverter.GetBytes(s.Category));r.Write(d+88,BitConverter.GetBytes(page));r.Write(d+4,BitConverter.GetBytes(command));r.Write(d+8,new byte[4]);r.Write(d+12,BitConverter.GetBytes(1));r.Write(d,BitConverter.GetBytes(1));}
+  internal static bool MarketHasSellableStack(InventorySnapshot bag,MarketRule rule){return bag.Items.Any(x=>x.TemplateId==rule.ItemId&&!x.Locked&&Math.Max(1,x.Quantity)>=rule.Quantity&&x.Slot==x.BagIndex);}
   internal static bool MarketFits(MarketListing x,MarketRule rule,string owner,long remaining){return x!=null&&x.ItemId==rule.ItemId&&x.Price>0&&x.Price<=rule.Price&&x.Price<=remaining&&!String.Equals(x.Seller,owner,StringComparison.OrdinalIgnoreCase);}
   internal static void PumpMarket(Remote r,long d,long game,NativeJob j,Func<MarketSnapshot> reader=null,Func<InventorySnapshot> bagReader=null,Func<long> silverReader=null,Func<MarketSnapshot> ownReader=null,DateTime? clock=null){if(d==0)return;lock(j){try{
    bool ready=j.MarketEnabled&&!j.CloseRequested&&!j.CancelRequested&&!j.ReconnectRequested&&j.GameSettingsReady&&!AuxiliaryActionBlocked(j)&&!j.MailEnabled&&!j.MailBusy&&!j.ChestEnabled&&!j.CloakEnabled&&!j.QuestEnabled&&!j.SonCapEnabled&&!j.IzanamiEnabled&&!j.InboxEnabled&&!j.GiftEnabled;
@@ -3944,13 +3947,17 @@ namespace TGLL {
     if(exact!=null&&MarketCount(bag,rule.ItemId)==j.MarketBeforeCount){j.MarketItem=exact;j.MarketPhase=5;}else {if((now-j.MarketAt).TotalSeconds>15)MarketHalt(j,"Chưa xác nhận tách vật phẩm; không rao bán chồng gốc.");return;}
    }
    if(j.MarketPhase==6){var rule=j.MarketRules[j.MarketRuleIndex];if(MarketCount(bag,rule.ItemId)==j.MarketBeforeCount-rule.Quantity){j.MarketOwnArray=(ownReader==null?ReadMarket(r,game,true):ownReader()).Array;MarketQueue(r,d,s,5);j.MarketPhase=7;j.MarketAt=now;return;}if((now-j.MarketAt).TotalSeconds>20)MarketHalt(j,"Chưa xác nhận rao bán; kiểm tra Chợ, không tự gửi lại.");return;}
-   if(j.MarketPhase==7){var rule=j.MarketRules[j.MarketRuleIndex];var own=(ownReader==null?ReadMarket(r,game,true):ownReader());if(own.Array!=j.MarketOwnArray&&own.Items.Any(x=>x.Id>j.MarketOldOwnMax&&x.ItemId==rule.ItemId&&x.Quantity==rule.Quantity&&x.Price==rule.Price)){j.MarketSold++;j.MarketRuleIndex++;j.MarketPhase=0;j.MarketNext=now.AddSeconds(3);j.MarketStatus="Đã rao bán "+j.MarketSold+" chồng";return;}if((now-j.MarketAt).TotalSeconds>20)MarketHalt(j,"Chưa thấy món vừa rao trong Chợ của mình; không gửi lại.");return;}
+   if(j.MarketPhase==7){var rule=j.MarketRules[j.MarketRuleIndex];var own=(ownReader==null?ReadMarket(r,game,true):ownReader());if(own.Array!=j.MarketOwnArray&&own.Items.Any(x=>x.Id>j.MarketOldOwnMax&&x.ItemId==rule.ItemId&&x.Quantity==rule.Quantity&&x.Price==rule.Price)){j.MarketSold++;j.MarketRuleIndex++;j.MarketPhase=0;j.MarketNext=now.AddSeconds(3);j.MarketStatus="Đã rao bán "+j.MarketSold+"/"+j.MarketMaxSells+" chồng";if(j.MarketSold>=j.MarketMaxSells)MarketHalt(j,"Đã đạt số lần rao: "+j.MarketSold+"/"+j.MarketMaxSells);return;}if((now-j.MarketAt).TotalSeconds>20)MarketHalt(j,"Chưa thấy món vừa rao trong Chợ của mình; không gửi lại.");return;}
    if(j.MarketMode==2){
-    if(j.MarketRuleIndex>=j.MarketRules.Length){MarketHalt(j,"Hoàn tất rao bán "+j.MarketSold+" chồng");return;}
+    if(j.MarketSold>=j.MarketMaxSells){MarketHalt(j,"Đã đạt số lần rao: "+j.MarketSold+"/"+j.MarketMaxSells);return;}
+    if(j.MarketRuleIndex>=j.MarketRules.Length)j.MarketRuleIndex=0;
+    // Revisit available rules only after a confirmed listing; never repeat an unconfirmed send.
+    int skipped=0;while(skipped<j.MarketRules.Length&&!MarketHasSellableStack(bag,j.MarketRules[j.MarketRuleIndex])){j.MarketRuleIndex=(j.MarketRuleIndex+1)%j.MarketRules.Length;j.MarketPhase=0;skipped++;}
+    if(skipped==j.MarketRules.Length){MarketHalt(j,"Hết vật phẩm đủ số lượng để rao • Đã rao "+j.MarketSold+"/"+j.MarketMaxSells+" chồng");return;}
     if(j.MarketPhase==0){j.MarketOwnArray=(ownReader==null?ReadMarket(r,game,true):ownReader()).Array;MarketQueue(r,d,s,5);j.MarketAt=now;j.MarketPhase=8;return;}
     if(j.MarketPhase==8){var own=(ownReader==null?ReadMarket(r,game,true):ownReader());if(own.Array==j.MarketOwnArray){if((now-j.MarketAt).TotalSeconds>15)MarketHalt(j,"Chưa đọc được Chợ của mình; chưa rao bán.");return;}j.MarketOldOwnMax=own.Items.Length==0?0:own.Items.Max(x=>x.Id);j.MarketPhase=2;}var rule=j.MarketRules[j.MarketRuleIndex];
     if(j.MarketPhase!=5){
-     var item=bag.Items.Where(x=>x.TemplateId==rule.ItemId&&!x.Locked&&Math.Max(1,x.Quantity)>=rule.Quantity&&x.Slot==x.BagIndex).OrderBy(x=>x.Quantity).FirstOrDefault();if(item==null){j.MarketStatus="Bỏ qua ID "+rule.ItemId+": thiếu vật phẩm không khóa";j.MarketRuleIndex++;j.MarketNext=now.AddSeconds(1);return;}
+     var item=bag.Items.Where(x=>x.TemplateId==rule.ItemId&&!x.Locked&&Math.Max(1,x.Quantity)>=rule.Quantity&&x.Slot==x.BagIndex).OrderBy(x=>x.Quantity).FirstOrDefault();if(item==null){j.MarketStatus="Bỏ qua ID "+rule.ItemId+": thiếu vật phẩm không khóa";j.MarketRuleIndex++;j.MarketPhase=0;j.MarketNext=now.AddSeconds(1);return;}
      if((silverReader==null?ReadMailSilver(r,game):silverReader())<((long)rule.Price+9)/10){MarketHalt(j,"Không đủ bạc trả phí rao bán 10%.");return;}j.MarketBeforeCount=MarketCount(bag,rule.ItemId);j.MarketItem=item;
      if(Math.Max(1,item.Quantity)>rule.Quantity){if(bag.Items.Length>=bag.Capacity){MarketHalt(j,"Túi đầy, không có ô tách vật phẩm.");return;}j.MarketSlots=bag.Items.Select(x=>x.Slot).ToArray();long sd=d+4096;byte[] wire=ExpectedMailWire("","","","",item.Slot,2,rule.Quantity);r.Write(sd+44,BitConverter.GetBytes(wire.Length));r.Write(sd+2560,wire);r.Write(sd+4,BitConverter.GetBytes(2));r.Write(sd+16,BitConverter.GetBytes(item.TemplateId));r.Write(sd+20,BitConverter.GetBytes(item.Slot));r.Write(sd+24,BitConverter.GetBytes(item.Quantity));r.Write(sd+32,BitConverter.GetBytes(rule.Quantity));r.Write(sd,BitConverter.GetBytes(1));j.MarketPhase=4;j.MarketAt=now;j.MarketStatus="Tách ID "+rule.ItemId+" x"+rule.Quantity;return;}
     }

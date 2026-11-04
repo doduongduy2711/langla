@@ -10,7 +10,9 @@ $null=Ui-Label 'Tối đa lần mua' $marketPage 355 155 130 25
 $marketMaxBuys=New-Object Windows.Forms.NumericUpDown;$marketMaxBuys.Minimum=1;$marketMaxBuys.Maximum=100000;$marketMaxBuys.Value=1;$marketMaxBuys.SetBounds(490,154,150,25);$marketPage.Controls.Add($marketMaxBuys)
 $null=Ui-Label 'Tổng bạc tối đa' $marketPage 355 185 130 25
 $marketBudget=New-Object Windows.Forms.NumericUpDown;$marketBudget.Minimum=1;$marketBudget.Maximum=2147483647;$marketBudget.Value=1000000;$marketBudget.ThousandsSeparator=$true;$marketBudget.SetBounds(490,184,150,25);$marketPage.Controls.Add($marketBudget)
-$marketSellButton=New-Object Windows.Forms.Button;$marketSellButton.Text='Rao bán đã chọn';$marketSellButton.SetBounds(12,166,160,30);$marketPage.Controls.Add($marketSellButton)
+$null=Ui-Label 'Số lần rao tối đa / acc' $marketPage 12 159 180 25
+$marketMaxSells=New-Object Windows.Forms.NumericUpDown;$marketMaxSells.Minimum=1;$marketMaxSells.Maximum=100000;$marketMaxSells.Value=1;$marketMaxSells.SetBounds(200,158,140,25);$marketPage.Controls.Add($marketMaxSells)
+$marketSellButton=New-Object Windows.Forms.Button;$marketSellButton.Text='Rao bán đã chọn';$marketSellButton.SetBounds(12,194,160,30);$marketPage.Controls.Add($marketSellButton)
 $marketScanButton=New-Object Windows.Forms.Button;$marketScanButton.Text='Quét đã chọn';$marketScanButton.SetBounds(355,220,150,30);$marketPage.Controls.Add($marketScanButton)
 $marketStopButton=New-Object Windows.Forms.Button;$marketStopButton.Text='Dừng đã chọn';$marketStopButton.SetBounds(515,220,150,30);$marketPage.Controls.Add($marketStopButton)
 $null=Ui-Label 'Quét không cần mở Chợ; khi mở dùng bộ lọc hiện tại. Rao bán cần mở Chợ. Quét tối thiểu 0,5 giây/trang và đợi dữ liệu mới. Giá cả chồng; giới hạn mua riêng từng acc.' $marketPage 12 260 680 42
@@ -39,20 +41,20 @@ function Update-MarketResultTable {
  Set-MarketResultTable @($records.ToArray())
 }
 function Get-MarketPreference($a){
- $p=[pscustomobject]@{sell='';scan='';buy=$false;maxBuys=1;budget=1000000}
- if($null -ne $a -and $a.PSObject.Properties['marketConfig'] -and $null -ne $a.marketConfig){$c=$a.marketConfig;foreach($f in @('sell','scan','buy','maxBuys','budget')){if($c.PSObject.Properties[$f]){$p.$f=$c.$f}}}
- $p.maxBuys=[Math]::Max(1,[Math]::Min(100000,[int]$p.maxBuys));$p.budget=[Math]::Max(1,[Math]::Min(2147483647,[long]$p.budget));return $p
+ $p=[pscustomobject]@{sell='';scan='';buy=$false;maxBuys=1;budget=1000000;maxSells=1}
+ if($null -ne $a -and $a.PSObject.Properties['marketConfig'] -and $null -ne $a.marketConfig){$c=$a.marketConfig;foreach($f in @('sell','scan','buy','maxBuys','budget','maxSells')){if($c.PSObject.Properties[$f]){$p.$f=$c.$f}}}
+ $p.maxSells=[Math]::Max(1,[Math]::Min(100000,[int]$p.maxSells));$p.maxBuys=[Math]::Max(1,[Math]::Min(100000,[int]$p.maxBuys));$p.budget=[Math]::Max(1,[Math]::Min(2147483647,[long]$p.budget));return $p
 }
 function Save-MarketUi {
  if($script:marketLoading -or !$grid.SelectedRows.Count){return}
- $p=[pscustomobject]@{sell=$marketSellRules.Text;scan=$marketScanRules.Text;buy=$marketAutoBuy.Checked;maxBuys=[int]$marketMaxBuys.Value;budget=[long]$marketBudget.Value}
+ $p=[pscustomobject]@{sell=$marketSellRules.Text;scan=$marketScanRules.Text;buy=$marketAutoBuy.Checked;maxBuys=[int]$marketMaxBuys.Value;budget=[long]$marketBudget.Value;maxSells=[int]$marketMaxSells.Value}
  $grid.SelectedRows[0].Tag | Add-Member NoteProperty marketConfig $p -Force
  if(!$UiTest){Save-Accounts}
 }
 function Update-MarketUi {
  Update-MarketResultTable;if(!$grid.SelectedRows.Count){return};$a=$grid.SelectedRows[0].Tag
- if(!$marketSellRules.Focused -and !$marketScanRules.Focused -and !$marketMaxBuys.Focused -and !$marketBudget.Focused -and !$marketAutoBuy.Focused){
-  $script:marketLoading=$true;try{$p=Get-MarketPreference $a;$marketSellRules.Text=[string]$p.sell;$marketScanRules.Text=[string]$p.scan;$marketAutoBuy.Checked=[bool]$p.buy;$marketMaxBuys.Value=[decimal]$p.maxBuys;$marketBudget.Value=[decimal]$p.budget}finally{$script:marketLoading=$false}
+ if(!$marketSellRules.Focused -and !$marketScanRules.Focused -and !$marketMaxSells.Focused -and !$marketMaxBuys.Focused -and !$marketBudget.Focused -and !$marketAutoBuy.Focused){
+  $script:marketLoading=$true;try{$p=Get-MarketPreference $a;$marketSellRules.Text=[string]$p.sell;$marketScanRules.Text=[string]$p.scan;$marketAutoBuy.Checked=[bool]$p.buy;$marketMaxSells.Value=[decimal]$p.maxSells;$marketMaxBuys.Value=[decimal]$p.maxBuys;$marketBudget.Value=[decimal]$p.budget}finally{$script:marketLoading=$false}
  }
  if($script:accountJobs.ContainsKey([string]$a.id)){$j=Get-AccountJob $script:accountJobs[[string]$a.id];if($j -is [TGLL.NativeJob]){
   $lines=@(($a.username+': '+$j.MarketStatus),('Đã mua: '+$j.MarketBought+' lần • '+$j.MarketSpent+' bạc | Đã rao: '+$j.MarketSold+' chồng'))
@@ -63,9 +65,9 @@ function Update-MarketUi {
 function Start-MarketSelected([bool]$sell){
  try{$rules=if($sell){$marketSellRules.Text}else{$marketScanRules.Text};$null=[TGLL.NativeBackend]::ParseMarketRules($rules,$sell)}catch{$status.Text=$_.Exception.Message;return}
  $rows=@(Get-LaunchRows);if(!$rows.Count){$status.Text='Tích Chọn các acc cần chạy Auto chợ.';return};Save-MarketUi;$p=Get-MarketPreference $grid.SelectedRows[0].Tag;$ok=0;$errors=@();if(!$sell){$script:marketResultAccountIds=@()}
- foreach($row in $rows){try{$id=[string]$row.Tag.id;if(!$script:accountJobs.ContainsKey($id)){throw 'Acc chưa mở.'};[TGLL.NativeBackend]::StartMarket($script:accountJobs[$id],$rules,$sell,$marketAutoBuy.Checked,[int]$marketMaxBuys.Value,[long]$marketBudget.Value);$row.Tag | Add-Member NoteProperty marketConfig ($p | ConvertTo-Json | ConvertFrom-Json) -Force;$ok++;if(!$sell){$script:marketResultAccountIds+=([string]$row.Tag.id)}}catch{$errors+=($row.Tag.username+': '+$_.Exception.Message)}}
+ foreach($row in $rows){try{$id=[string]$row.Tag.id;if(!$script:accountJobs.ContainsKey($id)){throw 'Acc chưa mở.'};[TGLL.NativeBackend]::StartMarket($script:accountJobs[$id],$rules,$sell,$marketAutoBuy.Checked,[int]$marketMaxBuys.Value,[long]$marketBudget.Value,[int]$marketMaxSells.Value);$row.Tag | Add-Member NoteProperty marketConfig ($p | ConvertTo-Json | ConvertFrom-Json) -Force;$ok++;if(!$sell){$script:marketResultAccountIds+=([string]$row.Tag.id)}}catch{$errors+=($row.Tag.username+': '+$_.Exception.Message)}}
  if(!$UiTest){Save-Accounts};$status.Text='Auto chợ: bắt đầu '+$ok+' acc. '+($errors -join ' | ');Update-MarketUi
 }
-$marketSellRules.Add_TextChanged({Save-MarketUi});$marketScanRules.Add_TextChanged({Save-MarketUi});$marketAutoBuy.Add_CheckedChanged({Save-MarketUi});$marketMaxBuys.Add_ValueChanged({Save-MarketUi});$marketBudget.Add_ValueChanged({Save-MarketUi})
+$marketSellRules.Add_TextChanged({Save-MarketUi});$marketScanRules.Add_TextChanged({Save-MarketUi});$marketAutoBuy.Add_CheckedChanged({Save-MarketUi});$marketMaxBuys.Add_ValueChanged({Save-MarketUi});$marketBudget.Add_ValueChanged({Save-MarketUi});$marketMaxSells.Add_ValueChanged({Save-MarketUi})
 $marketSellButton.Add_Click({Start-MarketSelected $true});$marketScanButton.Add_Click({Start-MarketSelected $false});$marketStopButton.Add_Click({foreach($row in @(Get-LaunchRows)){$id=[string]$row.Tag.id;if($script:accountJobs.ContainsKey($id)){[TGLL.NativeBackend]::StopMarket($script:accountJobs[$id])}};Update-MarketUi})
 $grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $marketPage){Update-MarketUi}});Update-MarketUi

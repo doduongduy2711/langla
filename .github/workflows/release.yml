@@ -26,6 +26,14 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Manager status cache compilation failed'}
           ./ManagerStatusCacheTests.exe
           if($LASTEXITCODE -ne 0){throw 'Manager status cache tests failed'}
+      - name: Repeated market listing checks
+        shell: powershell
+        run: |
+          $compiler=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          & $compiler /nologo /platform:x64 /out:MarketRepeatTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/MarketRepeatTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Market repeat compilation failed'}
+          ./MarketRepeatTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Market repeat tests failed'}
       - name: Native window move timer checks
         shell: powershell
         run: |
