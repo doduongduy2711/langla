@@ -2477,10 +2477,17 @@ namespace TGLL {
             string n=System.Text.RegularExpressions.Regex.Replace(b.ToString(),@"\s+"," ").Trim();
             return System.Text.RegularExpressions.Regex.IsMatch(n,@"^dang co \d+(?: \d{3})* player online tich cuc tham gia tuong tac o fanpage de nhan qua fan cung hang tuan nhe$");
         }
+        internal static bool IsBlockingIzanamiNotice(string text){
+            if(String.IsNullOrWhiteSpace(text)||text.Length>512)return false;
+            StringBuilder b=new StringBuilder();foreach(char c in text.ToLowerInvariant().Normalize(NormalizationForm.FormD)){if(System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)==System.Globalization.UnicodeCategory.NonSpacingMark)continue;b.Append(c=='đ'?'d':Char.IsLetterOrDigit(c)?c:' ');}
+            string n=System.Text.RegularExpressions.Regex.Replace(b.ToString(),@"\s+"," ").Trim();
+            return System.Text.RegularExpressions.Regex.IsMatch(n,@"^(?:nguoi choi [a-z0-9 ]+ )?(?:khong du luot tham gia cam thuat|het luot tham gia cam thuat)$");
+        }
         internal static bool QueueOnlineNotice(Remote r,long data,NativeJob j,long popup,long message,string text){
-            if(data==0||popup==0||message==0||!IsOnlineFanpageNotice(text))return false;
+            bool izanami=IsBlockingIzanamiNotice(text);
+            if(data==0||popup==0||message==0||(!izanami&&!IsOnlineFanpageNotice(text)))return false;
             int state=BitConverter.ToInt32(r.Read(data,4),0);if(state==15||state==17)return false;
-            r.Write(data+3272,BitConverter.GetBytes(popup));r.Write(data+3288,BitConverter.GetBytes(message));r.Write(data,BitConverter.GetBytes(15));Log(j,"online_notice_dismiss_requested",",\"pid\":"+j.ProcessId);return true;
+            r.Write(data+3272,BitConverter.GetBytes(popup));r.Write(data+3288,BitConverter.GetBytes(message));r.Write(data,BitConverter.GetBytes(15));Log(j,izanami?"izanami_notice_dismiss_requested":"online_notice_dismiss_requested",",\"pid\":"+j.ProcessId);return true;
         }
         internal static void PumpOnlineNotice(Remote r,long data,NativeJob j,long game){
             if(data==0||j.CloseRequested||j.CancelRequested)return;
@@ -2488,6 +2495,9 @@ namespace TGLL {
                 long cls=ResolvedClass(r,game+0x16ee888),fc=r.Ptr(r.Ptr(cls+0xb8)+16);if(fc==0||r.Ptr(fc)!=cls)return;
                 long popup=r.Ptr(fc+0x90);if(popup==0||r.Ptr(popup)!=ResolvedClass(r,game+0x16eeba8)||Array.IndexOf(ReadVector(r,r.Ptr(fc+0x88)),popup)<0)return;
                 long message=r.Ptr(popup+0xb0);string text=ReadLabel(r,message);if(r.Ptr(fc+0x90)!=popup||r.Ptr(popup+0xb0)!=message)return;
+                // Record the entry refusal before its modal is dismissed. This also runs after
+                // switching to Quest/Beast, so an old limit notice cannot cover the NPC menu.
+                if(IsBlockingIzanamiNotice(text))PumpIzanamiAttemptLimit(r,game,j);
                 QueueOnlineNotice(r,data,j,popup,message,text);
             }catch{}
         }

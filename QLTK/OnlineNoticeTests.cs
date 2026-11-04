@@ -27,8 +27,21 @@ class OnlineNoticeTests {
   NativeBackend.PumpOnlineNotice(r,data,j,game);P(r,button+0x78,S(r,"Đồng ý"));tick();C(clicked==1,"unrecognized button was clicked");P(r,button+0x78,S(r,"Xác nhận"));
   NativeBackend.PumpOnlineNotice(r,data,j,game);visible=false;tick();C(clicked==1,"stale inactive dialog was clicked");visible=true;
   P(r,popup+0xb0,S(r,Message(4001)));NativeBackend.PumpOnlineNotice(r,data,j,game);tick();C(clicked==2,"recurring online notice was not dismissed");
+  foreach(string text in new[]{"Người chơi Edolria không đủ lượt tham gia cấm thuật.","Người chơi A B không đủ lượt\ntham gia cấm thuật", "Hết lượt tham gia cấm thuật"})C(NativeBackend.IsBlockingIzanamiNotice(text),"Izanami notice not recognized");
+  foreach(string text in new[]{"Người chơi A không đủ lượt tham gia Sơn Cáp", "Bạn có muốn nhận nhiệm vụ?", "Nhập mã để giải bùa", "Người chơi A không đủ lượt tham gia cấm thuật. Xác nhận mua vật phẩm"})C(!NativeBackend.IsBlockingIzanamiNotice(text),"unrelated modal matched as Izanami");
+  visible=false;tick();visible=true;
+  // No Izanami toggle is active: the next activity must still be able to clear the old modal.
+  C(!j.IzanamiEnabled,"fixture unexpectedly running Izanami");P(r,popup+0xb0,S(r,"Người chơi Edolria không đủ lượt tham gia cấm thuật."));
+  NativeBackend.PumpOnlineNotice(r,data,j,game);tick();tick();C(clicked==3,"old Izanami notice still covers next activity or confirms repeatedly");
+  visible=false;tick();C(BitConverter.ToInt32(r.Read(data,4),0)==16,"Izanami modal closure not confirmed");
+  visible=true;P(r,popup+0xb0,S(r,"Nhập mã để giải bùa"));NativeBackend.PumpOnlineNotice(r,data,j,game);tick();C(clicked==3,"unrelated task/captcha modal confirmed");
+  var jobs=(System.Collections.Concurrent.ConcurrentDictionary<string,NativeJob>)typeof(NativeBackend).GetField("jobs",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic).GetValue(null);
+  jobs[j.Id]=j;j.IzanamiEnabled=true;j.IzanamiLimitArmed=true;j.IzanamiNoticeAt=DateTime.UtcNow;j.DailyManaged=true;
+  P(r,popup+0xb0,S(r,"Người chơi Edolria không đủ lượt tham gia cấm thuật."));NativeBackend.PumpOnlineNotice(r,data,j,game);
+  C(j.IzanamiNoAttempts&&j.IzanamiRunFinished,"modal dismissed before recording exhausted attempts");tick();C(clicked==4,"armed Izanami notice not confirmed");
+  NativeJob removed;jobs.TryRemove(j.Id,out removed);
   GC.KeepAlive(contains);GC.KeepAlive(confirm);
  }
- Console.WriteLine("PASS: exact online/Fanpage text, dynamic count/wrapped text, live overlay and button action, one confirmation until closure, recurring notices, changed immutable body, replacement popup, wrong button and stale overlay exclusions; no real game/UI action.");
+ Console.WriteLine("PASS: exact online/Fanpage text, dynamic count/wrapped text, live overlay and button action, one confirmation until closure, recurring notices, changed immutable body, replacement popup, wrong button and stale overlay exclusions; Izanami modal clears after activity switch and preserves exhausted-attempt detection; no real game/UI action.");
  }
 }
