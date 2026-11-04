@@ -36,9 +36,15 @@ class OnlineNoticeTests {
   visible=false;tick();C(BitConverter.ToInt32(r.Read(data,4),0)==16,"Izanami modal closure not confirmed");
   visible=true;P(r,popup+0xb0,S(r,"Nhập mã để giải bùa"));NativeBackend.PumpOnlineNotice(r,data,j,game);tick();C(clicked==3,"unrelated task/captcha modal confirmed");
   var jobs=(System.Collections.Concurrent.ConcurrentDictionary<string,NativeJob>)typeof(NativeBackend).GetField("jobs",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic).GetValue(null);
-  jobs[j.Id]=j;j.IzanamiEnabled=true;j.IzanamiLimitArmed=true;j.IzanamiNoticeAt=DateTime.UtcNow;j.DailyManaged=true;
+  jobs[j.Id]=j;j.IzanamiEnabled=true;j.IzanamiLimitArmed=false;j.IzanamiNoticeAt=DateTime.UtcNow.AddMinutes(-10);j.DailyManaged=true;j.DailyActive=true;j.DailyStage=3;j.DailyStatus="Đang đi cấm thuật";j.ReceiveFlowActive=true;j.IzanamiRequested=true;j.IzanamiMapAutoActive=true;
   P(r,popup+0xb0,S(r,"Người chơi Edolria không đủ lượt tham gia cấm thuật."));NativeBackend.PumpOnlineNotice(r,data,j,game);
-  C(j.IzanamiNoAttempts&&j.IzanamiRunFinished,"modal dismissed before recording exhausted attempts");tick();C(clicked==4,"armed Izanami notice not confirmed");
+  C(j.IzanamiNoAttempts&&j.IzanamiRunFinished,"unarmed/expired modal dismissed before recording exhausted attempts");C(!j.ReceiveFlowActive&&!j.IzanamiRequested&&!j.IzanamiMapAutoActive&&j.DailyStatus=="Hết lượt tham gia Cấm thuật","activity kept running/status stale after exhaustion");tick();C(clicked==4,"armed Izanami notice not confirmed");
+  var peer=new NativeJob("synthetic.exe","peer","",null,true){IzanamiEnabled=true,DailyActive=true,DailyStage=3,DailyStatus="Đang đi cấm thuật",ReceiveFlowActive=true};
+  var inside=new NativeJob("synthetic.exe","inside","",null,true){IzanamiEnabled=true,IzanamiRoundEntered=true,MapId=89};
+  jobs[peer.Id]=peer;jobs[inside.Id]=inside;j.TeamJobIds=new[]{j.Id,peer.Id,inside.Id};j.IzanamiNoAttempts=false;j.IzanamiLimitArmed=false;
+  C(NativeBackend.ObserveBlockingIzanamiLimit(j,"Người chơi Edolria không đủ lượt tham gia cấm thuật"),"unarmed team rejection ignored");
+  C(peer.IzanamiNoAttempts&&!peer.ReceiveFlowActive&&peer.DailyStatus=="Hết lượt tham gia Cấm thuật"&&!inside.IzanamiNoAttempts,"outside team did not stop or in-instance teammate was interrupted");
+  NativeJob peerRemoved;jobs.TryRemove(peer.Id,out peerRemoved);jobs.TryRemove(inside.Id,out peerRemoved);
   NativeJob removed;jobs.TryRemove(j.Id,out removed);
   GC.KeepAlive(contains);GC.KeepAlive(confirm);
  }
