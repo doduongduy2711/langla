@@ -1775,7 +1775,9 @@ namespace TGLL {
         internal static bool ObserveIzanamiAttemptLimit(NativeJob leader,string text){
             if(!leader.IzanamiEnabled||!leader.IzanamiLimitArmed||leader.IzanamiRoundEntered||leader.IzanamiNoAttempts||!(leader.SonCapEnabled?IsSonCapAttemptLimit(text):IsIzanamiAttemptLimit(text)))return false;
             leader.IzanamiLimitArmed=false;string[] ids=leader.TeamJobIds.Length>0?leader.TeamJobIds:new string[]{leader.Id};
-            foreach(string id in ids){NativeJob peer=Get(id);if(peer==null||!peer.IzanamiEnabled||peer.IzanamiRoundEntered)continue;
+            // The reporting job is authoritative even if its inherited team still names an old session.
+            foreach(NativeJob peer in new[]{leader}.Concat(ids.Select(id=>Get(id))).Where(p=>p!=null).Distinct()){
+                if(!peer.IzanamiEnabled||peer.IzanamiRoundEntered||peer.CloseRequested||peer.CancelRequested||peer.State=="closed"||peer.State=="failed"||peer.State=="cancelled")continue;
                 if(leader.SonCapEnabled){if(!peer.SonCapEnabled)continue;peer.SonCapNoAttempts=true;peer.SonCapFinished=true;peer.SonCapMoving=false;peer.SonCapMapAutoActive=false;peer.SonCapFailure="";peer.SonCapStatus="Hết lượt tham gia Sơn Cáp";Log(peer,"soncap_attempt_limit",",\"message\":"+Quote(text));}
                 if(!leader.SonCapEnabled){peer.IzanamiLimitArmed=false;peer.IzanamiMapAutoActive=false;peer.IzanamiTravelStopped=true;peer.ReceiveFlowActive=false;peer.ActivityWatchStatus="";if(peer.DailyActive&&peer.DailyStage==3)peer.DailyStatus="Hết lượt tham gia Cấm thuật";}
                 peer.IzanamiNoAttempts=true;peer.IzanamiLimitNotice=text;peer.IzanamiRequested=false;peer.EntryAutoWaiting=false;peer.GameAutoWanted=false;peer.TrainEnabled=false;peer.State="izanami_no_attempts";
@@ -2484,9 +2486,12 @@ namespace TGLL {
             string n=System.Text.RegularExpressions.Regex.Replace(b.ToString(),@"\s+"," ").Trim();
             return System.Text.RegularExpressions.Regex.IsMatch(n,@"^(?:nguoi choi [a-z0-9 ]+ )?(?:khong du luot tham gia cam thuat|het luot tham gia cam thuat)$");
         }
-        internal static bool ObserveBlockingIzanamiLimit(NativeJob j,string text){
+        internal static bool ObserveBlockingIzanamiLimit(NativeJob j,string text,int confirmedMap=-1){
             // A verified live modal remains authoritative after the entry polling window expires.
-            if(!IsBlockingIzanamiNotice(text)||!j.IzanamiEnabled||j.SonCapEnabled||j.IzanamiRoundEntered||j.MapId==89||j.CloseRequested||j.CancelRequested||j.IzanamiNoAttempts)return false;
+            if(!IsBlockingIzanamiNotice(text)||!j.IzanamiEnabled||j.SonCapEnabled||j.CloseRequested||j.CancelRequested||j.IzanamiNoAttempts)return false;
+            if(confirmedMap==89)return false;
+            if(confirmedMap>=0){j.MapId=confirmedMap;j.IzanamiRoundEntered=false;}
+            if(j.IzanamiRoundEntered||j.MapId==89)return false;
             j.IzanamiLimitArmed=true;
             return ObserveIzanamiAttemptLimit(j,text);
         }
@@ -2494,7 +2499,7 @@ namespace TGLL {
             bool izanami=IsBlockingIzanamiNotice(text);
             if(data==0||popup==0||message==0||(!izanami&&!IsOnlineFanpageNotice(text)))return false;
             int state=BitConverter.ToInt32(r.Read(data,4),0);if(state==15||state==17)return false;
-            r.Write(data+3272,BitConverter.GetBytes(popup));r.Write(data+3288,BitConverter.GetBytes(message));r.Write(data,BitConverter.GetBytes(15));Log(j,izanami?"izanami_notice_dismiss_requested":"online_notice_dismiss_requested",",\"pid\":"+j.ProcessId);return true;
+            r.Write(data+3272,BitConverter.GetBytes(popup));r.Write(data+3288,BitConverter.GetBytes(message));r.Write(data,BitConverter.GetBytes(15));Log(j,izanami?"izanami_notice_dismiss_requested":"online_notice_dismiss_requested",",\"pid\":"+j.ProcessId+(izanami?",\"limit_recorded\":"+(j.IzanamiNoAttempts?"true":"false")+",\"map\":"+j.MapId+",\"enabled\":"+(j.IzanamiEnabled?"true":"false")+",\"entered\":"+(j.IzanamiRoundEntered?"true":"false"):""));return true;
         }
         internal static void PumpOnlineNotice(Remote r,long data,NativeJob j,long game){
             if(data==0||j.CloseRequested||j.CancelRequested)return;
@@ -2504,7 +2509,10 @@ namespace TGLL {
                 long message=r.Ptr(popup+0xb0);string text=ReadLabel(r,message);if(r.Ptr(fc+0x90)!=popup||r.Ptr(popup+0xb0)!=message)return;
                 // Record the entry refusal before its modal is dismissed. This also runs after
                 // switching to Quest/Beast, so an old limit notice cannot cover the NPC menu.
-                if(IsBlockingIzanamiNotice(text)&&ObserveBlockingIzanamiLimit(j,text)&&ShouldCloseIzanamiLimit(j))BeginCloseBatch(j.TeamJobIds.Length>0?j.TeamJobIds:new string[]{j.Id});
+                if(IsBlockingIzanamiNotice(text)){
+                    int liveMap=-1;try{liveMap=BitConverter.ToInt16(r.Read(fc+0x134,2),0);}catch{}
+                    if(ObserveBlockingIzanamiLimit(j,text,liveMap)&&ShouldCloseIzanamiLimit(j))BeginCloseBatch(new[]{j.Id}.Concat(j.TeamJobIds).Distinct().ToArray());
+                }
                 QueueOnlineNotice(r,data,j,popup,message,text);
             }catch{}
         }
@@ -3236,6 +3244,7 @@ namespace TGLL {
             }finally{j.DailyApplying=false;}
         }
         static bool DailyStageComplete(NativeJob j){
+            if(j.DailyStage==3&&j.IzanamiNoAttempts&&j.MapId>=0&&j.MapId!=89&&!j.IzanamiRoundEntered)return true;
             if(j.PersistentUp&&(j.DailyStage==3||j.DailyStage==5)){string[] ids=j.DailyStage==3?j.DailyTeamIds:j.UpSonCapTeamIds;bool outside=j.MapId>=0&&(j.DailyStage==3?j.MapId!=89&&!j.IzanamiRoundEntered:Array.IndexOf(SonCapMaps,j.MapId)<0);return outside&&ids.Any(id=>{NativeJob p=Get(id);return p!=null&&(p.UpCompleted[j.DailyStage-1]||(j.DailyStage==3?p.IzanamiNoAttempts:p.SonCapNoAttempts));});}
             if(j.DailyStage==1)return j.KeyReceiptVerified;
             if(j.DailyStage==2)return j.DungeonFinished;
