@@ -248,6 +248,8 @@ function Update-VisibleCharacterNames([bool]$changesOnly=$false) {
 }
 $grid.Add_Scroll({Update-VisibleCharacterNames})
 function Update-UiSummary {
+    $processReadScope=[TGLL.ManagedGames]::BeginProcessReadScope()
+    try{
     if([TGLL.UiPerformance]::IsScrolling){$script:uiRefreshPending=$true;return}
     $total=$grid.Rows.Count;$livePids=@(Get-OpenGamePids);$active=$livePids.Count;$waiting=0;$failed=0
     $script:summaryWindowSnapshot=[TGLL.ManagedGames]::WindowVisibilities([int[]]$livePids)
@@ -289,6 +291,8 @@ function Update-UiSummary {
         if($j.Error){$detailsLabel.Text+="`r`n`r`n$(Get-LoginErrorText $j.Error)"}
     }
     } finally {$script:summaryWindowSnapshot=$null}
+
+    }finally{$processReadScope.Dispose()}
 }
 function Resize-UiLayout {
     if($script:uiDragging){$script:uiLayoutPending=$true;return}

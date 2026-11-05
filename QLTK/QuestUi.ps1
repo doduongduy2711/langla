@@ -14,8 +14,14 @@ $questHint=Ui-Label '' $questPage 16 222 635 70;$questPage.AutoScroll=$true
 [TGLL.NativeBackend]::QuestCloseAfterEnabled=$questCloseAfter.Checked
 function Save-QuestQueueSettings {[TGLL.NativeBackend]::QuestCloseAfterEnabled=$questCloseAfter.Checked;$script:settings.questMaxOnline=[int]$questMax.Value;$script:settings.questCloseAfter=$questCloseAfter.Checked;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings};Update-QuestQueueStatus}
 $questMax.Add_ValueChanged({Save-QuestQueueSettings});$questCloseAfter.Add_CheckedChanged({Save-QuestQueueSettings});Update-QuestQueueStatus
-function Sync-QuestPreferences {
-    foreach($a in $script:accounts){$key=[string]$a.id;if(!$script:accountJobs.ContainsKey($key)){continue};$j=Get-AccountJob $script:accountJobs[$key]
+function Sync-QuestPreferences([int]$maxAccounts=0) {
+    $questAccounts=$script:accounts
+    if($maxAccounts -gt 0 -and $questAccounts.Count -gt $maxAccounts){
+        if($script:questPreferenceCursor -ge $questAccounts.Count){$script:questPreferenceCursor=0}
+        $questAccounts=@(for($n=0;$n -lt $maxAccounts;$n++){$script:accounts[(($script:questPreferenceCursor+$n)%$script:accounts.Count)]})
+        $script:questPreferenceCursor=($script:questPreferenceCursor+$maxAccounts)%$script:accounts.Count
+    }
+    foreach($a in $questAccounts){$key=[string]$a.id;if(!$script:accountJobs.ContainsKey($key)){continue};$j=Get-AccountJob $script:accountJobs[$key]
         if($null -eq $j -or $j.CloseRequested -or $j.State -in @('closed','cancelled','failed','reconnecting')){continue}
         if($j -is [TGLL.NativeJob] -and ($j.DailyManaged -or $j.BeastQuestEnabled)){continue}
         $allStage='';if(${function:Get-AutoAllStage}){$allStage=Get-AutoAllStage $key}

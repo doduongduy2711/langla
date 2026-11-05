@@ -59,6 +59,8 @@ function Reset-BeastQueue {
  $script:beastBatches=@()
 }
 function Pump-BeastQueue {
+    $processReadScope=[TGLL.ManagedGames]::BeginProcessReadScope()
+    try{
  if($script:beastQueuePaused -or !$script:beastBatches.Count){return}
  $script:beastAccountIndex=@{};foreach($a in $script:accounts){$script:beastAccountIndex[[string]$a.id]=$a}
  Sync-BeastTeams
@@ -100,6 +102,8 @@ function Pump-BeastQueue {
  foreach($b in $script:beastBatches){if($b.state -ne 'launching'){continue};foreach($m in $b.members){if($m.job){continue};if($budget -le 0){break};$budget--;try{Start-BeastMember $m}catch{$b.state='blocked';$b.error=$_.Exception.Message;$j=Get-BeastMemberJob $m;$a=$script:beastAccountIndex[$m.id]
    if(!(Test-BeastMemberRunning $m) -and !($a -and (Test-AccountOpenBlocked $a))){if($j -and $j.State -eq 'failed'){$j.CancelRequested=$true};$m | Add-Member NoteProperty retiredJob ([string]$m.job) -Force;$m.job='';$b.state='waiting';$b | Add-Member NoteProperty retryAt ([datetime]::UtcNow.AddSeconds(30)) -Force};break}};if($b.state -eq 'launching' -and @($b.members | Where-Object {!$_.job}).Count -eq 0){$b.state='running'}}
  Sync-BeastTeams
+
+    }finally{$processReadScope.Dispose()}
 }
 function Sync-BeastPreferences {
  foreach($a in $script:accounts){

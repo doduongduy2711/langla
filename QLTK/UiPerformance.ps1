@@ -65,9 +65,9 @@ function Invoke-ActivityQueuePhase {
   9 {[TGLL.NativeBackend]::PulseQuestAutoClose()}
  }
 }
-function Invoke-UiTimedStep([string]$stepName){
+function Invoke-UiTimedStep([string]$stepName,[int]$maxAccounts=0){
  $clock=[Diagnostics.Stopwatch]::StartNew()
- try{& $stepName}
+ try{if($maxAccounts -gt 0){& $stepName $maxAccounts}else{& $stepName}}
  finally{
   $elapsed=$clock.ElapsedMilliseconds
   if(!$UiTest -and $elapsed -ge 100){
@@ -93,5 +93,6 @@ function Invoke-LargeManagerRefresh {
     if($task -like 'Update-*' -and !(Test-ScheduledUiRefresh $task)){return}
     if($task -in @('Sync-SonCapPreferences','Sync-IzanamiTeams') -and !(Test-ScheduledUiRefresh ('preferences:'+$task) 50)){return}
     if($task -eq 'Update-ManagerStatus'){Update-ManagerStatus $true;return}
+    if($task -eq 'Sync-QuestPreferences'){Invoke-UiTimedStep $task 8;return}
     Invoke-UiTimedStep $task
 }

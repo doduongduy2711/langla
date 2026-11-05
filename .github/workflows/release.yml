@@ -18,6 +18,9 @@ jobs:
       - name: Windows Forms regression checks
         shell: powershell
         run: powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File QLTK/AccountManager.ps1 -UiTest
+      - name: Bounded quest preference checks
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File QLTK/QuestPreferenceBatchTests.ps1
       - name: Manager status change checks
         shell: powershell
         run: |
