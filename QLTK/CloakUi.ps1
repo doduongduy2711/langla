@@ -12,7 +12,7 @@ if($script:settings.ContainsKey('cloakMaxOnline')){$cloakMax.Value=[Math]::Max(1
 function Save-CloakQueueSettings {$script:settings.cloakMaxOnline=[int]$cloakMax.Value;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}}
 $cloakMax.Add_ValueChanged({Save-CloakQueueSettings})
 $cloakPrice=Ui-Label '' $cloakPage 16 125 650 24
-$null=Ui-Label 'Tự dùng phù ID 168 về Trường Konoha Gakuen và mua tại Senju Tobirama.' $cloakPage 16 154 650 26
+$null=Ui-Label 'Mua trực tiếp bằng lệnh game; không dùng phù, không mở menu NPC.' $cloakPage 16 154 650 26
 $null=Ui-Label 'Áo Đệ Tam trong ảnh có hạn 2 tuần. Kiểm tra yêu cầu cấp/Tài phú trong game.' $cloakPage 16 181 650 26
 $cloakBuy=New-Object Windows.Forms.Button;$cloakBuy.Text='Mua đã chọn';$cloakBuy.SetBounds(16,216,160,29);$cloakPage.Controls.Add($cloakBuy)
 $cloakRead=New-Object Windows.Forms.Button;$cloakRead.Text='Đọc giá cửa hàng';$cloakRead.SetBounds(184,216,180,29);$cloakPage.Controls.Add($cloakRead)
@@ -59,9 +59,9 @@ function Start-CloakDirectSelected {
 }
 function Read-CloakPrices {
  try{
-  if(!$grid.SelectedRows.Count){throw 'Chọn acc đang ở cửa hàng áo choàng.'}
+  if(!$grid.SelectedRows.Count){throw 'Chọn acc đã vào game.'}
   $a=$grid.SelectedRows[0].Tag;$key=[string]$a.id;if(!$script:accountJobs.ContainsKey($key)){throw 'Acc chưa mở.'}
-  $offers=@([TGLL.NativeBackend]::GetCloakOffers($script:accountJobs[$key]));if(!$offers.Count){throw 'Mở mục Áo choàng ở Senju Tobirama để đọc giá hiện tại.'}
+  $offers=@([TGLL.NativeBackend]::GetCloakOffers($script:accountJobs[$key]));if(!$offers.Count){throw 'Chưa có danh mục giá áo trong client; chưa mua.'}
   $selectedId=[int]$cloakChoice.SelectedItem.TemplateId;$script:loadingCloak=$true
   try{$cloakChoice.Items.Clear();foreach($o in $offers){$null=$cloakChoice.Items.Add($o)};$cloakChoice.SelectedIndex=0;for($i=0;$i -lt $cloakChoice.Items.Count;$i++){if($cloakChoice.Items[$i].TemplateId -eq $selectedId){$cloakChoice.SelectedIndex=$i;break}}}finally{$script:loadingCloak=$false}
   Save-CloakUi;Update-CloakPrice;$status.Text='Đã đọc '+$offers.Count+' loại áo và giá tinh thạch hiện tại.'

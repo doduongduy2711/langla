@@ -2957,7 +2957,7 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                     itemData=r.Allocate(4096);long itemCode=r.Allocate(4096);byte[] itemBytes=NativeCode.AutoItem(itemData,game);r.Write(itemCode,itemBytes);r.Protect(itemCode,4096,0x20);
                     chestData=r.Allocate(4096);long chestCode=r.Allocate(4096);byte[] chestBytes=NativeCode.StoneChest(chestData,game);if(chestBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(chestCode,chestBytes);r.Protect(chestCode,4096,0x20);
                     cloakData=r.Allocate(4096);long cloakAction=r.Allocate(4096),cloakUse=r.Allocate(4096),cloakBuy=r.Allocate(4096),cloakEquip=r.Allocate(4096),cloakPacket=r.Allocate(4096),cloakCode=r.Allocate(4096);
-                    byte[] cloakActions=NativeCode.CloakAction(cloakData,game);if(cloakActions.Length>4096)throw new Exception("native_code_too_large");r.Write(cloakAction,cloakActions);r.Write(cloakUse,NativeCode.AutoItem(cloakData+256,game));r.Write(cloakBuy,NativeCode.StoneChest(cloakData+512,game));r.Write(cloakPacket,NativeCode.EquipPacket(game));r.Write(cloakEquip,NativeCode.EquipItem(cloakData+768,game+0x16ed658,game+0x16ee888,game+0x3672c0,game+0x16ee578,cloakPacket));r.Write(cloakCode,NativeCode.CloakBundle(cloakData,game,cloakAction,cloakUse,cloakBuy,cloakEquip));foreach(long address in new[]{cloakAction,cloakUse,cloakBuy,cloakEquip,cloakPacket,cloakCode})r.Protect(address,4096,0x20);
+                    r.Write(cloakBuy,NativeCode.StoneChest(cloakData+512,game));r.Write(cloakPacket,NativeCode.EquipPacket(game));r.Write(cloakEquip,NativeCode.EquipItem(cloakData+768,game+0x16ed658,game+0x16ee888,game+0x3672c0,game+0x16ee578,cloakPacket));r.Write(cloakCode,NativeCode.CloakBundle(cloakData,game,cloakAction,cloakUse,cloakBuy,cloakEquip));foreach(long address in new[]{cloakBuy,cloakEquip,cloakPacket,cloakCode})r.Protect(address,4096,0x20);
                     giftData=r.Allocate(4096);long giftCode=r.Allocate(4096);byte[] giftBytes=NativeCode.GiftCode(giftData,game);r.Write(giftCode,giftBytes);r.Protect(giftCode,4096,0x20);
                     mailData=r.Allocate(4096);long mailCode=r.Allocate(4096);byte[] mailBytes=NativeCode.Mail(mailData,game);if(mailBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(mailCode,mailBytes);r.Protect(mailCode,4096,0x20);
                     marketData=r.Allocate(8192);long marketCode=r.Allocate(4096),marketSplit=r.Allocate(4096);r.Write(marketSplit,NativeCode.Mail(marketData+4096,game));r.Protect(marketSplit,4096,0x20);byte[] marketBytes=NativeCode.Market(marketData,game,marketSplit);if(marketBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(marketCode,marketBytes);r.Protect(marketCode,4096,0x20);
@@ -3752,7 +3752,7 @@ namespace TGLL {
 
 namespace TGLL {
  public sealed class CloakOffer {
-  public int TemplateId,SaleId,CrystalPrice;public string Name;
+  public int TemplateId,SaleId,CrystalPrice;public long Address;public string Name;
   public override string ToString(){return Name+" • "+CrystalPrice+" tinh thạch";}
  }
  public static partial class NativeBackend {
@@ -3760,12 +3760,11 @@ namespace TGLL {
   public static CloakOffer[] DefaultCloakOffers(){int[] prices={300,500,700,900,2000,2500,3000,6000,4000};string[] names={"Áo Choàng Hokage Đệ Lục","Áo Choàng Hokage Đệ Ngũ","Áo Choàng Hokage Đệ Tứ","Áo Choàng Hokage Đệ Tam","Áo Choàng Hokage Đệ Nhị","Áo Choàng Hokage Đệ Nhất","Áo Choàng Hokage Làng Lá","Áo Choàng Tiên Nhân","Áo Choàng Hiền Nhân"};return CloakIds.Select((id,i)=>new CloakOffer{TemplateId=id,SaleId=314+i,CrystalPrice=prices[i],Name=names[i]}).ToArray();}
   internal static bool ValidCloakOffer(CloakOffer o){return o!=null&&CloakIds.Contains(o.TemplateId)&&o.SaleId>=0&&o.CrystalPrice>0&&DefaultCloakOffers().Any(x=>x.TemplateId==o.TemplateId&&String.Equals(x.Name.Normalize(NormalizationForm.FormC),o.Name==null?"":o.Name.Normalize(NormalizationForm.FormC),StringComparison.OrdinalIgnoreCase));}
   internal static CloakOffer[] ReadCloakOffers(Remote r,long game){
-   if(ReadDungeonMap(r,game)!=86)throw new Exception("Nhân vật chưa ở Trường Konoha Gakuen (map 86).");
    long fc=r.Ptr(r.Ptr(ResolvedClass(r,game+0x16ee888)+0xb8)+16),canvas=r.Ptr(r.Ptr(ResolvedClass(r,game+0x16ed658)+0xb8)),templates=r.Ptr(canvas+0x118),source=r.Ptr(fc+0xe8);var offers=new List<CloakOffer>();int count=FarmI(r,templates+24);
    foreach(long item in ReadVector(r,source)){
     if(item==0)continue;byte[] b=r.Read(item+16,84);int id=BitConverter.ToInt32(b,4);if(!CloakIds.Contains(id)||id<0||id>=count)continue;
     int price=BitConverter.ToInt32(b,64);bool only=price>0;foreach(int off in new[]{48,52,56,60,68,72,76})if(BitConverter.ToInt32(b,off)!=0)only=false;if(!only)continue;
-    var offer=new CloakOffer{TemplateId=id,SaleId=BitConverter.ToInt32(b,0),CrystalPrice=price,Name=ReadLabel(r,r.Ptr(r.Ptr(templates+32+id*8)+24))};
+    var offer=new CloakOffer{Address=item,TemplateId=id,SaleId=BitConverter.ToInt32(b,0),CrystalPrice=price,Name=ReadLabel(r,r.Ptr(r.Ptr(templates+32+id*8)+24))};
     if(!ValidCloakOffer(offer)||!SameBytes(b,r.Read(item+16,84))||r.Ptr(fc+0xe8)!=source)throw new Exception("Dữ liệu cửa hàng thay đổi; chưa mua.");offers.Add(offer);
    }return offers.ToArray();
   }
@@ -3777,7 +3776,7 @@ namespace TGLL {
    if(!CloakIds.Contains(templateId)||quantity<1||quantity>100||expectedPrice<=0)throw new Exception("Chọn đúng áo và số lượng 1–100.");
    if(j.CloakEnabled)throw new Exception("Tác vụ mua áo đang chạy.");
    if(j.FarmEnabled||j.IzanamiEnabled||j.SonCapEnabled||j.DungeonHighEnabled||j.ReceiveKeyEnabled||j.QuestEnabled||j.MailEnabled||j.MailBusy||j.GiftEnabled||j.ChestEnabled||AuxiliaryActionBlocked(j))throw new Exception("Dừng Up/các auto hoạt động, gom đồ, gift code hoặc rương trước khi mua áo.");
-   j.CloakDone=false;j.CloakEquipSlot=-1;j.CloakId=templateId;j.CloakQuantity=ownedOnly?0:quantity;if(ownedOnly)j.CloakEquipAfter=true;j.CloakExpectedPrice=expectedPrice;j.CloakBought=0;j.CloakPhase=ownedOnly?9:0;j.CloakAt=DateTime.MinValue;j.CloakPollAt=DateTime.MinValue;j.CloakStatus=ownedOnly?"Dùng áo có HSD dài nhất trong túi; không mua thêm":"Đợi về Trường Konoha Gakuen";j.CloakEnabled=true;Log(j,"cloak_start",",\"template_id\":"+templateId+",\"quantity\":"+quantity+",\"expected_price\":"+expectedPrice);
+   j.CloakDone=false;j.CloakEquipSlot=-1;j.CloakId=templateId;j.CloakQuantity=ownedOnly?0:quantity;if(ownedOnly)j.CloakEquipAfter=true;j.CloakExpectedPrice=expectedPrice;j.CloakBought=0;j.CloakPhase=ownedOnly?9:7;j.CloakAt=DateTime.MinValue;j.CloakPollAt=DateTime.MinValue;j.CloakStatus=ownedOnly?"Dùng áo có HSD dài nhất trong túi; không mua thêm":"Đọc danh mục áo từ client; mua trực tiếp";j.CloakEnabled=true;Log(j,"cloak_start",",\"template_id\":"+templateId+",\"quantity\":"+quantity+",\"expected_price\":"+expectedPrice);
   }
   public static void StopCloakPurchase(string id){NativeJob j=Get(id);if(j==null)return;j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Đã dừng; lệnh mua có thể đã gửi, kiểm tra túi trước khi mua lại":"Đã dừng mua áo";}
   static void FinishCloak(NativeJob j,string status){j.CloakEnabled=false;j.CloakStatus=status;Log(j,"cloak_stopped",",\"status\":"+Quote(status)+",\"bought\":"+j.CloakBought);}
@@ -3789,32 +3788,16 @@ namespace TGLL {
    r.Write(data+12,BitConverter.GetBytes(ready?1:0));r.Write(use+12,BitConverter.GetBytes(ready?1:0));r.Write(buy+12,BitConverter.GetBytes(ready?1:0));r.Write(equip+12,BitConverter.GetBytes(ready?1:0));
    if(!enabled)return;if(now<j.CloakPollAt)return;j.CloakPollAt=now.AddSeconds(1);
    try{
-    int map=mapReader==null?ReadDungeonMap(r,game):mapReader();
-    if(j.CloakPhase>=4&&map!=86){FinishCloak(j,"Đã rời Trường Konoha Gakuen; dừng mua, kiểm tra túi.");return;}
-    if(j.CloakPhase==0){
-     if(!ready||FarmI(r,data)!=0||FarmI(r,use)!=0||FarmI(r,buy)!=0)return;
-     if(map==86){j.CloakPhase=4;j.CloakAt=now;return;}
-     InventorySnapshot bag=bagReader==null?ReadInventorySnapshot(r,game):bagReader();if(!bag.Ready)throw new Exception("Túi chưa sẵn sàng");if(!bag.Items.Any(x=>x.TemplateId==168&&x.Quantity>0)){FinishCloak(j,"Cần phù về làng ID 168 để về Trường Konoha Gakuen.");return;}
-     r.Write(use+4,BitConverter.GetBytes(168));r.Write(use+8,new byte[4]);r.Write(use+24,BitConverter.GetBytes(1));r.Write(use,BitConverter.GetBytes(1));j.CloakPhase=1;j.CloakAt=now;j.CloakStatus="Đang dùng phù để về Trường Konoha Gakuen";return;
-    }
-    if(j.CloakPhase==1){if(FarmI(r,use)!=0)return;if(FarmI(r,use+8)!=2){FinishCloak(j,"Chưa dùng được phù; không thử lại tự động.");return;}j.CloakPhase=2;j.CloakAt=now;QueueCloakAction(r,data,2);return;}
-    if(j.CloakPhase==2||j.CloakPhase==6){
-     if(FarmI(r,data)!=0)return;if(FarmI(r,data+36)==1){j.CloakPhase=j.CloakPhase==2?3:7;j.CloakAt=now;return;}
-     if((now-j.CloakAt).TotalSeconds>=30){FinishCloak(j,"Chưa thấy đúng menu trường/Áo choàng; dừng để kiểm tra.");return;}
-     if(ready){QueueCloakAction(r,data,j.CloakPhase==2?2:3);j.CloakPollAt=now.AddSeconds(2);}return;
-    }
-    if(j.CloakPhase==3){if(map==86){j.CloakPhase=4;j.CloakAt=now;j.CloakStatus="Đã về trường; tìm Senju Tobirama";}else if((now-j.CloakAt).TotalSeconds>=60)FinishCloak(j,"Chưa xác nhận về map 86; dừng để kiểm tra.");return;}
-    if(j.CloakPhase==4){if(!ready||FarmI(r,data)!=0)return;QueueCloakAction(r,data,1);j.CloakPhase=5;j.CloakAt=now;j.CloakStatus="Đang gọi Senju Tobirama • chọn Áo choàng";return;}
-    if(j.CloakPhase==5){if(FarmI(r,data)!=0)return;if(FarmI(r,data+36)!=1){FinishCloak(j,"Chưa tìm được Senju Tobirama (NPC 92); chưa mua.");return;}QueueCloakAction(r,data,3);j.CloakPhase=6;j.CloakAt=now;return;}
+    if(j.CloakPhase<7){j.CloakPhase=7;j.CloakAt=now;}
     if(j.CloakPhase==7){
      if(!ready||FarmI(r,buy)!=0)return;var offers=offerReader==null?ReadCloakOffers(r,game):offerReader();var offer=offers.FirstOrDefault(x=>x.TemplateId==j.CloakId&&ValidCloakOffer(x));
-     if(offer==null){j.CloakStatus="Chờ đúng danh mục Áo choàng";if((now-j.CloakAt).TotalSeconds>=20)FinishCloak(j,"Chưa xác minh được áo trong cửa hàng; chưa mua.");return;}
+     if(offer==null){if(j.CloakAt==DateTime.MinValue)j.CloakAt=now;j.CloakStatus="Chờ danh mục áo từ client; chưa mua";if((now-j.CloakAt).TotalSeconds>=20)FinishCloak(j,"Chưa xác minh được áo trong cửa hàng; chưa mua.");return;}
      if(offer.CrystalPrice!=j.CloakExpectedPrice){FinishCloak(j,"Giá hiện tại "+offer.CrystalPrice+" khác giá đã chọn "+j.CloakExpectedPrice+"; đọc lại giá trước khi mua.");return;}
      InventorySnapshot bag=bagReader==null?ReadInventorySnapshot(r,game):bagReader();j.CloakBefore=CountCloaks(bag,j.CloakId);j.CloakBeforeSlots=bag.Items.Where(x=>x.TemplateId==j.CloakId).Select(x=>x.Slot).ToArray();if(bag.Items.Length>=bag.Capacity){FinishCloak(j,"Túi đầy; chưa mua áo.");return;}
-     r.Write(buy+4,BitConverter.GetBytes(2));r.Write(buy+8,BitConverter.GetBytes(1));r.Write(buy+20,BitConverter.GetBytes(offer.SaleId));r.Write(buy+24,new byte[4]);r.Write(buy,BitConverter.GetBytes(1));j.CloakPhase=8;j.CloakAt=now;j.CloakStatus="Đã xếp mua "+offer.Name+" • "+offer.CrystalPrice+" tinh thạch; chờ áo vào túi";Log(j,"cloak_buy_queued",",\"template_id\":"+offer.TemplateId+",\"sale_id\":"+offer.SaleId+",\"crystal_price\":"+offer.CrystalPrice);return;
+     r.Write(buy+4,BitConverter.GetBytes(2));r.Write(buy+8,BitConverter.GetBytes(1));r.Write(buy+20,BitConverter.GetBytes(offer.SaleId));r.Write(buy+24,new byte[4]);r.Write(buy+32,BitConverter.GetBytes(offer.Address));r.Write(buy+40,BitConverter.GetBytes(offer.TemplateId));r.Write(buy+44,BitConverter.GetBytes(offer.CrystalPrice));r.Write(buy,BitConverter.GetBytes(1));j.CloakPhase=8;j.CloakAt=now;j.CloakStatus="Đã xếp mua "+offer.Name+" • "+offer.CrystalPrice+" tinh thạch; chờ áo vào túi";Log(j,"cloak_buy_queued",",\"template_id\":"+offer.TemplateId+",\"sale_id\":"+offer.SaleId+",\"crystal_price\":"+offer.CrystalPrice);return;
     }
     if(j.CloakPhase==8){
-     if(FarmI(r,buy)!=0)return;if(FarmI(r,buy+24)!=3){FinishCloak(j,"Chưa gửi mua; kiểm tra lại trường/menu.");return;}
+     if(FarmI(r,buy)!=0)return;if(FarmI(r,buy+24)!=3){FinishCloak(j,"Chưa gửi mua; danh mục hoặc giá đã thay đổi.");return;}
      InventorySnapshot after=bagReader==null?ReadInventorySnapshot(r,game):bagReader();long count=CountCloaks(after,j.CloakId);
      if(count-j.CloakBefore==1){j.CloakBought++;Log(j,"cloak_buy_confirmed",",\"bought\":"+j.CloakBought);if(j.CloakBought>=j.CloakQuantity){if(j.CloakEquipAfter){InventoryItem fresh=LongestCloak(after,j.CloakId,now);if(fresh==null||fresh.Slot<0||fresh.Slot>255){FinishCloak(j,"Đã mua nhưng chưa xác minh được ô áo mới; giữ game để kiểm tra.");return;}j.CloakEquipSlot=fresh.Slot;j.CloakEquipExpiry=fresh.ExpiryUtcMs;j.CloakPhase=9;j.CloakAt=now;j.CloakStatus="Đã mua xong; đang chuẩn bị mặc áo mới";return;}FinishCloak(j,"Hoàn tất • đã mua "+j.CloakBought+" áo; giữ áo trong túi");return;}j.CloakPhase=7;j.CloakAt=now;j.CloakPollAt=now.AddSeconds(2);return;}
      if((now-j.CloakAt).TotalSeconds>=20)FinishCloak(j,"Chưa xác nhận áo vào túi; kiểm tra tinh thạch/thông báo, không mua lặp.");return;
@@ -3834,9 +3817,16 @@ namespace TGLL {
  }
  internal static partial class NativeCode {
   internal static byte[] CloakBundle(long data,long game,long actionCode,long useCode,long buyCode,long equipCode=0){
-   Code64 a=new Code64();a.Emit(0x53,0x48,0x83,0xec,0x20);a.Call(useCode);a.Call(actionCode);
-   a.Emit(0x48,0xbb);a.Q(data+512);Slot(a,game+0x16ee888,"block",game+0x1dd900);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"block");a.Emit(0x48,0x8b,0x40,16,0x48,0x85,0xc0);a.J(0x84,"block");a.Emit(0x66,0x83,0xb8,0x34,1,0,0,86);a.J(0x84,"buy");
-   a.Label("block");a.Emit(0xc7,0x43,12,0,0,0,0);a.Label("buy");a.Call(buyCode);if(equipCode!=0)a.Call(equipCode);a.Emit(0x48,0x83,0xc4,0x20,0x5b,0xc3);return a.Finish();
+   // Validate the catalog again on the game thread, then use the purchase packet only.
+   Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x48,0x83,0xec,0x20);
+   a.Emit(0x48,0xbb);a.Q(data+512);a.Emit(0x83,0x3b,1);a.J(0x85,"buy");a.Emit(0x83,0x7b,12,1);a.J(0x85,"buy");
+   Slot(a,game+0x16ee888,"block",game+0x1dd900);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"block");a.Emit(0x48,0x8b,0x70,16,0x48,0x85,0xf6);a.J(0x84,"block");
+   a.Emit(0x48,0x8b,0xbe,0xe8,0,0,0,0x48,0x85,0xff);a.J(0x84,"block");a.Emit(0x45,0x33,0xe4);
+   a.Label("scan");a.Emit(0x41,0x81,0xfc,0,16,0,0);a.J(0x83,"block");VectorCount(a);a.Emit(0x41,0x39,0xc4);a.J(0x8d,"block");VectorElement(a);a.Emit(0x4c,0x3b,0x6b,32);a.J(0x85,"next");a.Emit(0x4d,0x85,0xed);a.J(0x84,"block");
+   foreach(int[] field in new[]{new[]{16,20},new[]{20,40},new[]{80,44}}){a.Emit(0x41,0x8b,0x45,(byte)field[0],0x3b,0x43,(byte)field[1]);a.J(0x85,"block");}
+   foreach(byte off in new byte[]{64,68,72,76,84,88,92}){a.Emit(0x41,0x83,0x7d,off,0);a.J(0x85,"block");}a.Jump("buy");
+   a.Label("next");a.Emit(0x41,0xff,0xc4);a.Jump("scan");a.Label("block");a.Emit(0xc7,0x43,12,0,0,0,0);
+   a.Label("buy");a.Call(buyCode);if(equipCode!=0)a.Call(equipCode);a.Emit(0x48,0x83,0xc4,0x20,0x41,0x5d,0x41,0x5c,0x5f,0x5e,0x5b,0xc3);return a.Finish();
   }
   internal static byte[] CloakAction(long data,long game){
    Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x48,0x83,0xec,0x20);a.Emit(0x48,0xbb);a.Q(data);a.Emit(0x83,0x3b,1);a.J(0x85,"return");a.Emit(0xc7,0x03,2,0,0,0,0xc7,0x43,36,0,0,0,0,0x83,0x7b,12,1);a.J(0x85,"done");
