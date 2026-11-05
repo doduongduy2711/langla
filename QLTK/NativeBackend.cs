@@ -612,12 +612,13 @@ namespace TGLL {
             Code64 a=new Code64();a.Emit(0x53,0x48,0x83,0xec,0x20);a.Call(original);a.Emit(0x48,0xbb);a.Q(data);a.Emit(0x83,0x7b,4,1);a.J(0x85,"done");a.Emit(0x83,0x7b,8,2);a.J(0x85,"done");a.Emit(0xff,0x43,28);a.Label("done");a.Emit(0x48,0x83,0xc4,0x20,0x5b,0xc3);return a.Finish();
         }
 
-        internal static byte[] Login(long data,long classSlot,long original,long stringNew,long setter,long login,long characterCode=0,long trainingCode=0,long settingsCode=0,long teamCode=0,long followCode=0,long zoneCode=0,long itemCode=0,long questCode=0,long travelItemCode=0,long travelMenuCode=0,long giftCode=0,long mailCode=0,long inboxCode=0,long farmCode=0,long chestCode=0,long cloakCode=0,long marketCode=0,long reminderCode=0,long gemCode=0,long captchaCode=0,long cuongRouteCode=0,long cuongZoneCode=0) {
+        internal static byte[] Login(long data,long classSlot,long original,long stringNew,long setter,long login,long characterCode=0,long trainingCode=0,long settingsCode=0,long teamCode=0,long followCode=0,long zoneCode=0,long itemCode=0,long questCode=0,long travelItemCode=0,long travelMenuCode=0,long giftCode=0,long mailCode=0,long inboxCode=0,long farmCode=0,long chestCode=0,long cloakCode=0,long marketCode=0,long reminderCode=0,long gemCode=0,long captchaCode=0,long cuongRouteCode=0,long cuongZoneCode=0,long startupPopupCode=0) {
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x40);
             // Thử skill trước Update treo; giữ nguyên tham số của Update gốc.
             a.Emit(0x48,0x89,0x4c,0x24,0x20,0x48,0x89,0x54,0x24,0x28,0x4c,0x89,0x44,0x24,0x30,0x4c,0x89,0x4c,0x24,0x38);
             if(captchaCode!=0)a.Call(captchaCode);if(trainingCode!=0)a.Call(trainingCode);if(gemCode!=0)a.Call(gemCode);
             a.Emit(0x48,0x8b,0x4c,0x24,0x20,0x48,0x8b,0x54,0x24,0x28,0x4c,0x8b,0x44,0x24,0x30,0x4c,0x8b,0x4c,0x24,0x38);a.Call(original);
+            if(startupPopupCode!=0){a.Call(startupPopupCode);a.Emit(0x85,0xc0);a.J(0x85,"done");}
             a.Emit(0x48,0xbb);a.Q(data);a.Emit(0x83,0x3b,0x01);a.J(0x85,"done");a.Phase(11);
             a.Rax(classSlot);a.Emit(0x48,0x8b,0x38,0x48,0x85,0xff);a.J(0x84,"done");a.Emit(0x40,0xf6,0xc7,0x01);a.J(0x85,"done");
             a.Phase(12);a.Emit(0x48,0x8b,0x87,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");
@@ -968,6 +969,20 @@ namespace TGLL {
             a.Label("done");a.Emit(0x48,0x83,0xc4,0x20,0x41,0x5d,0x41,0x5c,0x5f,0x5e,0x5b,0xc3);return a.Finish();
         }
         static void NpcRecord(Code64 a){a.Emit(0x4d,0x89,0xe2,0x49,0xc1,0xe2,0x04,0x49,0x01,0xda,0x49,0x83,0xc2,0x40);}
+        // Only the loader's jh data-download confirmation (action 2111), before login.
+        // Return 1 while this exact modal is active, 0 to continue login immediately.
+        internal static byte[] PreLoginDataUpdate(long data,long loginData,long canvasSlot,long dialogSlot,long initialize){
+            Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x48,0x83,0xec,0x30,0x48,0xbb);a.Q(data);a.Rax(loginData);a.Emit(0x83,0x38,1);a.J(0x85,"absent");
+            Slot(a,canvasSlot,"absent",initialize);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"absent");a.Emit(0x48,0x8b,0x00,0x48,0x85,0xc0);a.J(0x84,"absent");a.Emit(0x48,0x8b,0xb0,0xb8,1,0,0,0x48,0x85,0xf6);a.J(0x84,"absent");
+            a.Emit(0x48,0x8b,0xbe,0x90,0,0,0,0x48,0x85,0xff);a.J(0x84,"absent");Slot(a,dialogSlot,"absent",initialize);a.Emit(0x48,0x39,0x07);a.J(0x85,"absent");a.Emit(0x48,0x39,0xb7,0xa8,0,0,0);a.J(0x85,"absent");
+            a.Emit(0x48,0x8b,0x8e,0x88,0,0,0,0x48,0x85,0xc9);a.J(0x84,"absent");a.Emit(0x48,0x8b,0x01,0x48,0x89,0xfa,0x4c,0x8b,0x80,0x10,2,0,0,0xff,0x90,8,2,0,0,0x84,0xc0);a.J(0x84,"absent");
+            a.Emit(0x4c,0x8b,0xaf,0xc0,0,0,0,0x4d,0x85,0xed);a.J(0x84,"absent");a.Emit(0x41,0x83,0x7d,24,2);a.J(0x85,"absent");a.Emit(0x49,0x8b,0x45,40);MatchString(a,"Internet trước khi bắt đầu tải.","absent");
+            a.Emit(0x49,0x8b,0x45,32,0x48,0x85,0xc0);a.J(0x84,"absent");string prefix="Cập nhật dữ liệu ";a.Emit(0x81,0x78,16);a.I(prefix.Length);a.J(0x8c,"absent");a.Emit(0x81,0x78,16);a.I(256);a.J(0x8f,"absent");for(int i=0;i<prefix.Length;i++){a.Emit(0x66,0x81,0xb8);a.I(20+i*2);a.Emit((byte)prefix[i],(byte)(prefix[i]>>8));a.J(0x85,"absent");}
+            a.Emit(0x4c,0x8b,0xa7,0xc8,0,0,0,0x4d,0x85,0xe4);a.J(0x84,"absent");a.Emit(0x49,0x39,0x7c,0x24,0x48);a.J(0x85,"absent");a.Emit(0x41,0x81,0xbc,0x24,0x80,0,0,0);a.I(2111);a.J(0x85,"absent");a.Emit(0x49,0x8b,0x44,0x24,0x78);MatchString(a,"Xác nhận","absent");
+            a.Emit(0x48,0x39,0x3b);a.J(0x84,"pending");a.Emit(0x48,0x89,0x3b,0xff,0x43,8); // once, before a reentrant callback
+            a.Emit(0x48,0x8b,0x07,0x48,0x89,0xf9,0xba);a.I(2111);a.Emit(0x4d,0x8b,0x84,0x24,0x98,0,0,0,0x4d,0x89,0xe1,0x4c,0x8b,0x90,0x90,4,0,0,0x4c,0x89,0x54,0x24,0x20,0xff,0x90,0x88,4,0,0);
+            a.Label("pending");a.Emit(0xb8,1,0,0,0);a.Jump("return");a.Label("absent");a.Emit(0x48,0xc7,0x03,0,0,0,0,0x33,0xc0);a.Label("return");a.Emit(0x48,0x83,0xc4,0x30,0x41,0x5d,0x41,0x5c,0x5f,0x5e,0x5b,0xc3);return a.Finish();
+        }
         // Main-thread gate: map ready -> worker waits 5 seconds -> dismiss exact reminder -> NPC.
         internal static byte[] PrepareMap(long data,long canvasSlot,long gameSlot,long dialogSlot,long initialize,long next,bool expectedPopupOnly=false){
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x30);a.Emit(0x48,0xbb);a.Q(data);
@@ -2930,7 +2945,7 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                 if(j.Proxy!=null){long slots=r.Allocate(2048);relay=new SocksRelay(r,slots,j.Proxy);ushort networkPort=(ushort)IPAddress.HostToNetworkOrder((short)relay.Port);
                     connectCode=r.Allocate(4096);byte[] code=NativeCode.Connect(slots,networkPort,originalConnect,r.Ptr(game+0x129e5f0),r.Ptr(game+0x129e640),SocketExport(p,"WSAGetLastError"),SocketExport(p,"WSASetLastError"));r.Write(connectCode,code);r.Protect(connectCode,4096,0x20);
                 }
-                long teamData=0,teamCode=0,followCode=0,zoneCode=0;long update=game+0x24ddb0,trampoline=0,loginCode=0;byte[] patch=null;
+                long startupPopupData=0;int startupPopupCount=0;long teamData=0,teamCode=0,followCode=0,zoneCode=0;long update=game+0x24ddb0,trampoline=0,loginCode=0;byte[] patch=null;
                 if(j.Auto){byte[] prefix=r.Read(update,16);byte[] expected={0x40,0x57,0x48,0x83,0xec,0x40,0x80,0x3d};for(int i=0;i<expected.Length;i++)if(prefix[i]!=expected[i])throw new Exception("native_build_unsupported");
                     if(prefix[12]!=0||prefix[13]!=0x48||prefix[14]!=0x8b||prefix[15]!=0xf9)throw new Exception("native_build_unsupported");
                     trampoline=r.Near(update,4096);byte[] relocated=(byte[])prefix.Clone();long comparison=update+13+BitConverter.ToInt32(prefix,8);Array.Copy(BitConverter.GetBytes(checked((int)(comparison-trampoline-13))),0,relocated,8,4);
@@ -2941,6 +2956,7 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                     byte[] replyBytes=NativeCode.ZoneReply(j.ZoneResponseData,zoneReplyCode+2048);if(replyBytes.Length>2048)throw new Exception("native_code_too_large");r.Write(zoneReplyCode,replyBytes);r.Protect(zoneReplyCode,4096,0x20);
                     byte[] zoneReplyPatch=new byte[5];zoneReplyPatch[0]=0xe9;Array.Copy(BitConverter.GetBytes(checked((int)(zoneReplyCode-zoneReply-5))),0,zoneReplyPatch,1,4);r.Suspended(delegate{r.Install(zoneReply,zoneReplyPatch);});
                     data=r.Allocate(139264);reminderData=r.Allocate(4096);reminderCode=r.Allocate(4096);byte[] reminderBytes=NativeCode.PrepareMap(reminderData,game+0x16ed658,game+0x16ee888,game+0x16eeba8,game+0x1dd900,0,true);r.Write(reminderCode,reminderBytes);r.Protect(reminderCode,4096,0x20);user=r.Utf8(j.Username);pass=r.Utf8(j.Password);r.Write(data+8,BitConverter.GetBytes(user));r.Write(data+16,BitConverter.GetBytes(pass));
+                    startupPopupData=r.Allocate(4096);long startupPopupCode=r.Allocate(4096);r.Write(startupPopupCode,NativeCode.PreLoginDataUpdate(startupPopupData,data,game+0x16ed658,game+0x16ef760,game+0x1dd900));r.Protect(startupPopupCode,4096,0x20);
                     long partyCode=r.Allocate(4096);byte[] partyBytes=NativeCode.Party(data,game+0x16ee888,game+0x16f0240,game+0x16ee820,game+0x16f760,game+0x2e2aa0,game+0x1dd900);r.Write(partyCode,partyBytes);r.Protect(partyCode,4096,0x20);
                     long npcCode=r.Allocate(8192);byte[] npcBytes=NativeCode.Npc(data,game+0x16ed658,game+0x16ee888,game+0x16ee910,game+0x16efe08,game+0x4e19f0,game+0x2d8f00,game+0x12d9e0,game+0x1dd900,game+0x303250,partyCode);
                     if(npcBytes.Length>8192)throw new Exception("native_code_too_large");r.Write(npcCode,npcBytes);r.Protect(npcCode,8192,0x20);
@@ -2957,10 +2973,10 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                     itemData=r.Allocate(4096);long itemCode=r.Allocate(4096);byte[] itemBytes=NativeCode.AutoItem(itemData,game);r.Write(itemCode,itemBytes);r.Protect(itemCode,4096,0x20);
                     chestData=r.Allocate(4096);long chestCode=r.Allocate(4096);byte[] chestBytes=NativeCode.StoneChest(chestData,game);if(chestBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(chestCode,chestBytes);r.Protect(chestCode,4096,0x20);
                     cloakData=r.Allocate(4096);long cloakAction=r.Allocate(4096),cloakUse=0,cloakBuy=r.Allocate(4096),cloakEquip=r.Allocate(4096),cloakPacket=r.Allocate(4096),cloakCode=r.Allocate(4096);
-                    long cloakReply=game+0x4e26b9;byte[] cloakPrefix=r.Read(cloakReply,7),expectedCloakPrefix={0x48,0x8b,0x3d,0xd0,0xbb,0x20,1};
+                    long cloakReply=game+0x4e5762;byte[] cloakPrefix=r.Read(cloakReply,10),expectedCloakPrefix={0x33,0xd2,0x48,0x8d,0x8c,0x24,0x88,1,0,0};
                     if(!SameBytes(cloakPrefix,expectedCloakPrefix))throw new Exception("cloak_reply_build_unsupported");
-                    long cloakReplyCode=r.Near(cloakReply,4096);r.Write(cloakReplyCode,NativeCode.CloakCatalogReply(cloakData,game+0x16ee290,cloakReply+7,game+0x4e2b1d));r.Protect(cloakReplyCode,4096,0x20);
-                    byte[] cloakReplyPatch={0xe9,0,0,0,0,0x90,0x90};Array.Copy(BitConverter.GetBytes(checked((int)(cloakReplyCode-cloakReply-5))),0,cloakReplyPatch,1,4);r.Suspended(delegate{r.Install(cloakReply,cloakReplyPatch);});
+                    long cloakReplyCode=r.Near(cloakReply,4096);r.Write(cloakReplyCode,NativeCode.CloakCatalogReply(cloakData,cloakReply+10,game+0x4e2b1d));r.Protect(cloakReplyCode,4096,0x20);
+                    byte[] cloakReplyPatch={0xe9,0,0,0,0,0x90,0x90,0x90,0x90,0x90};Array.Copy(BitConverter.GetBytes(checked((int)(cloakReplyCode-cloakReply-5))),0,cloakReplyPatch,1,4);r.Suspended(delegate{r.Install(cloakReply,cloakReplyPatch);});
                     r.Write(cloakBuy,NativeCode.StoneChest(cloakData+512,game));r.Write(cloakPacket,NativeCode.EquipPacket(game));r.Write(cloakEquip,NativeCode.EquipItem(cloakData+768,game+0x16ed658,game+0x16ee888,game+0x3672c0,game+0x16ee578,cloakPacket));r.Write(cloakAction,NativeCode.CloakCatalogRequest(cloakData,game+0x16ee888,game+0x1dd900,game+0x4e6b00));r.Write(cloakCode,NativeCode.CloakBundle(cloakData,game,cloakAction,cloakUse,cloakBuy,cloakEquip));foreach(long address in new[]{cloakAction,cloakBuy,cloakEquip,cloakPacket,cloakCode})r.Protect(address,4096,0x20);
                     giftData=r.Allocate(4096);long giftCode=r.Allocate(4096);byte[] giftBytes=NativeCode.GiftCode(giftData,game);r.Write(giftCode,giftBytes);r.Protect(giftCode,4096,0x20);
                     mailData=r.Allocate(4096);long mailCode=r.Allocate(4096);byte[] mailBytes=NativeCode.Mail(mailData,game);if(mailBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(mailCode,mailBytes);r.Protect(mailCode,4096,0x20);
@@ -2986,12 +3002,12 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                     teamData=r.Allocate(4096);teamCode=r.Allocate(4096);byte[] teamBytes=NativeCode.Team(teamData,game,game+0x1dd900);if(teamBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(teamCode,teamBytes);r.Protect(teamCode,4096,0x20);
                     followCode=r.Allocate(4096);byte[] followBytes=NativeCode.Follow(teamData+1024,game,game+0x1dd900);if(followBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(followCode,followBytes);r.Protect(followCode,4096,0x20);
                     zoneCode=r.Allocate(4096);byte[] zoneBytes=NativeCode.Zone(teamData+2048,game,game+0x1dd900,j.ZoneResponseData);if(zoneBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(zoneCode,zoneBytes);r.Protect(zoneCode,4096,0x20);
-                    loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode,gemCode,captchaCode,cuongRouteCode,cuongZoneCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
+                    loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode,gemCode,captchaCode,cuongRouteCode,cuongZoneCode,startupPopupCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
                     patch=new byte[16];for(int i=0;i<16;i++)patch[i]=0x90;patch[0]=0xe9;Array.Copy(BitConverter.GetBytes(checked((int)(loginCode-update-5))),0,patch,1,4);
                 }
                 Check(j);r.Suspended(delegate{if(j.Proxy!=null){r.Install(game+0x129e618,BitConverter.GetBytes(connectCode));r.Install(baseModule+0x45448,BitConverter.GetBytes(connectCode));}if(j.Auto)r.Install(update,patch);});installed=true;
                 if(j.Auto){r.Write(data,BitConverter.GetBytes(1));j.State="typing";timer.Restart();bool done=false;
-                    j.Stage="login";while(timer.ElapsedMilliseconds<60000){Check(j);if(p.HasExited)throw new Exception("game_exited");byte[] progress=r.Read(data,8);j.ReadyPhase=BitConverter.ToInt32(progress,4);if(BitConverter.ToInt32(progress,0)==3){done=true;break;}Thread.Sleep(100);}
+                    j.Stage="login";while(timer.ElapsedMilliseconds<60000){Check(j);if(p.HasExited)throw new Exception("game_exited");byte[] progress=r.Read(data,8);j.ReadyPhase=BitConverter.ToInt32(progress,4);if(startupPopupData!=0){int confirmed=FarmI(r,startupPopupData+8);if(confirmed>startupPopupCount){startupPopupCount=confirmed;Log(j,"startup_data_update_confirm_requested",",\"count\":"+confirmed);}}if(BitConverter.ToInt32(progress,0)==3){done=true;break;}Thread.Sleep(100);}
                     if(!done)throw new Exception("native_login_not_ready");j.State="submitted";Log(j,"login_submitted",",\"elapsed_ms\":"+launchTimer.ElapsedMilliseconds);
                     r.Write(data,new byte[4]);r.Write(user,new byte[Encoding.UTF8.GetByteCount(j.Username)+1]);r.Write(pass,new byte[Encoding.UTF8.GetByteCount(j.Password)+1]);
                     j.Stage="character";j.State="selecting_character";r.Write(data,BitConverter.GetBytes(4));timer.Restart();bool selected=false;
@@ -3796,7 +3812,7 @@ namespace TGLL {
     if(j.CloakPhase<7){j.CloakPhase=7;j.CloakAt=now;}
     if(j.CloakPhase==7){
      if(!ready||FarmI(r,buy)!=0)return;var offers=offerReader==null?ReadCloakOffers(r,game):offerReader();var offer=offers.FirstOrDefault(x=>x.TemplateId==j.CloakId&&ValidCloakOffer(x));
-     if(offer==null){if(j.CloakCatalogAttempted){FinishCloak(j,"Server chưa cung cấp đúng áo cần mua; chưa gửi mua.");return;}j.CloakCatalogAttempted=true;r.Write(data+96,new byte[4]);r.Write(data+80,BitConverter.GetBytes(1));j.CloakPhase=11;j.CloakAt=now;j.CloakStatus="Yêu cầu danh mục áo từ server; không mở cửa hàng";Log(j,"cloak_catalog_requested",",\"category\":36");return;}
+     if(offer==null){if(j.CloakCatalogAttempted){FinishCloak(j,"Server chưa cung cấp đúng áo cần mua; chưa gửi mua.");return;}j.CloakCatalogAttempted=true;r.Write(data+96,new byte[4]);r.Write(data+80,BitConverter.GetBytes(1));j.CloakPhase=11;j.CloakAt=now;j.CloakStatus="Yêu cầu danh mục áo từ server; không mở cửa hàng";Log(j,"cloak_catalog_requested",",\"category\":18");return;}
      if(offer.CrystalPrice!=j.CloakExpectedPrice){FinishCloak(j,"Giá hiện tại "+offer.CrystalPrice+" khác giá đã chọn "+j.CloakExpectedPrice+"; đọc lại giá trước khi mua.");return;}
      InventorySnapshot bag=bagReader==null?ReadInventorySnapshot(r,game):bagReader();j.CloakBefore=CountCloaks(bag,j.CloakId);j.CloakBeforeSlots=bag.Items.Where(x=>x.TemplateId==j.CloakId).Select(x=>x.Slot).ToArray();if(bag.Items.Length>=bag.Capacity){FinishCloak(j,"Túi đầy; chưa mua áo.");return;}
      r.Write(buy+4,BitConverter.GetBytes(2));r.Write(buy+8,BitConverter.GetBytes(1));r.Write(buy+20,BitConverter.GetBytes(offer.SaleId));r.Write(buy+24,new byte[4]);r.Write(buy+32,BitConverter.GetBytes(offer.Address));r.Write(buy+40,BitConverter.GetBytes(offer.TemplateId));r.Write(buy+44,BitConverter.GetBytes(offer.CrystalPrice));r.Write(buy,BitConverter.GetBytes(1));j.CloakPhase=8;j.CloakAt=now;j.CloakStatus="Đã xếp mua "+offer.Name+" • "+offer.CrystalPrice+" tinh thạch; chờ áo vào túi";Log(j,"cloak_buy_queued",",\"template_id\":"+offer.TemplateId+",\"sale_id\":"+offer.SaleId+",\"crystal_price\":"+offer.CrystalPrice);return;
@@ -3821,16 +3837,16 @@ namespace TGLL {
   }
  }
  internal static partial class NativeCode {
-  // fc.bor sends opcode 0x7A + WriteByte(category). Category 36 is the cloak catalog.
+  // fc.bor sends opcode 0x7A + WriteByte(category). Category 18 supplies the NPC shop catalog.
   internal static byte[] CloakCatalogRequest(long data,long worldSlot,long initialize,long requestCatalog){
    Code64 a=new Code64();a.Emit(0x53,0x48,0x83,0xec,0x20,0x48,0xbb);a.Q(data);a.Emit(0x83,0x7b,80,1);a.J(0x85,"return");a.Emit(0xc7,0x43,80,2,0,0,0,0x83,0x7b,12,1);a.J(0x85,"done");
-   Slot(a,worldSlot,"done",initialize);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x40,16,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x89,0x43,104,0xc7,0x43,96,1,0,0,0,0xb9,36,0,0,0,0x33,0xd2);a.Call(requestCatalog);
+   Slot(a,worldSlot,"done",initialize);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x40,16,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x89,0x43,104,0xc7,0x43,96,1,0,0,0,0xb9,18,0,0,0,0x33,0xd2);a.Call(requestCatalog);
    a.Label("done");a.Emit(0xc7,0x43,80,0,0,0,0);a.Label("return");a.Emit(0x48,0x83,0xc4,0x20,0x5b,0xc3);return a.Finish();
   }
   // Enter after the original parser fills fc.fgt; bypass only our pending cloak response's UI tail.
-  internal static byte[] CloakCatalogReply(long data,long titleSlot,long normal,long headless){
-   Code64 a=new Code64();a.Emit(0x9c,0x50,0x48,0xb8);a.Q(data);a.Emit(0x83,0x78,96,1);a.J(0x85,"normal");a.Emit(0x48,0x39,0x58,104);a.J(0x85,"normal");a.Emit(0x80,0xbc,0x24,0x98,1,0,0,36);a.J(0x85,"normal");a.Emit(0xc7,0x40,96,2,0,0,0,0x58,0x9d,0xff,0x25,0,0,0,0);a.Q(headless);
-   a.Label("normal");a.Emit(0x58,0x9d,0x48,0xbf);a.Q(titleSlot);a.Emit(0x48,0x8b,0x3f,0xff,0x25,0,0,0,0);a.Q(normal);return a.Finish();
+  internal static byte[] CloakCatalogReply(long data,long normal,long headless){
+   Code64 a=new Code64();a.Emit(0x9c,0x50,0x48,0xb8);a.Q(data);a.Emit(0x83,0x78,96,1);a.J(0x85,"normal");a.Emit(0x48,0x39,0x58,104);a.J(0x85,"normal");a.Emit(0x80,0xbc,0x24,0x98,1,0,0,18);a.J(0x85,"normal");a.Emit(0xc7,0x40,96,2,0,0,0,0x58,0x9d,0xff,0x25,0,0,0,0);a.Q(headless);
+   a.Label("normal");a.Emit(0x58,0x9d,0x33,0xd2,0x48,0x8d,0x8c,0x24,0x88,1,0,0,0xff,0x25,0,0,0,0);a.Q(normal);return a.Finish();
   }
   internal static byte[] CloakBundle(long data,long game,long actionCode,long useCode,long buyCode,long equipCode=0){
    // Validate the catalog again on the game thread, then use the purchase packet only.
