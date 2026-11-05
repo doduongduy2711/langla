@@ -5,11 +5,11 @@ $farmMode.SelectedIndex=3;$farmManualMap.Value=74;$farmManualX.Value=1490;$farmM
 $grid.Rows[$dailyTestIndex].Cells['up'].Value=$true
 if(!$dailyJob.DailyManaged -or !$dailyJob.FarmEnabled -or $dailyJob.ReceiveKeyEnabled -or $dailyJob.DungeonHighEnabled -or $dailyJob.IzanamiEnabled -or $dailyJob.QuestEnabled){throw 'All activity selections conflict with farming before midnight'}
 if((Get-AccountLaunchMode $dailyAccount) -ne 'farm'){throw 'Bulk open would incorrectly launch an activity queue for Up'}
-$dailyJob.FarmEnabled=$false;$dailyJob.DailyActive=$true;$dailyJob.DailyStage=2;$dailyJob.DailyStatus='Đang chạy: Địa cung cao cấp';$dailyJob.DungeonHighEnabled=$true;$dailyJob.GameAutoWanted=$false
+$dailyJob.FarmEnabled=$false;$dailyJob.DailyActive=$true;$dailyJob.DailyStage=2;$dailyJob.DailyStatus='Đang chạy: Địa cung';$dailyJob.DungeonHighEnabled=$true;$dailyJob.GameAutoWanted=$false
 Sync-FarmUpRow $grid.Rows[$dailyTestIndex];Sync-AutoRows
 if(!$grid.Rows[$dailyTestIndex].Cells['up'].Value -or $dailyJob.GameAutoWanted){throw 'UI refresh cleared Up or restarted combat during daily stage'}
 $script:uiTicks=9;Invoke-ManagerTick
-if($grid.Rows[$dailyTestIndex].Cells['status'].Value -ne 'Đang chạy: Địa cung cao cấp'){throw 'Daily activity status not shown'}
+if($grid.Rows[$dailyTestIndex].Cells['status'].Value -ne 'Đang chạy: Địa cung'){throw 'Daily activity status not shown'}
 Set-AccountAuto $grid.Rows[$dailyTestIndex] $true
 if($dailyJob.GameAutoWanted){throw 'All Auto overrides the active daily stage'}
 $grid.Rows[$dailyTestIndex].Cells['up'].Value=$false

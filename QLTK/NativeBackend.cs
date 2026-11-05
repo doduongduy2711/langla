@@ -955,8 +955,13 @@ namespace TGLL {
             a.Label("soncap_label");MatchString(a,"Sơn Cáp Myoboku","soncap_label_2");a.Jump("key_selected");a.Label("soncap_label_2");MatchString(a,":-chatSơn Cáp Myoboku","option_next");a.Jump("key_selected");
             a.Label("izanami_label");MatchString(a,"Cấm thuật Izanami","izanami_label_2");a.Jump("key_selected");
             a.Label("izanami_label_2");MatchString(a,":-chatCấm thuật Izanami","option_next");a.Jump("key_selected");
-            a.Label("dungeon_label");MatchString(a,"Địa cung (cao cấp)","dungeon_label_2");a.Jump("key_selected");
-            a.Label("dungeon_label_2");MatchString(a,":-chatĐịa cung (cao cấp)","option_next");a.Label("key_selected");
+            a.Label("dungeon_label");
+            for(int tier=1;tier<=4;tier++){
+                a.Emit(0x83,0xbb);a.I(3304);a.Emit((byte)tier);a.J(0x85,"dungeon_tier_next_"+tier);
+                string name=NativeBackend.DungeonTierName(tier);MatchString(a,"Địa cung ("+name+")","dungeon_chat_"+tier);a.Jump("key_selected");a.Label("dungeon_chat_"+tier);MatchString(a,":-chatĐịa cung ("+name+")",tier==2?"dungeon_typo":"option_next");a.Jump("key_selected");
+                if(tier==2){a.Label("dungeon_typo");MatchString(a,"Địa cung (trung câp)","dungeon_typo_chat");a.Jump("key_selected");a.Label("dungeon_typo_chat");MatchString(a,":-chatĐịa cung (trung câp)","option_next");a.Jump("key_selected");}
+                a.Label("dungeon_tier_next_"+tier);
+            }a.Jump("option_next");a.Label("key_selected");
             a.Emit(0x83,0xbb);a.I(3280);a.Emit(1);a.J(0x85,"key_authorized");
             a.Emit(0x83,0xbb);a.I(3292);a.Emit(1);a.J(0x84,"key_authorized");
             a.Emit(0xc7,0x03,21,0,0,0);a.Jump("done");
@@ -1232,7 +1237,7 @@ namespace TGLL {
         public volatile string State="queued",Error="",NpcDetails="",Stage="",CapturedNpcName="",DynamicMenuJson="",LogError="";
         public volatile int ProcessId,ReadyPhase,NpcCount,NpcId=-1,NpcTemplateId=-1,CapturedNpcId=-1,CapturedTemplateId=-1,MenuTag,MenuSelectedIndex=-1;
         public volatile string[] MenuOptions=new string[0];public volatile bool CancelRequested,CloseRequested,ReplayRequested;public volatile bool ReceiveKeyEnabled=true,ReceiveKeyRequested;
-        public volatile bool MailQueueOnly;public volatile bool IzanamiQueueOnly;public volatile bool IzanamiEnabled,IzanamiRequested;public volatile int IzanamiStage;internal HashSet<string> IzanamiStageSeen=new HashSet<string>();public volatile bool IzanamiMapAutoActive;internal DateTime IzanamiMapSeenAt,IzanamiMapPollAt;public volatile bool IzanamiNoAttempts;public volatile string IzanamiLimitNotice="";internal bool IzanamiLimitArmed;internal string IzanamiPopupBefore="";internal HashSet<string> IzanamiNoticeSeen=new HashSet<string>();internal DateTime IzanamiNoticePollAt,IzanamiNoticeAt;public volatile int IzanamiEntries,IzanamiRoundsCompleted,IzanamiRoundsTarget=1;public bool IzanamiRunFinished{get{return IzanamiNoAttempts||IzanamiRoundComplete&&IzanamiRoundsCompleted>=IzanamiRoundsTarget;}}public volatile bool IzanamiRoundEntered,IzanamiRoundComplete;internal DateTime IzanamiReturnAt=DateTime.MinValue;public volatile bool DungeonHighEnabled;public volatile bool PartyReady;public volatile int PartyMembers,PartyCreateAttempts;internal int NpcAction;internal DateTime DungeonStartAt=DateTime.MinValue;
+        public volatile bool MailQueueOnly;public volatile bool IzanamiQueueOnly;public volatile bool IzanamiEnabled,IzanamiRequested;public volatile int IzanamiStage;internal HashSet<string> IzanamiStageSeen=new HashSet<string>();public volatile bool IzanamiMapAutoActive;internal DateTime IzanamiMapSeenAt,IzanamiMapPollAt;public volatile bool IzanamiNoAttempts;public volatile string IzanamiLimitNotice="";internal bool IzanamiLimitArmed;internal string IzanamiPopupBefore="";internal HashSet<string> IzanamiNoticeSeen=new HashSet<string>();internal DateTime IzanamiNoticePollAt,IzanamiNoticeAt;public volatile int IzanamiEntries,IzanamiRoundsCompleted,IzanamiRoundsTarget=1;public bool IzanamiRunFinished{get{return IzanamiNoAttempts||IzanamiRoundComplete&&IzanamiRoundsCompleted>=IzanamiRoundsTarget;}}public volatile bool IzanamiRoundEntered,IzanamiRoundComplete;internal DateTime IzanamiReturnAt=DateTime.MinValue;public volatile bool DungeonHighEnabled;public volatile int DungeonTier=3;public volatile bool PartyReady;public volatile int PartyMembers,PartyCreateAttempts;internal int NpcAction;internal DateTime DungeonStartAt=DateTime.MinValue;
         internal CloseBatchOperation DungeonAutoCloseOperation;public volatile int DungeonKeyCount,DungeonEntries;public volatile bool DungeonStopped,DungeonFinished,DungeonQueueOnly,DungeonReturnConfirmed;
         internal bool DungeonProbeRefused,DungeonNoKeyProbeConfirmed;internal string DungeonProbePopupBefore="";internal HashSet<string> DungeonProbeNotices=new HashSet<string>();internal bool DungeonResumeProbe,DungeonResumeChecked;internal bool DungeonKeyChecked,DungeonCycleWaiting,DungeonLeftOrigin,DungeonRepeatRequested;
         internal int DungeonEntryRetries;internal int DungeonOriginMap=-1;internal DateTime DungeonCycleAt,DungeonReturnAt,DungeonPollAt=DateTime.MinValue;
@@ -2052,11 +2057,19 @@ namespace TGLL {
             j.ReceiveKeyEnabled=enabled;if(!enabled){j.ReceiveKeyRequested=j.DungeonHighEnabled&&(j.ReceiveKeyRequested||(j.ReceiveFlowActive&&j.NpcAction==0));}
             if(enabled&&j.QuestEnabled)SetAutoQuest(id,false);
         }
-        internal static int CountHighDungeonKeys(InventorySnapshot snapshot){
+        internal static int DungeonTierForLevel(int level){if(level<1||level>500)throw new Exception("dungeon_level_unavailable");return level<40?1:level<50?2:level<60?3:4;}
+        internal static string DungeonTierName(int tier){if(tier<1||tier>4)throw new Exception("dungeon_tier_unavailable");return new[]{"sơ cấp","trung cấp","cao cấp","thượng cấp"}[tier-1];}
+        internal static int DungeonTierForMap(int map){return map==6?1:map==7?2:map==18?3:map==19?4:0;}
+        internal static int ReadDungeonLevel(Remote r,long game){
+            long player=r.Ptr(r.Ptr(ResolvedClass(r,game+0x16ee330)+0xb8)+8),canvas=r.Ptr(r.Ptr(ResolvedClass(r,game+0x16ed658)+0xb8));long table=r.Ptr(canvas+0x210);int count=FarmI(r,table+24);if(player==0||count<1||count>500)throw new Exception("dungeon_level_unavailable");
+            long xp=r.Ptr(player+0xe8);if(xp<0)throw new Exception("dungeon_level_unavailable");byte[] costs=r.Read(table+32,count*8);int level=0;for(int i=0;i<count;i++){long cost=BitConverter.ToInt64(costs,i*8);if(cost<0||xp<cost)break;xp-=cost;level++;}DungeonTierForLevel(level);return level;
+        }
+        internal static void RefreshDungeonTier(Remote r,long data,NativeJob j,long game){if(game==0)return;int level=ReadDungeonLevel(r,game),tier=DungeonTierForLevel(level);if(j.DungeonTier!=tier||j.CharacterLevel!=level){j.DungeonTier=tier;j.CharacterLevel=level;Log(j,"dungeon_tier_selected",",\"level\":"+level+",\"tier\":"+tier+",\"name\":"+Quote(DungeonTierName(tier)));}r.Write(data+3304,BitConverter.GetBytes(tier));}
+        internal static int CountHighDungeonKeys(InventorySnapshot snapshot,int tier=3){
             if(snapshot==null||!snapshot.Ready)throw new Exception("dungeon_inventory_unavailable");
             long count=0;foreach(InventoryItem item in snapshot.Items){
                 string name=(item.Name??"").Normalize(NormalizationForm.FormC).Trim().Replace("khoá","khóa").Replace("Khoá","Khóa");
-                if(item.Quantity>0&&String.Equals(name,"Chìa khóa địa cung (cao cấp)",StringComparison.OrdinalIgnoreCase))count+=item.Quantity;
+                if(item.Quantity>0&&String.Equals(name.Replace("trung câp","trung cấp"),"Chìa khóa địa cung ("+DungeonTierName(tier)+")",StringComparison.OrdinalIgnoreCase))count+=item.Quantity;
             }return (int)Math.Min(Int32.MaxValue,count);
         }
         internal static int ReadDungeonMap(Remote r,long game){
@@ -2073,8 +2086,9 @@ namespace TGLL {
         }
         static bool CheckDungeonKeys(Remote r,long data,NativeJob j,Stopwatch timer,long game,Func<InventorySnapshot> reader){
             try{
+                RefreshDungeonTier(r,data,j,game);
                 int probeMap=-1;if(j.DungeonResumeProbe&&j.DungeonResumeChecked&&j.DungeonEntries>0&&!j.DungeonLeftOrigin&&r!=null&&game!=0){try{probeMap=ReadDungeonMap(r,game);}catch{}}
-                InventorySnapshot snapshot=reader==null?ReadInventorySnapshot(r,game):reader();j.Inventory=snapshot;j.DungeonKeyCount=CountHighDungeonKeys(snapshot);Log(j,"dungeon_keys_checked",",\"keys\":"+j.DungeonKeyCount);
+                InventorySnapshot snapshot=reader==null?ReadInventorySnapshot(r,game):reader();j.Inventory=snapshot;j.DungeonKeyCount=CountHighDungeonKeys(snapshot,j.DungeonTier);Log(j,"dungeon_keys_checked",",\"keys\":"+j.DungeonKeyCount);
                 if(j.DungeonKeyCount==0){
                     if(j.DungeonEntries==0&&!j.DungeonResumeChecked){j.DungeonResumeProbe=true;j.DungeonKeyChecked=true;return true;}
                     if(probeMap>=0){try{if(ConfirmEmptyDungeonProbe(j,probeMap,ReadDungeonMap(r,game),snapshot))Log(j,"dungeon_empty_probe_confirmed",",\"keys\":0,\"map\":"+probeMap);}catch{}}
@@ -2115,7 +2129,7 @@ namespace TGLL {
         // confirmed return until a real map transition, then refresh keys before timeout.
         internal static bool RecheckReturnedDungeonKeys(NativeJob j,int map,Func<InventorySnapshot> reader){
             if(!j.DungeonHighEnabled||!j.DungeonCycleWaiting||!j.DungeonReturnConfirmed||j.DungeonLeftOrigin||map!=j.DungeonOriginMap)return false;
-            try{InventorySnapshot snapshot=reader();int count=CountHighDungeonKeys(snapshot);int before=j.DungeonKeyCount;j.Inventory=snapshot;j.DungeonKeyCount=count;
+            try{InventorySnapshot snapshot=reader();int count=CountHighDungeonKeys(snapshot,j.DungeonTier);int before=j.DungeonKeyCount;j.Inventory=snapshot;j.DungeonKeyCount=count;
                 Log(j,"dungeon_entry_keys_rechecked",",\"before\":"+before+",\"keys\":"+count);return count==0;
             }catch(Exception e){Log(j,"dungeon_entry_keys_unavailable",",\"detail\":"+Quote(e.Message));return false;}
         }
@@ -2123,7 +2137,7 @@ namespace TGLL {
             // Only a probe submitted with zero keys can finish without an observed round.
             // A normal entry may have consumed its key while the map packet is delayed.
             if(!j.DungeonHighEnabled||!j.DungeonResumeProbe||!j.DungeonResumeChecked||j.DungeonEntries<1||j.DungeonLeftOrigin||j.DungeonKeyCount!=0||beforeMap!=j.DungeonOriginMap||afterMap!=j.DungeonOriginMap)return false;
-            int keys=CountHighDungeonKeys(snapshot);j.Inventory=snapshot;j.DungeonKeyCount=keys;
+            int keys=CountHighDungeonKeys(snapshot,j.DungeonTier);j.Inventory=snapshot;j.DungeonKeyCount=keys;
             if(keys>0){j.DungeonResumeProbe=false;return false;}
             j.DungeonNoKeyProbeConfirmed=true;return true;
         }
@@ -2706,13 +2720,14 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
             }
             if(j.NpcAction==1){j.DungeonProbeRefused=false;try{j.DungeonProbePopupBefore=ReadKeyNotice(r,game);j.DungeonProbeNotices=new HashSet<string>(ReadKeyNotifications(r,game).Keys);}catch{j.DungeonProbeNotices=new HashSet<string>();}}
             j.ReceiveFlowActive=true;j.TrainEnabled=false;j.NpcId=-1;j.NpcTemplateId=-1;
+            r.Write(data+3304,BitConverter.GetBytes(j.DungeonTier));
             r.Write(data+3280,BitConverter.GetBytes(j.SonCapEnabled&&j.NpcAction==2?3:j.NpcAction));
             r.Write(data+28,BitConverter.GetBytes(-1));r.Write(data+32,new byte[4]);
             r.Write(data,BitConverter.GetBytes(8));timer.Restart();j.Stage="npc";j.State=j.NpcAction==2?"finding_onoki":"finding_npc";Log(j,"npc_search_start","");
         }
         internal static bool ResumeHighDungeon(Remote r,long data,NativeJob j,Stopwatch timer,int map){
-            if(!j.DungeonHighEnabled||j.DungeonCycleWaiting||map!=18||j.CloseRequested||j.CancelRequested)return false;
-            j.DungeonOriginMap=59;j.DungeonCycleWaiting=true;j.DungeonLeftOrigin=true;j.DungeonReturnConfirmed=false;j.DungeonResumeProbe=false;j.DungeonResumeChecked=true;j.DungeonFinished=false;j.DungeonStopped=false;
+            if(!j.DungeonHighEnabled||j.DungeonCycleWaiting||DungeonTierForMap(map)==0||j.CloseRequested||j.CancelRequested)return false;
+            j.DungeonTier=DungeonTierForMap(map);j.DungeonOriginMap=59;j.DungeonCycleWaiting=true;j.DungeonLeftOrigin=true;j.DungeonReturnConfirmed=false;j.DungeonResumeProbe=false;j.DungeonResumeChecked=true;j.DungeonFinished=false;j.DungeonStopped=false;
             j.ReceiveKeyRequested=false;j.ReceiveFlowActive=false;j.DungeonRepeatRequested=false;j.DungeonStartAt=DateTime.MinValue;j.KeyReceiptPending=false;
             j.DungeonEntries=Math.Max(1,j.DungeonEntries);j.DungeonCycleAt=DateTime.UtcNow;j.DungeonReturnAt=DateTime.MinValue;j.DungeonPollAt=DateTime.MinValue;
             PrepareEntryAuto(j,1,59);SubmitEntryAuto(j);ObserveEntryAuto(j,map,DateTime.UtcNow);j.State="dungeon_running";j.Stage="dungeon_wait_return";j.Error="";
@@ -3264,7 +3279,7 @@ namespace TGLL {
         }
         static bool DailyAlive(NativeJob j){return j!=null&&!j.CloseRequested&&!j.CancelRequested&&j.State!="closed"&&j.State!="failed"&&j.State!="cancelled"&&j.TrainReady&&j.GameSettingsReady;}
         static int DailyOccupancy(int stage){return jobs.Values.Count(delegate(NativeJob j){if(!DailyAlive(j))return false;return stage==2?j.DungeonHighEnabled:stage==3?j.IzanamiEnabled&&!j.SonCapEnabled:j.QuestEnabled&&!j.BeastQuestEnabled;});}
-        static string DailyStageName(int stage){return stage==1?"Nhận chìa":stage==2?"Địa cung cao cấp":stage==3?"Cấm thuật":stage==4?"Nhiệm vụ tuần hoàn":"Quay lại bãi train";}
+        static string DailyStageName(int stage){return stage==1?"Nhận chìa":stage==2?"Địa cung":stage==3?"Cấm thuật":stage==4?"Nhiệm vụ tuần hoàn":"Quay lại bãi train";}
         static void AdvanceDailyStage(NativeJob j){
             ClearDailyActions(j);j.DailyExecuting=false;j.Error="";j.State="opened";
             do{j.DailyStage++;}while(j.DailyStage<=j.DailyRunPlan.Length&&!j.DailyRunPlan[j.DailyStage-1]);

@@ -127,6 +127,10 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Dungeon entry test compilation failed'}
           ./DungeonEntryTests.exe
           if($LASTEXITCODE -ne 0){throw 'Dungeon entry tests failed'}
+          & $compiler /nologo /platform:x64 /out:DungeonTierTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/DungeonTierTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Dungeon tier compilation failed'}
+          ./DungeonTierTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Dungeon tier tests failed'}
       - name: Inventory count persistence checks
         shell: powershell
         run: |

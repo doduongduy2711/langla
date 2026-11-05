@@ -89,17 +89,17 @@ $dungeonPage=New-Object Windows.Forms.TabPage;$dungeonPage.Text='Auto địa cun
 $script:loadingDungeon=$false
 $dungeonAccount=Ui-Label 'Chọn tài khoản trong bảng.' $dungeonPage 16 15 635 25
 $receiveKey=New-Object Windows.Forms.CheckBox;$receiveKey.Text='Nhận chìa khóa';$receiveKey.SetBounds(16,50,220,25);$dungeonPage.Controls.Add($receiveKey)
-$dungeonHigh=New-Object Windows.Forms.CheckBox;$dungeonHigh.Text='Vào địa cung cao cấp';$dungeonHigh.SetBounds(250,50,250,25);$dungeonPage.Controls.Add($dungeonHigh)
+$dungeonHigh=New-Object Windows.Forms.CheckBox;$dungeonHigh.Text='Vào địa cung theo level';$dungeonHigh.SetBounds(250,50,250,25);$dungeonPage.Controls.Add($dungeonHigh)
 $closeAfterKey=New-Object Windows.Forms.CheckBox;$closeAfterKey.Text='Tự tắt sau khi nhận chìa hoặc báo đã nhận trong ngày';$closeAfterKey.SetBounds(16,78,620,25);$dungeonPage.Controls.Add($closeAfterKey)
 $null=Ui-Label "Dùng phù ID 168 → Làng → Làng Cát → Raikage → nhận chìa / vào địa cung.`r`nNếu bật tự tắt: nhận chìa, xác nhận chìa trong túi tăng rồi đóng game trước khi vào địa cung." $dungeonPage 16 110 635 45
 $dungeonHint=Ui-Label '' $dungeonPage 16 158 635 42
 
 $dungeonPage.AutoScroll=$true
 $dungeonHint.Top=278
-$null=Ui-Label 'Số tài khoản tối đa chạy địa cung cao cấp:' $dungeonPage 16 159 300 24
+$null=Ui-Label 'Số tài khoản tối đa chạy địa cung theo level:' $dungeonPage 16 159 300 24
 $dungeonMax=New-Object Windows.Forms.NumericUpDown;$dungeonMax.Minimum=1;$dungeonMax.Maximum=10000;$dungeonMax.SetBounds(325,158,80,24);$dungeonMax.Value=12
 if($script:settings.dungeonMaxOnline){$dungeonMax.Value=[Math]::Max(1,[Math]::Min(10000,[int]$script:settings.dungeonMaxOnline))};$dungeonPage.Controls.Add($dungeonMax)
-$dungeonCloseAfter=New-Object Windows.Forms.CheckBox;$dungeonCloseAfter.Text='Tự tắt game sau khi đi hết chìa địa cung cao cấp';$dungeonCloseAfter.SetBounds(16,185,620,25);$dungeonCloseAfter.Checked=[bool]$script:settings.dungeonCloseAfter;$dungeonPage.Controls.Add($dungeonCloseAfter)
+$dungeonCloseAfter=New-Object Windows.Forms.CheckBox;$dungeonCloseAfter.Text='Tự tắt game sau khi đi hết chìa địa cung theo level';$dungeonCloseAfter.SetBounds(16,185,620,25);$dungeonCloseAfter.Checked=[bool]$script:settings.dungeonCloseAfter;$dungeonPage.Controls.Add($dungeonCloseAfter)
 $dungeonStart=Ui-NewButton 'Xếp hàng địa cung đã chọn' {try{Add-DungeonQueue @((Get-LaunchRows) | ForEach-Object {$_.Tag})}catch{Show-Error $_.Exception.Message}};Ui-Place $dungeonStart $dungeonPage 16 214 220 26
 $dungeonStop=Ui-NewButton 'Hủy hàng chờ địa cung' {Reset-DungeonQueue;Update-DungeonQueueStatus};Ui-Place $dungeonStop $dungeonPage 248 214 220 26
 $dungeonQueueHint=Ui-Label '' $dungeonPage 16 244 635 32
@@ -118,8 +118,8 @@ function Update-DungeonUi {
         $receiveKey.Enabled=$true;$receiveKey.Checked=[bool]$a.receiveKey;$dungeonAccount.Text='Tài khoản: '+$a.username
         $dungeonHigh.Enabled=$true;$dungeonHigh.Checked=[bool]$a.dungeonHigh;$closeAfterKey.Enabled=$true;$closeAfterKey.Checked=[bool]$a.closeAfterKey
         $dungeonHint.Text=$(if($receiveKey.Checked){'Đã bật nhận chìa • Đợi game sẵn sàng.'}else{'Nhận chìa: Tắt'})
-        $dungeonHint.Text+=' • Địa cung cao cấp: '+$(if($dungeonHigh.Checked){'Bật'}else{'Tắt'})
-        if($script:accountJobs.ContainsKey([string]$a.id)){$j=Get-AccountJob $script:accountJobs[[string]$a.id];if($null -ne $j){$dungeonHint.Text+=' • '+$j.State;if($j.PSObject.Properties['DungeonKeyCount']){$dungeonHint.Text+=' • Chìa đã đọc: '+$j.DungeonKeyCount+' • Lượt gửi: '+$j.DungeonEntries};if($j.Error){$dungeonHint.Text+="`r`n"+(Get-LoginErrorText $j.Error)}}}
+        $dungeonHint.Text+=' • Địa cung theo level: '+$(if($dungeonHigh.Checked){'Bật'}else{'Tắt'})
+        if($script:accountJobs.ContainsKey([string]$a.id)){$j=Get-AccountJob $script:accountJobs[[string]$a.id];if($null -ne $j){$dungeonHint.Text+=' • '+$j.State;if($j -is [TGLL.NativeJob] -and $j.CharacterLevel -gt 0 -and $j.State -in @('choosing_dungeon','dungeon_submitted','dungeon_running','dungeon_no_keys')){$dungeonHint.Text+=' • Lv '+$j.CharacterLevel+' / '+@('','sơ cấp','trung cấp','cao cấp','thượng cấp')[$j.DungeonTier]};if($j.PSObject.Properties['DungeonKeyCount']){$dungeonHint.Text+=' • Chìa đã đọc: '+$j.DungeonKeyCount+' • Lượt gửi: '+$j.DungeonEntries};if($j.Error){$dungeonHint.Text+="`r`n"+(Get-LoginErrorText $j.Error)}}}
     }finally{$script:loadingDungeon=$false}
 }
 $receiveKey.Add_CheckedChanged({
@@ -147,7 +147,7 @@ $dungeonHigh.Add_CheckedChanged({
         }
         $a | Add-Member NoteProperty dungeonHigh $enabled -Force
         if(!$UiTest){Save-Accounts}
-        $status.Text=$a.username+': Vào địa cung cao cấp '+$(if($enabled){'Bật'}else{'Tắt'})
+        $status.Text=$a.username+': Vào địa cung theo level '+$(if($enabled){'Bật'}else{'Tắt'})
     }catch{$status.Text=$a.username+': '+$_.Exception.Message}
     Update-DungeonUi
 })
