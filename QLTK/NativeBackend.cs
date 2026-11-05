@@ -612,7 +612,7 @@ namespace TGLL {
             Code64 a=new Code64();a.Emit(0x53,0x48,0x83,0xec,0x20);a.Call(original);a.Emit(0x48,0xbb);a.Q(data);a.Emit(0x83,0x7b,4,1);a.J(0x85,"done");a.Emit(0x83,0x7b,8,2);a.J(0x85,"done");a.Emit(0xff,0x43,28);a.Label("done");a.Emit(0x48,0x83,0xc4,0x20,0x5b,0xc3);return a.Finish();
         }
 
-        internal static byte[] Login(long data,long classSlot,long original,long stringNew,long setter,long login,long characterCode=0,long trainingCode=0,long settingsCode=0,long teamCode=0,long followCode=0,long zoneCode=0,long itemCode=0,long questCode=0,long travelItemCode=0,long travelMenuCode=0,long giftCode=0,long mailCode=0,long inboxCode=0,long farmCode=0,long chestCode=0,long cloakCode=0,long marketCode=0,long reminderCode=0,long gemCode=0,long captchaCode=0,long cuongRouteCode=0,long cuongZoneCode=0,long startupPopupCode=0) {
+        internal static byte[] Login(long data,long classSlot,long original,long stringNew,long setter,long login,long characterCode=0,long trainingCode=0,long settingsCode=0,long teamCode=0,long followCode=0,long zoneCode=0,long itemCode=0,long questCode=0,long travelItemCode=0,long travelMenuCode=0,long giftCode=0,long mailCode=0,long inboxCode=0,long farmCode=0,long chestCode=0,long cloakCode=0,long marketCode=0,long reminderCode=0,long gemCode=0,long captchaCode=0,long cuongRouteCode=0,long cuongZoneCode=0,long startupPopupCode=0,long speedCode=0) {
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x40);
             // Thử skill trước Update treo; giữ nguyên tham số của Update gốc.
             a.Emit(0x48,0x89,0x4c,0x24,0x20,0x48,0x89,0x54,0x24,0x28,0x4c,0x89,0x44,0x24,0x30,0x4c,0x89,0x4c,0x24,0x38);
@@ -629,7 +629,29 @@ namespace TGLL {
             a.Emit(0x48,0x8b,0x4b,0x08);a.Call(stringNew);a.Emit(0x48,0x89,0xc2,0x48,0x8b,0x8e,0xa0,0,0,0,0x45,0x33,0xc0);a.Call(setter);
             a.Emit(0x48,0x8b,0x4b,0x10);a.Call(stringNew);a.Emit(0x48,0x89,0xc2,0x48,0x8b,0x8e,0xa8,0,0,0,0x45,0x33,0xc0);a.Call(setter);
             a.Emit(0x48,0x89,0xf1,0xba,0x01,0,0,0,0x45,0x33,0xc0);a.Call(login);a.Emit(0xc7,0x03,0x03,0,0,0);
-            a.Label("done");if(reminderCode!=0)a.Call(reminderCode);if(characterCode!=0)a.Call(characterCode);if(settingsCode!=0)a.Call(settingsCode);if(teamCode!=0)a.Call(teamCode);if(followCode!=0)a.Call(followCode);if(zoneCode!=0)a.Call(zoneCode);if(itemCode!=0)a.Call(itemCode);if(questCode!=0)a.Call(questCode);if(travelItemCode!=0)a.Call(travelItemCode);if(travelMenuCode!=0)a.Call(travelMenuCode);if(giftCode!=0)a.Call(giftCode);if(mailCode!=0)a.Call(mailCode);if(inboxCode!=0)a.Call(inboxCode);if(farmCode!=0)a.Call(farmCode);if(cuongRouteCode!=0)a.Call(cuongRouteCode);if(cuongZoneCode!=0)a.Call(cuongZoneCode);if(chestCode!=0)a.Call(chestCode);if(cloakCode!=0)a.Call(cloakCode);if(marketCode!=0)a.Call(marketCode);a.Emit(0x48,0x83,0xc4,0x40,0x5f,0x5e,0x5b,0xc3);return a.Finish();
+            a.Label("done");if(speedCode!=0)a.Call(speedCode);if(reminderCode!=0)a.Call(reminderCode);if(characterCode!=0)a.Call(characterCode);if(settingsCode!=0)a.Call(settingsCode);if(teamCode!=0)a.Call(teamCode);if(followCode!=0)a.Call(followCode);if(zoneCode!=0)a.Call(zoneCode);if(itemCode!=0)a.Call(itemCode);if(questCode!=0)a.Call(questCode);if(travelItemCode!=0)a.Call(travelItemCode);if(travelMenuCode!=0)a.Call(travelMenuCode);if(giftCode!=0)a.Call(giftCode);if(mailCode!=0)a.Call(mailCode);if(inboxCode!=0)a.Call(inboxCode);if(farmCode!=0)a.Call(farmCode);if(cuongRouteCode!=0)a.Call(cuongRouteCode);if(cuongZoneCode!=0)a.Call(cuongZoneCode);if(chestCode!=0)a.Call(chestCode);if(cloakCode!=0)a.Call(cloakCode);if(marketCode!=0)a.Call(marketCode);a.Emit(0x48,0x83,0xc4,0x40,0x5f,0x5e,0x5b,0xc3);return a.Finish();
+        }
+        // Client-side only: +100 attack-speed points and 1.7x the server movement step.
+        // Cache the original/applied values so repeated frames never compound the boost.
+        // State: player(+0), base/applied move(+8/+12), base/applied attack(+16/+20), prior move(+24).
+        internal static byte[] CharacterSpeed(long data,long canvasSlot,long fcSlot,long charSlot){
+            Code64 a=new Code64();a.Emit(0x53,0x56,0x57);a.Emit(0x48,0xbf);a.Q(data);
+            a.Rax(canvasSlot);a.Emit(0x48,0x8b,0,0x48,0x85,0xc0);a.J(0x84,"return");a.Emit(0xa8,1);a.J(0x85,"return");
+            a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"return");a.Emit(0x48,0x8b,0x30,0x48,0x85,0xf6);a.J(0x84,"return");
+            a.Rax(fcSlot);a.Emit(0x48,0x8b,0,0x48,0x85,0xc0);a.J(0x84,"return");a.Emit(0xa8,1);a.J(0x85,"return");a.Emit(0x48,0x8b,0x88,0xb8,0,0,0,0x48,0x85,0xc9);a.J(0x84,"return");
+            a.Emit(0x48,0x8b,0x49,0x10,0x48,0x85,0xc9);a.J(0x84,"return");a.Emit(0x48,0x39,0x01);a.J(0x85,"return");a.Emit(0x48,0x39,0x8e,0xb8,1,0,0);a.J(0x85,"return");
+            a.Rax(charSlot);a.Emit(0x48,0x8b,0,0x48,0x85,0xc0);a.J(0x84,"return");a.Emit(0xa8,1);a.J(0x85,"return");a.Emit(0x48,0x8b,0x88,0xb8,0,0,0,0x48,0x85,0xc9);a.J(0x84,"return");
+            a.Emit(0x48,0x8b,0x59,8,0x48,0x85,0xdb);a.J(0x84,"return");a.Emit(0x48,0x39,0x03);a.J(0x85,"return");a.Emit(0x83,0xbb,0xa8,0,0,0,0);a.J(0x8e,"return");
+            a.Emit(0x0f,0xbf,0x73,0x60,0x83,0xfe,1);a.J(0x8c,"return");a.Emit(0x81,0xfe,127,0,0,0);a.J(0x8f,"return");
+            a.Emit(0x8b,0x8b,0x80,0,0,0,0x48,0x39,0x1f);a.J(0x85,"attackRange");a.Emit(0x3b,0x4f,20);a.J(0x84,"attackValid");a.Label("attackRange");a.Emit(0x83,0xf9,0xa6);a.J(0x8c,"return");a.Emit(0x81,0xf9,0xe8,3,0,0);a.J(0x8f,"return");a.Label("attackValid");
+            a.Emit(0x48,0x39,0x1f);a.J(0x84,"move");a.Emit(0x48,0x89,0x1f,0xc7,0x47,12,0,0,0,0,0xc7,0x47,20,0,0,0,0x80,0xc7,0x47,24,0,0,0,0);
+            a.Label("move");a.Emit(0x3b,0x77,12);a.J(0x84,"attack");a.Emit(0x8b,0x47,12,0x89,0x47,24,0x89,0x77,8);
+            a.Emit(0x6b,0xc6,17,0x83,0xc0,5,0x33,0xd2,0x41,0xb8,10,0,0,0,0x41,0xf7,0xf0,0x41,0xb8,127,0,0,0,0x41,0x3b,0xc0,0x41,0x0f,0x4f,0xc0,0x89,0x47,12,0x66,0x89,0x43,0x60);
+            a.Label("attack");a.Emit(0x3b,0x4f,20);a.J(0x84,"route");a.Emit(0x89,0x4f,16,0x8d,0x41,100,0x89,0x47,20,0x89,0x83,0x80,0,0,0);
+            // Only synchronize the common walking step. A zero means explicit/scripted X/Y steps.
+            a.Label("route");a.Emit(0x48,0x8b,0x83,0x98,0,0,0,0x48,0x85,0xc0);a.J(0x84,"return");a.Emit(0x0f,0xbe,0x48,0x1c,0x85,0xc9);a.J(0x8e,"return");
+            a.Emit(0x3b,0x4f,8);a.J(0x84,"routeWrite");a.Emit(0x3b,0x4f,24);a.J(0x85,"return");a.Label("routeWrite");a.Emit(0x8b,0x57,12,0x88,0x50,0x1c);
+            a.Label("return");a.Emit(0x5f,0x5e,0x5b,0xc3);return a.Finish();
         }
         // Shared data: request, generation, count, enabled, selected ID, attempts,
         // status; records at +128 (32 bytes: ID/template/MP/cast/name/level/type).
@@ -2985,6 +3007,7 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                     long npcCode=r.Allocate(8192);byte[] npcBytes=NativeCode.Npc(data,game+0x16ed658,game+0x16ee888,game+0x16ee910,game+0x16efe08,game+0x4e19f0,game+0x2d8f00,game+0x12d9e0,game+0x1dd900,game+0x303250,partyCode);
                     if(npcBytes.Length>8192)throw new Exception("native_code_too_large");r.Write(npcCode,npcBytes);r.Protect(npcCode,8192,0x20);
                     long prepareCode=r.Allocate(4096);byte[] prepareBytes=NativeCode.PrepareMap(data,game+0x16ed658,game+0x16ee888,game+0x16eeba8,game+0x1dd900,npcCode);if(prepareBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(prepareCode,prepareBytes);r.Protect(prepareCode,4096,0x20);
+                    long speedData=r.Allocate(4096),speedCode=r.Allocate(4096);r.Write(speedCode,NativeCode.CharacterSpeed(speedData,game+0x16ed658,game+0x16ee888,game+0x16ee330));r.Protect(speedCode,4096,0x20);
                     long characterCode=trampoline+1024;r.Write(characterCode,NativeCode.Character(data,game+0x16ed658,game+0x16eeaf8,game+0x453fb0,prepareCode));
                     long interact=game+0x4e19f0;byte[] interactionPrefix=r.Read(interact,13),expectedInteraction={0x48,0x89,0x5c,0x24,0x08,0x57,0x48,0x83,0xec,0x40,0x48,0x8b,0xf9};
                     for(int n=0;n<13;n++)if(interactionPrefix[n]!=expectedInteraction[n])throw new Exception("native_build_unsupported");
@@ -3026,7 +3049,7 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                     teamData=r.Allocate(4096);teamCode=r.Allocate(4096);byte[] teamBytes=NativeCode.Team(teamData,game,game+0x1dd900);if(teamBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(teamCode,teamBytes);r.Protect(teamCode,4096,0x20);
                     followCode=r.Allocate(4096);byte[] followBytes=NativeCode.Follow(teamData+1024,game,game+0x1dd900);if(followBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(followCode,followBytes);r.Protect(followCode,4096,0x20);
                     zoneCode=r.Allocate(4096);byte[] zoneBytes=NativeCode.Zone(teamData+2048,game,game+0x1dd900,j.ZoneResponseData);if(zoneBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(zoneCode,zoneBytes);r.Protect(zoneCode,4096,0x20);
-                    loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode,gemCode,captchaCode,cuongRouteCode,cuongZoneCode,startupPopupCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
+                    loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode,gemCode,captchaCode,cuongRouteCode,cuongZoneCode,startupPopupCode,speedCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
                     patch=new byte[16];for(int i=0;i<16;i++)patch[i]=0x90;patch[0]=0xe9;Array.Copy(BitConverter.GetBytes(checked((int)(loginCode-update-5))),0,patch,1,4);
                 }
                 Check(j);r.Suspended(delegate{if(j.Proxy!=null){r.Install(game+0x129e618,BitConverter.GetBytes(connectCode));r.Install(baseModule+0x45448,BitConverter.GetBytes(connectCode));}if(j.Auto)r.Install(update,patch);});installed=true;
