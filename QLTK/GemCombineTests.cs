@@ -14,6 +14,8 @@ class GemCombineTests {
   Check(NativeBackend.PlanGemCombine(Bag(15),262144,4194304).Length==15,"15 stones must wait");Check(NativeBackend.PlanGemCombine(Bag(20),262144,4194304).Length==16,"exact 16 stones");
   var mixed=Bag(16);mixed.Items[3].TemplateId=10;Check(NativeBackend.PlanGemCombine(mixed,262144,4194304).Length==15,"exclude level11");mixed.Items[4].Quantity=2;Check(NativeBackend.PlanGemCombine(mixed,262144,4194304).Length==14,"no unverified stacks");
   bool rejected=false;try{NativeBackend.PlanGemCombine(Bag(16),262144,8388608);}catch{rejected=true;}Check(rejected,"unverified rate rejected");
+  int available12=16,available10=16,available8=16;Func<int,GemPlan> choose=level=>new GemPlan{TargetLevel=level,Items=new InventoryItem[level==12?available12:level==10?available10:available8]};
+  Check(NativeBackend.SelectGemPlan(7,choose).TargetLevel==12,"both lower targets cannot preempt ready level12");available12=15;Check(NativeBackend.SelectGemPlan(7,choose).TargetLevel==10,"fall back to ready level10");available10=0;Check(NativeBackend.SelectGemPlan(7,choose).TargetLevel==8,"fall back to ready level8");Check(NativeBackend.SelectGemPlan(2,choose).TargetLevel==10,"disabled levels never selected even if enough materials");
   var j=new NativeJob("fixture","synthetic","",null,true);j.GemBeforeSource=16;j.GemBeforeTarget=2;j.GemBeforeSilver=1000;j.GemFee=100;
   var after=new InventorySnapshot(new[]{new InventoryItem{TemplateId=11,Quantity=3}},100,true,"",DateTime.UtcNow);Check(NativeBackend.ConfirmGemCombine(j,after,900),"ack requires 16 consumed, one level12 gained, correct fee");Check(!NativeBackend.ConfirmGemCombine(j,after,1000),"do not ack without fee");after.Items[0].Quantity=2;Check(!NativeBackend.ConfirmGemCombine(j,after,900),"do not ack inventory loss alone");
   using(var r=new Remote(Process.GetCurrentProcess())){
@@ -25,7 +27,7 @@ class GemCombineTests {
    Alloc alloc=delegate{return new IntPtr(service);};Ctor ctor=delegate(IntPtr self,byte op,IntPtr info){opcode=op;values.Clear();};Write write=delegate(IntPtr self,int value,IntPtr info){tick();Check(Read(r,d)==2,"reentrant dispatch held");values.Add(value);};Flush flush=delegate{flushes++;};
    foreach(int slot in new[]{0x218,0x228,0x248})P(r,serviceCls+slot,Marshal.GetFunctionPointerForDelegate(write).ToInt64());P(r,serviceCls+0x298,Marshal.GetFunctionPointerForDelegate(flush).ToInt64());
    byte[] code=NativeCode.GemCombineCore(d,Static(r,player,8),Static(r,root,8),Static(r,canvas,0),serviceSlot,Marshal.GetFunctionPointerForDelegate(alloc).ToInt64(),Marshal.GetFunctionPointerForDelegate(ctor).ToInt64(),0);Check(code.Length<4096,"hook size");long exe=r.Allocate(4096);r.Write(exe,code);r.Protect(exe,4096,0x20);tick=(Tick)Marshal.GetDelegateForFunctionPointer(new IntPtr(exe),typeof(Tick));
-   I(r,d+12,1);I(r,d,1);tick();tick();Check(flushes==1&&opcode==108&&Read(r,d+16)==2&&values.SequenceEqual(new[]{1,16}.Concat(Enumerable.Range(0,16))),"exact original stone packet, single flight");Check(r.Read(opts+39,1)[0]==255&&r.Read(root+0x188,1)[0]==1,"disable only >50%, preserve treo");
+   I(r,d+88,9);I(r,d+92,11);I(r,d+12,1);I(r,d,1);tick();tick();Check(flushes==1&&opcode==108&&Read(r,d+16)==2&&values.SequenceEqual(new[]{1,16}.Concat(Enumerable.Range(0,16))),"exact original stone packet, single flight");Check(r.Read(opts+39,1)[0]==255&&r.Read(root+0x188,1)[0]==1,"disable only >50%, preserve treo");
    I(r,items[5]+20,10);I(r,d,1);tick();Check(flushes==1&&Read(r,d+16)==1,"reject changed stone");I(r,items[5]+20,9);
    P(r,weights+120,8388608);I(r,d,1);tick();Check(flushes==1,"reject changed rate");P(r,weights+120,4194304);
    P(r,weights+120,2097152);P(r,d+32,2097152);I(r,d,1);tick();Check(flushes==1,"reject non-100 percent even if worker buffer matches table");P(r,weights+120,4194304);P(r,d+32,4194304);
@@ -53,8 +55,16 @@ class GemCombineTests {
    NativeBackend.PumpGemCombine(r,d,0,worker,()=>current,b=>plan,()=>observedSilver,restore,now.AddSeconds(15),itemData);Check(!worker.GemBusy,"wait for item response to settle");
    NativeBackend.PumpGemCombine(r,d,0,worker,()=>current,b=>plan,()=>observedSilver,restore,now.AddSeconds(17),itemData);tick();NativeBackend.PumpAutoItem(r,itemData,worker);Check(worker.GemBusy&&flushes==3&&worker.AutoItemEnabled&&Read(r,itemData+12)==0,"auto item enabled does not block gem combine, sends paused during flight");
    current=new InventorySnapshot(new[]{new InventoryItem{TemplateId=11,Quantity=1}},100,true,"",DateTime.UtcNow);observedSilver=900;NativeBackend.PumpGemCombine(r,d,0,worker,()=>current,b=>plan,()=>observedSilver,restore,now.AddSeconds(19),itemData);NativeBackend.PumpAutoItem(r,itemData,worker);Check(!worker.GemBusy&&!worker.GemItemPause&&worker.AutoItemEnabled&&Read(r,itemData+12)==1&&restores==2,"resume item use and game >50% after confirmation");
+   foreach(int level in new[]{8,10}){
+    int source=level-3,target=level-1;long sw=1L<<(source*2),tw=sw*16;P(r,weights+32+source*8,sw);P(r,weights+32+target*8,tw);I(r,costs+32+target*4,100);P(r,d+24,sw);P(r,d+32,tw);P(r,d+40,100);I(r,d+88,source);I(r,d+92,target);P(r,player+0xc0,1000);
+    foreach(long item in items){I(r,item+20,source);I(r,item+24,1);}int before=flushes;I(r,d+12,1);I(r,d,1);tick();Check(flushes==before+1&&Read(r,d+16)==2&&values.SequenceEqual(new[]{1,16}.Concat(Enumerable.Range(0,16))),"level "+level+" native packet and fee table");
+    I(r,items[0]+20,source+1);I(r,d,1);tick();Check(flushes==before+1,"reject mixed source for level "+level);I(r,items[0]+20,source);
+    I(r,d+92,target-1);I(r,d,1);tick();Check(flushes==before+1,"reject unsupported target");I(r,d+92,target);
+    var levelBag=Bag(16);foreach(var item in levelBag.Items)item.TemplateId=source;Check(NativeBackend.PlanGemCombine(levelBag,sw,tw,level).Length==16,"level "+level+" planner");
+    var receipt=new InventorySnapshot(new[]{new InventoryItem{TemplateId=target,Quantity=1}},100,true,"",DateTime.UtcNow);var levelJob=new NativeJob("fixture","level-worker","",null,true);levelJob.GemTargetLevel=level;levelJob.GemBeforeSource=16;levelJob.GemBeforeTarget=0;levelJob.GemBeforeSilver=1000;levelJob.GemFee=100;levelJob.GemTargets=7;Check(NativeBackend.ConfirmGemCombine(levelJob,receipt,900),"level "+level+" receipt stays bound to in-flight target despite config changes");receipt.Items[0].TemplateId=11;Check(!NativeBackend.ConfirmGemCombine(levelJob,receipt,900),"wrong output cannot confirm level "+level);
+   }
    GC.KeepAlive(alloc);GC.KeepAlive(ctor);GC.KeepAlive(write);GC.KeepAlive(flush);
   }
-  Console.WriteLine("PASS: stone10 x16 -> stone12 at100%, native packet, reentry, rate/slot/quantity/fee gates and acknowledgement.");return 0;
+  Console.WriteLine("PASS: stone6/8/10 x16 -> stone8/10/12 at100%, native packet, reentry, rate/slot/quantity/fee gates and acknowledgement.");return 0;
  }catch(Exception e){Console.Error.WriteLine(e);return 1;}}
 }

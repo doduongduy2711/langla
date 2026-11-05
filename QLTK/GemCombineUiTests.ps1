@@ -10,6 +10,12 @@ try{
  $gemB=New-Object Windows.Forms.DataGridViewRow;$gemB.Tag=[pscustomobject]@{id='gem-b';username='gem-b';gemCombineEnabled=$false}
  Set-GemCombinePreference $gemA $true
  if(!$gemA.Tag.gemCombineEnabled -or $gemB.Tag.gemCombineEnabled -or @($gemA.Tag.gameOverrides | Where-Object {$_.code -eq 307 -and $_.value -eq 1}).Count -ne 1){throw 'Gem offline selection leaked or disabled game mode'}
+ Set-GemCombinePreference $gemA $true 8;Set-GemCombinePreference $gemA $true 10
+ if((Get-GemCombineTargets $gemA.Tag) -ne 7 -or (Get-GemCombineTargets $gemB.Tag) -ne 0){throw 'Gem 8/10/12 preferences not independent per account'}
+ Set-GemCombinePreference $gemA $false 8
+ if((Get-GemCombineTargets $gemA.Tag) -ne 6){throw 'Disabling stone8 changed other targets'}
+ Set-GemCombinePreference $gemA $false 10
+ if((Get-GemCombineTargets $gemA.Tag) -ne 4){throw 'Legacy stone12 preference not preserved'}
  $gemCtor=[TGLL.NativeJob].GetConstructors([Reflection.BindingFlags]'NonPublic,Instance') | Where-Object {$_.GetParameters().Count -eq 5} | Select-Object -First 1
  $script:gemTestJob=$gemCtor.Invoke(@('C:\synthetic.exe','gem-a','unused',$null,$true));$script:gemTestJob.State='opened';$script:gemTestJob.TrainReady=$true;$script:gemTestJob.GameSettingsReady=$true
  function Get-AccountJob($id){return $script:gemTestJob}
