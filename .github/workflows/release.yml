@@ -37,6 +37,10 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Cloak test compilation failed'}
           ./CloakTests.exe
           if($LASTEXITCODE -ne 0){throw 'Cloak tests failed'}
+          & $compiler /nologo /platform:x64 /out:HeadlessCloakCatalogTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/HeadlessCloakCatalogTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Cloak catalog compilation failed'}
+          ./HeadlessCloakCatalogTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Cloak catalog tests failed'}
       - name: Repeated market listing checks
         shell: powershell
         run: |

@@ -1186,7 +1186,7 @@ namespace TGLL {
         internal HashSet<string> KeyNotificationSeen=new HashSet<string>();
         public volatile bool IzanamiTravelReady,IzanamiTravelStopped;
         public volatile bool ReconnectRequested;internal DateTime DisconnectSeenAt,DisconnectPollAt;
-        public volatile bool CloakEnabled,CloakEquipAfter,CloakDone,CloakQueueOnly;internal int CloakEquipSlot;internal int[] CloakBeforeSlots=new int[0];internal long CloakWornBefore,CloakEquipExpiry;public volatile int CloakId,CloakQuantity,CloakExpectedPrice,CloakBought,CloakPhase;public volatile string CloakStatus="Chưa chạy";internal long CloakBefore;internal DateTime CloakAt,CloakPollAt;
+        public volatile bool CloakEnabled,CloakEquipAfter,CloakDone,CloakQueueOnly;internal bool CloakCatalogAttempted;internal int CloakEquipSlot;internal int[] CloakBeforeSlots=new int[0];internal long CloakWornBefore,CloakEquipExpiry;public volatile int CloakId,CloakQuantity,CloakExpectedPrice,CloakBought,CloakPhase;public volatile string CloakStatus="Chưa chạy";internal long CloakBefore;internal DateTime CloakAt,CloakPollAt;
         public volatile bool ChestEnabled,ChestUseOwned,ChestOpenAfter,ChestUseOnly;
         public volatile int ChestQuantity,ChestPhase,ChestBought,ChestUnitPrice,ChestSaleId,ChestBatch;
         public volatile string ChestStatus="Chưa chạy";
@@ -2956,8 +2956,12 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                     questData=r.Allocate(4096);long questCode=r.Allocate(8192);byte[] questBytes=NativeCode.Quest(questData,game);if(questBytes.Length>8192)throw new Exception("quest_code_too_large");r.Write(questCode,questBytes);r.Protect(questCode,8192,0x20);
                     itemData=r.Allocate(4096);long itemCode=r.Allocate(4096);byte[] itemBytes=NativeCode.AutoItem(itemData,game);r.Write(itemCode,itemBytes);r.Protect(itemCode,4096,0x20);
                     chestData=r.Allocate(4096);long chestCode=r.Allocate(4096);byte[] chestBytes=NativeCode.StoneChest(chestData,game);if(chestBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(chestCode,chestBytes);r.Protect(chestCode,4096,0x20);
-                    cloakData=r.Allocate(4096);long cloakAction=r.Allocate(4096),cloakUse=r.Allocate(4096),cloakBuy=r.Allocate(4096),cloakEquip=r.Allocate(4096),cloakPacket=r.Allocate(4096),cloakCode=r.Allocate(4096);
-                    r.Write(cloakBuy,NativeCode.StoneChest(cloakData+512,game));r.Write(cloakPacket,NativeCode.EquipPacket(game));r.Write(cloakEquip,NativeCode.EquipItem(cloakData+768,game+0x16ed658,game+0x16ee888,game+0x3672c0,game+0x16ee578,cloakPacket));r.Write(cloakCode,NativeCode.CloakBundle(cloakData,game,cloakAction,cloakUse,cloakBuy,cloakEquip));foreach(long address in new[]{cloakBuy,cloakEquip,cloakPacket,cloakCode})r.Protect(address,4096,0x20);
+                    cloakData=r.Allocate(4096);long cloakAction=r.Allocate(4096),cloakUse=0,cloakBuy=r.Allocate(4096),cloakEquip=r.Allocate(4096),cloakPacket=r.Allocate(4096),cloakCode=r.Allocate(4096);
+                    long cloakReply=game+0x4e26b9;byte[] cloakPrefix=r.Read(cloakReply,7),expectedCloakPrefix={0x48,0x8b,0x3d,0xd0,0xbb,0x20,1};
+                    if(!SameBytes(cloakPrefix,expectedCloakPrefix))throw new Exception("cloak_reply_build_unsupported");
+                    long cloakReplyCode=r.Near(cloakReply,4096);r.Write(cloakReplyCode,NativeCode.CloakCatalogReply(cloakData,game+0x16ee290,cloakReply+7,game+0x4e2b1d));r.Protect(cloakReplyCode,4096,0x20);
+                    byte[] cloakReplyPatch={0xe9,0,0,0,0,0x90,0x90};Array.Copy(BitConverter.GetBytes(checked((int)(cloakReplyCode-cloakReply-5))),0,cloakReplyPatch,1,4);r.Suspended(delegate{r.Install(cloakReply,cloakReplyPatch);});
+                    r.Write(cloakBuy,NativeCode.StoneChest(cloakData+512,game));r.Write(cloakPacket,NativeCode.EquipPacket(game));r.Write(cloakEquip,NativeCode.EquipItem(cloakData+768,game+0x16ed658,game+0x16ee888,game+0x3672c0,game+0x16ee578,cloakPacket));r.Write(cloakAction,NativeCode.CloakCatalogRequest(cloakData,game+0x16ee888,game+0x1dd900,game+0x4e6b00));r.Write(cloakCode,NativeCode.CloakBundle(cloakData,game,cloakAction,cloakUse,cloakBuy,cloakEquip));foreach(long address in new[]{cloakAction,cloakBuy,cloakEquip,cloakPacket,cloakCode})r.Protect(address,4096,0x20);
                     giftData=r.Allocate(4096);long giftCode=r.Allocate(4096);byte[] giftBytes=NativeCode.GiftCode(giftData,game);r.Write(giftCode,giftBytes);r.Protect(giftCode,4096,0x20);
                     mailData=r.Allocate(4096);long mailCode=r.Allocate(4096);byte[] mailBytes=NativeCode.Mail(mailData,game);if(mailBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(mailCode,mailBytes);r.Protect(mailCode,4096,0x20);
                     marketData=r.Allocate(8192);long marketCode=r.Allocate(4096),marketSplit=r.Allocate(4096);r.Write(marketSplit,NativeCode.Mail(marketData+4096,game));r.Protect(marketSplit,4096,0x20);byte[] marketBytes=NativeCode.Market(marketData,game,marketSplit);if(marketBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(marketCode,marketBytes);r.Protect(marketCode,4096,0x20);
@@ -3776,7 +3780,7 @@ namespace TGLL {
    if(!CloakIds.Contains(templateId)||quantity<1||quantity>100||expectedPrice<=0)throw new Exception("Chọn đúng áo và số lượng 1–100.");
    if(j.CloakEnabled)throw new Exception("Tác vụ mua áo đang chạy.");
    if(j.FarmEnabled||j.IzanamiEnabled||j.SonCapEnabled||j.DungeonHighEnabled||j.ReceiveKeyEnabled||j.QuestEnabled||j.MailEnabled||j.MailBusy||j.GiftEnabled||j.ChestEnabled||AuxiliaryActionBlocked(j))throw new Exception("Dừng Up/các auto hoạt động, gom đồ, gift code hoặc rương trước khi mua áo.");
-   j.CloakDone=false;j.CloakEquipSlot=-1;j.CloakId=templateId;j.CloakQuantity=ownedOnly?0:quantity;if(ownedOnly)j.CloakEquipAfter=true;j.CloakExpectedPrice=expectedPrice;j.CloakBought=0;j.CloakPhase=ownedOnly?9:7;j.CloakAt=DateTime.MinValue;j.CloakPollAt=DateTime.MinValue;j.CloakStatus=ownedOnly?"Dùng áo có HSD dài nhất trong túi; không mua thêm":"Đọc danh mục áo từ client; mua trực tiếp";j.CloakEnabled=true;Log(j,"cloak_start",",\"template_id\":"+templateId+",\"quantity\":"+quantity+",\"expected_price\":"+expectedPrice);
+   j.CloakDone=false;j.CloakCatalogAttempted=false;j.CloakEquipSlot=-1;j.CloakId=templateId;j.CloakQuantity=ownedOnly?0:quantity;if(ownedOnly)j.CloakEquipAfter=true;j.CloakExpectedPrice=expectedPrice;j.CloakBought=0;j.CloakPhase=ownedOnly?9:7;j.CloakAt=DateTime.MinValue;j.CloakPollAt=DateTime.MinValue;j.CloakStatus=ownedOnly?"Dùng áo có HSD dài nhất trong túi; không mua thêm":"Đọc danh mục áo từ client; mua trực tiếp";j.CloakEnabled=true;Log(j,"cloak_start",",\"template_id\":"+templateId+",\"quantity\":"+quantity+",\"expected_price\":"+expectedPrice);
   }
   public static void StopCloakPurchase(string id){NativeJob j=Get(id);if(j==null)return;j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Đã dừng; lệnh mua có thể đã gửi, kiểm tra túi trước khi mua lại":"Đã dừng mua áo";}
   static void FinishCloak(NativeJob j,string status){j.CloakEnabled=false;j.CloakStatus=status;Log(j,"cloak_stopped",",\"status\":"+Quote(status)+",\"bought\":"+j.CloakBought);}
@@ -3788,10 +3792,11 @@ namespace TGLL {
    r.Write(data+12,BitConverter.GetBytes(ready?1:0));r.Write(use+12,BitConverter.GetBytes(ready?1:0));r.Write(buy+12,BitConverter.GetBytes(ready?1:0));r.Write(equip+12,BitConverter.GetBytes(ready?1:0));
    if(!enabled)return;if(now<j.CloakPollAt)return;j.CloakPollAt=now.AddSeconds(1);
    try{
+    if(j.CloakPhase==11){if(FarmI(r,data+96)==2){j.CloakPhase=7;j.CloakAt=now;j.CloakStatus="Đã nhận danh mục áo; kiểm tra giá";}else if((now-j.CloakAt).TotalSeconds>=20){r.Write(data+80,new byte[4]);r.Write(data+96,new byte[4]);FinishCloak(j,"Chưa nhận được danh mục áo từ server; chưa mua.");}return;}
     if(j.CloakPhase<7){j.CloakPhase=7;j.CloakAt=now;}
     if(j.CloakPhase==7){
      if(!ready||FarmI(r,buy)!=0)return;var offers=offerReader==null?ReadCloakOffers(r,game):offerReader();var offer=offers.FirstOrDefault(x=>x.TemplateId==j.CloakId&&ValidCloakOffer(x));
-     if(offer==null){if(j.CloakAt==DateTime.MinValue)j.CloakAt=now;j.CloakStatus="Chờ danh mục áo từ client; chưa mua";if((now-j.CloakAt).TotalSeconds>=20)FinishCloak(j,"Chưa xác minh được áo trong cửa hàng; chưa mua.");return;}
+     if(offer==null){if(j.CloakCatalogAttempted){FinishCloak(j,"Server chưa cung cấp đúng áo cần mua; chưa gửi mua.");return;}j.CloakCatalogAttempted=true;r.Write(data+96,new byte[4]);r.Write(data+80,BitConverter.GetBytes(1));j.CloakPhase=11;j.CloakAt=now;j.CloakStatus="Yêu cầu danh mục áo từ server; không mở cửa hàng";Log(j,"cloak_catalog_requested",",\"category\":36");return;}
      if(offer.CrystalPrice!=j.CloakExpectedPrice){FinishCloak(j,"Giá hiện tại "+offer.CrystalPrice+" khác giá đã chọn "+j.CloakExpectedPrice+"; đọc lại giá trước khi mua.");return;}
      InventorySnapshot bag=bagReader==null?ReadInventorySnapshot(r,game):bagReader();j.CloakBefore=CountCloaks(bag,j.CloakId);j.CloakBeforeSlots=bag.Items.Where(x=>x.TemplateId==j.CloakId).Select(x=>x.Slot).ToArray();if(bag.Items.Length>=bag.Capacity){FinishCloak(j,"Túi đầy; chưa mua áo.");return;}
      r.Write(buy+4,BitConverter.GetBytes(2));r.Write(buy+8,BitConverter.GetBytes(1));r.Write(buy+20,BitConverter.GetBytes(offer.SaleId));r.Write(buy+24,new byte[4]);r.Write(buy+32,BitConverter.GetBytes(offer.Address));r.Write(buy+40,BitConverter.GetBytes(offer.TemplateId));r.Write(buy+44,BitConverter.GetBytes(offer.CrystalPrice));r.Write(buy,BitConverter.GetBytes(1));j.CloakPhase=8;j.CloakAt=now;j.CloakStatus="Đã xếp mua "+offer.Name+" • "+offer.CrystalPrice+" tinh thạch; chờ áo vào túi";Log(j,"cloak_buy_queued",",\"template_id\":"+offer.TemplateId+",\"sale_id\":"+offer.SaleId+",\"crystal_price\":"+offer.CrystalPrice);return;
@@ -3816,10 +3821,21 @@ namespace TGLL {
   }
  }
  internal static partial class NativeCode {
+  // fc.bor sends opcode 0x7A + WriteByte(category). Category 36 is the cloak catalog.
+  internal static byte[] CloakCatalogRequest(long data,long worldSlot,long initialize,long requestCatalog){
+   Code64 a=new Code64();a.Emit(0x53,0x48,0x83,0xec,0x20,0x48,0xbb);a.Q(data);a.Emit(0x83,0x7b,80,1);a.J(0x85,"return");a.Emit(0xc7,0x43,80,2,0,0,0,0x83,0x7b,12,1);a.J(0x85,"done");
+   Slot(a,worldSlot,"done",initialize);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x40,16,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x89,0x43,104,0xc7,0x43,96,1,0,0,0,0xb9,36,0,0,0,0x33,0xd2);a.Call(requestCatalog);
+   a.Label("done");a.Emit(0xc7,0x43,80,0,0,0,0);a.Label("return");a.Emit(0x48,0x83,0xc4,0x20,0x5b,0xc3);return a.Finish();
+  }
+  // Enter after the original parser fills fc.fgt; bypass only our pending cloak response's UI tail.
+  internal static byte[] CloakCatalogReply(long data,long titleSlot,long normal,long headless){
+   Code64 a=new Code64();a.Emit(0x9c,0x50,0x48,0xb8);a.Q(data);a.Emit(0x83,0x78,96,1);a.J(0x85,"normal");a.Emit(0x48,0x39,0x58,104);a.J(0x85,"normal");a.Emit(0x80,0xbc,0x24,0x98,1,0,0,36);a.J(0x85,"normal");a.Emit(0xc7,0x40,96,2,0,0,0,0x58,0x9d,0xff,0x25,0,0,0,0);a.Q(headless);
+   a.Label("normal");a.Emit(0x58,0x9d,0x48,0xbf);a.Q(titleSlot);a.Emit(0x48,0x8b,0x3f,0xff,0x25,0,0,0,0);a.Q(normal);return a.Finish();
+  }
   internal static byte[] CloakBundle(long data,long game,long actionCode,long useCode,long buyCode,long equipCode=0){
    // Validate the catalog again on the game thread, then use the purchase packet only.
    Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x48,0x83,0xec,0x20);
-   a.Emit(0x48,0xbb);a.Q(data+512);a.Emit(0x83,0x3b,1);a.J(0x85,"buy");a.Emit(0x83,0x7b,12,1);a.J(0x85,"buy");
+   a.Emit(0x48,0xbb);a.Q(data+512);if(actionCode!=0)a.Call(actionCode);a.Emit(0x83,0x3b,1);a.J(0x85,"buy");a.Emit(0x83,0x7b,12,1);a.J(0x85,"buy");
    Slot(a,game+0x16ee888,"block",game+0x1dd900);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"block");a.Emit(0x48,0x8b,0x70,16,0x48,0x85,0xf6);a.J(0x84,"block");
    a.Emit(0x48,0x8b,0xbe,0xe8,0,0,0,0x48,0x85,0xff);a.J(0x84,"block");a.Emit(0x45,0x33,0xe4);
    a.Label("scan");a.Emit(0x41,0x81,0xfc,0,16,0,0);a.J(0x83,"block");VectorCount(a);a.Emit(0x41,0x39,0xc4);a.J(0x8d,"block");VectorElement(a);a.Emit(0x4c,0x3b,0x6b,32);a.J(0x85,"next");a.Emit(0x4d,0x85,0xed);a.J(0x84,"block");
