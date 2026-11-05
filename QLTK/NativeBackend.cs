@@ -807,26 +807,46 @@ namespace TGLL {
         }
         // Main-thread zone commands. hy.rh's zone picker requests fc.bor(49);
         // change is the exact z.re(2002) packet path: ig.cld(-40), writeShort(zone), send.
-        internal static byte[] Zone(long data,long game,long initialize=0){
+        internal static byte[] Zone(long data,long game,long initialize=0,long responseData=0){
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x50,0x48,0xbb);a.Q(data);
             a.Emit(0x83,0x3b,1);a.J(0x84,"active");a.Emit(0x83,0x3b,2);a.J(0x85,"done");
             a.Label("active");Slot(a,game+0x16ee888,"reject",initialize);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"reject");a.Emit(0x48,0x8b,0x78,16,0x48,0x85,0xff);a.J(0x84,"reject");
             Slot(a,game+0x16ed658,"reject",initialize);a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"reject");a.Emit(0x48,0x8b,0x00,0x48,0x85,0xc0);a.J(0x84,"reject");a.Emit(0x48,0x39,0xb8,0xb8,1,0,0);a.J(0x85,"reject");
             a.Emit(0x0f,0xbf,0x87,0x34,1,0,0,0x3b,0x43,8);a.J(0x85,"reject");a.Emit(0x0f,0xbf,0x87,0x3a,1,0,0,0x3b,0x43,12);a.J(0x85,"reject");
             a.Emit(0x8b,0x03,0x89,0x43,4,0xc7,0x03,3,0,0,0,0x83,0x7b,4,1);a.J(0x85,"change");
-            // Open the same jk map/zone dialog as the map-name button. Its constructor
-            // requests fresh populations (message FA); fc.bub replaces jk.e8 on reply.
-            Slot(a,game+0x16f02b8,"reject",initialize);a.Emit(0x48,0x89,0xc1);a.Call(game+0x16f760);a.Emit(0x48,0x85,0xc0);a.J(0x84,"reject");a.Emit(0x48,0x89,0xc6,0x48,0x89,0xc1,0x48,0x89,0xfa,0x45,0x33,0xc0);a.Call(game+0x304ac0);
-            a.Emit(0x48,0x89,0x73,32,0x48,0x8b,0x86,0xe8,0,0,0,0x48,0x89,0x43,24,0x48,0x8b,0x07,0x48,0x89,0xf9,0x48,0x89,0xf2,0x4c,0x8b,0x80,0xe0,4,0,0,0xff,0x90,0xd8,4,0,0);a.Jump("sent");
+            if(responseData!=0){
+                // FA asks the server for fresh populations without constructing/attaching a dialog.
+                a.Rax(responseData);a.Emit(0x48,0x83,0x38,0);a.J(0x85,"reject");a.Emit(0x8b,0x4b,64,0x89,0x4b,24,0x48,0x89,0x18,0x48,0x89,0x78,8);
+                Slot(a,game+0x16ee820,"reject",initialize);a.Emit(0x48,0x89,0xc1);a.Call(game+0x16f760);a.Emit(0x48,0x85,0xc0);a.J(0x84,"reject");
+                a.Emit(0x48,0x89,0xc6,0x48,0x89,0xc1,0xba,0xfa,0,0,0,0x45,0x33,0xc0);a.Call(game+0x2e2aa0);
+                a.Emit(0x48,0x8b,0x06,0x48,0x89,0xf1,0x48,0x8b,0x90,0xa0,2,0,0,0xff,0x90,0x98,2,0,0);a.Jump("sent");
+            }else{a.Jump("reject");}
             a.Label("change");a.Emit(0x8b,0x43,16,0x85,0xc0);a.J(0x88,"reject");a.Emit(0x3d,0xff,0,0,0);a.J(0x8f,"reject");
             // jk.rk action 5001: ig(F9), writeByte(zone), send. Arena uses a different protocol.
             Slot(a,game+0x16ee820,"reject",initialize);a.Emit(0x48,0x89,0xc1);a.Call(game+0x16f760);a.Emit(0x48,0x85,0xc0);a.J(0x84,"reject");a.Emit(0x48,0x89,0xc6,0x48,0x89,0xc1,0xba,0xf9,0,0,0,0x45,0x33,0xc0);a.Call(game+0x2e2aa0);
             a.Emit(0x48,0x8b,0x06,0x48,0x89,0xf1,0x8b,0x53,16,0x4c,0x8b,0x80,0x30,2,0,0,0xff,0x90,0x28,2,0,0);
             a.Emit(0x48,0x8b,0x06,0x48,0x89,0xf1,0x48,0x8b,0x90,0xa0,2,0,0,0xff,0x90,0x98,2,0,0);
-            // Close only a jk dialog still active; never dismiss another popup.
-            a.Emit(0x48,0x8b,0xb7,0x90,0,0,0,0x48,0x85,0xf6);a.J(0x84,"sent");Slot(a,game+0x16f02b8,"sent",initialize);a.Emit(0x48,0x39,0x06);a.J(0x85,"sent");a.Emit(0x48,0x8b,0x06,0x48,0x89,0xf1,0x48,0x8b,0x90,0x80,5,0,0,0xff,0x90,0x78,5,0,0);
             a.Label("sent");a.Emit(0xc7,0x03,4,0,0,0);a.Jump("done");a.Label("reject");a.Emit(0xc7,0x03,5,0,0,0);
             a.Label("done");a.Emit(0x48,0x83,0xc4,0x50,0x5f,0x5e,0x5b,0xc3);return a.Finish();
+        }
+        static void ZoneReadShort(Code64 a){a.Emit(0x48,0x89,0xf1,0x48,0x8b,0x01,0x48,0x8b,0x90,0x80,1,0,0,0xff,0x90,0x78,1,0,0);}
+        internal static byte[] ZoneReply(long pending,long original){
+            Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x48,0x83,0xec,0x20);
+            a.Rax(pending);a.Emit(0x48,0x8b,0x18,0x48,0x85,0xdb);a.J(0x84,"normal");
+            a.Emit(0x48,0x39,0x48,8);a.J(0x85,"clearNormal");a.Emit(0x0f,0xbf,0x81,0x34,1,0,0,0x3b,0x43,8);a.J(0x85,"clearNormal");
+            a.Emit(0x83,0x7b,4,1);a.J(0x85,"clearNormal");a.Emit(0x83,0x3b,3);a.J(0x84,"stateOk");a.Emit(0x83,0x3b,4);a.J(0x85,"clearNormal");a.Label("stateOk");a.Emit(0x48,0x85,0xd2);a.J(0x84,"clearNormal");
+            a.Emit(0x48,0x8b,0x72,24,0x48,0x85,0xf6);a.J(0x84,"clearNormal");
+            a.Rax(pending);a.Emit(0x48,0xc7,0x00,0,0,0,0);
+            ZoneReadShort(a);a.Emit(0x0f,0xbf,0xc0,0x83,0xf8,1);a.J(0x8c,"done");a.Emit(0x3d,0,1,0,0);a.J(0x8f,"done");a.Emit(0x89,0x43,68);
+            ZoneReadShort(a);ZoneReadShort(a); // Server's two dialog-layout metadata shorts are not UI state.
+            a.Emit(0x33,0xff);a.Label("zero");a.Emit(0xc7,0x84,0xbb,0x80,0,0,0,0,0,0,0,0xff,0xc7,0x81,0xff,0,1,0,0);a.J(0x8c,"zero");
+            ZoneReadShort(a);a.Emit(0x44,0x0f,0xbf,0xe0,0x45,0x85,0xe4);a.J(0x88,"done");a.Emit(0x41,0x81,0xfc,0,1,0,0);a.J(0x8f,"done");
+            a.Label("pair");a.Emit(0x45,0x85,0xe4);a.J(0x84,"commit");ZoneReadShort(a);a.Emit(0x44,0x0f,0xbf,0xe8,0x45,0x85,0xed);a.J(0x88,"done");a.Emit(0x44,0x3b,0x6b,68);a.J(0x8d,"done");
+            ZoneReadShort(a);a.Emit(0x0f,0xbf,0xc0,0x85,0xc0);a.J(0x88,"done");a.Emit(0x42,0x89,0x84,0xab,0x80,0,0,0,0x41,0xff,0xcc);a.Jump("pair");
+            a.Label("commit");a.Emit(0x8b,0x43,8,0x89,0x43,72,0xff,0x43,64);a.Jump("done");
+            a.Label("clearNormal");a.Rax(pending);a.Emit(0x48,0xc7,0x00,0,0,0,0);
+            a.Label("normal");a.Emit(0x48,0x83,0xc4,0x20,0x41,0x5d,0x41,0x5c,0x5f,0x5e,0x5b);a.Rax(original);a.Emit(0xff,0xe0);
+            a.Label("done");a.Emit(0x48,0x83,0xc4,0x20,0x41,0x5d,0x41,0x5c,0x5f,0x5e,0x5b,0xc3);return a.Finish();
         }
         internal static byte[] Team(long data,long game,long initialize=0){
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x50,0x48,0xbb);a.Q(data);
@@ -1149,7 +1169,7 @@ namespace TGLL {
         public volatile InventorySnapshot Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"",DateTime.MinValue);
         public volatile bool FollowActive;public volatile string FollowStatus="";public volatile int FollowDistance=-1,FollowMoves;internal bool FollowStopPending;internal DateTime FollowPollAt=DateTime.MinValue;
         public volatile bool PersistentUp;internal bool UpRepeatDaily;internal DateTime UpDay;internal bool[] UpCompleted=new bool[5];internal string[] UpSonCapTeamIds=new string[0];internal bool UpIzanamiFull,UpSonCapFull;public volatile bool DailyManaged,DailyActive,DailyExecuting;internal bool DailyApplying;public volatile int DailyStage;public volatile string DailyStatus="";internal bool[] DailyPlan=new bool[4],DailyRunPlan=new bool[4];internal DateTime DailyLastDate;internal string[] DailyTeamIds=new string[0];internal FarmSpot DailyReturnSpot;internal bool DailyReturnQuiet;public volatile bool KeyReceiptVerified;public volatile bool CurseActive;internal readonly object CaptchaGate=new object();internal long CaptchaData;internal CaptchaFrame CaptchaFrame;internal int CaptchaGeneration,CaptchaEpisodeTries;internal bool CaptchaPending;internal bool CaptchaManual;internal string CaptchaSamplePath="",CaptchaReadKey="",CaptchaAttemptKey="",CaptchaCode="";internal DateTime CaptchaPollAt,CaptchaSubmitAt;internal bool CaptchaUnreadable,CaptchaSubmitTimedOut;public volatile string CaptchaStatus="";public DateTime CurseReadAt=DateTime.MinValue;internal DateTime CursePollAt=DateTime.MinValue;public volatile int MapId=-1,ZoneId=-1;public DateTime ZoneReadAt=DateTime.MinValue;public volatile string ZoneStatus="";public volatile bool ZoneSyncActive;
-        internal int PlannedZone=-1,ZonePlanMap=-1,ZoneAttempts;internal volatile bool ZonePrepared;internal DateTime ZoneActionAt=DateTime.MinValue,ZonePollAt=DateTime.MinValue;internal long ZoneOldPopup;internal bool ZoneListWaiting;
+        internal int PlannedZone=-1,ZonePlanMap=-1,ZoneAttempts;internal volatile bool ZonePrepared;internal DateTime ZoneActionAt=DateTime.MinValue,ZonePollAt=DateTime.MinValue;internal long ZoneResponseData;internal DateTime ZoneReplyRequestAt;internal bool ZoneListWaiting;
         internal long CuongThiRouteData,CuongThiZoneData;internal FarmSpot CuongThiDestination;public volatile string CuongThiDestinationKey="",CuongThiRouteStatus="";public volatile bool CuongThiNavigationReady,CuongThiMovementStopping;internal bool CuongThiCancelSent,CuongThiRouteSent,CuongThiMovePaused,CuongThiZoneListWaiting,CuongThiZoneValidated;internal int CuongThiRouteAttempts,CuongThiZoneAttempts,CuongThiMoveMap=-1,CuongThiMoveZone=-1;internal DateTime CuongThiMoveAt,CuongThiRouteAt,CuongThiZoneAt;
         internal long CuongThiNameCatalog,CuongThiNameClass;internal int CuongThiNameMap=-1,CuongThiNameCount;internal Dictionary<int,string> CuongThiNames=new Dictionary<int,string>();
         public volatile bool CuongThiEnabled;public volatile CuongThiSnapshot CuongThi;public volatile string CuongThiStatus="Tắt";internal DateTime CuongThiPollAt;internal string CuongThiDiagnostic="";
@@ -2268,11 +2288,19 @@ namespace TGLL {
             string[] names=peers.Select(p=>p.CharacterName).ToArray();return peers.All(p=>SameParty(p.TeamMembers,names));
         }
         internal static bool EntryZoneReady(NativeJob j){NativeJob[] peers=new NativeJob[j.TeamJobIds.Length];for(int n=0;n<peers.Length;n++)peers[n]=Get(j.TeamJobIds[n]??"");return TeamTogether(peers);}
-        static long ZonePopup(Remote r,long game){
-            long fc=r.Ptr(r.Ptr(r.Ptr(game+0x16ee888)+0xb8)+16),zoneClass=r.Ptr(game+0x16f02b8);
-            if(zoneClass==0||(zoneClass&1)!=0)return 0;foreach(long popup in ReadVector(r,r.Ptr(fc+0x88)))if(popup!=0&&r.Ptr(popup)==zoneClass)return popup;return 0;
+        internal static bool TryReadZoneList(Remote r,long data,out int[] ids,out int[] counts){
+            ids=counts=new int[0];int generation=FarmI(r,data+64);if(generation==0||generation==FarmI(r,data+24)||FarmI(r,data+72)!=FarmI(r,data+8))return false;
+            int length=FarmI(r,data+68);if(length<1||length>256)return false;byte[] raw=r.Read(data+128,length*4);int[] values=new int[length];
+            for(int n=0;n<length;n++){values[n]=BitConverter.ToInt32(raw,n*4);if(values[n]<0)return false;}
+            if(FarmI(r,data+64)!=generation)return false;ids=Enumerable.Range(0,length).ToArray();counts=values;return true;
+        }
+        static void PrepareZoneReply(Remote r,NativeJob j){
+            if(j.ZoneResponseData==0)return;DateTime now=DateTime.UtcNow;
+            if(r.Ptr(j.ZoneResponseData)!=0&&(now-j.ZoneReplyRequestAt).TotalSeconds>=10)r.Write(j.ZoneResponseData,new byte[8]);
+            if(r.Ptr(j.ZoneResponseData)==0)j.ZoneReplyRequestAt=now;
         }
         static void QueueZone(Remote r,long data,NativeJob j,int command,int target){
+            if(command==1)PrepareZoneReply(r,j);
             r.Write(data+8,BitConverter.GetBytes(j.MapId));r.Write(data+12,BitConverter.GetBytes(j.ZoneId));r.Write(data+16,BitConverter.GetBytes(target));r.Write(data,BitConverter.GetBytes(command));j.ZoneActionAt=DateTime.UtcNow;j.ZoneAttempts++;
             Log(j,"zone_command",",\"command\":"+command+",\"map\":"+j.MapId+",\"zone\":"+target);
         }
@@ -2320,13 +2348,11 @@ namespace TGLL {
                     if(j.ZonePlanMap!=j.MapId){j.ZonePlanMap=j.MapId;j.ZonePrepared=false;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;}
                     if(j.PlannedZone<0){
                         j.ZoneSyncActive=true;j.ZoneStatus="Đọc số người từng khu";
-                        if(j.ZoneListWaiting){long popup=ZonePopup(r,game);if(popup!=0&&popup==r.Ptr(data+32)&&r.Ptr(popup+0xe8)!=r.Ptr(data+24)){
-                            long array=r.Ptr(popup+0xe8);int length=array==0?0:BitConverter.ToInt32(r.Read(array+24,4),0);if(length<1||length>256)throw new Exception("zone_list_invalid");
-                            int[] ids=new int[length],counts=new int[length];for(int n=0;n<length;n++){long item=r.Ptr(array+32+n*8);if(item==0)throw new Exception("zone_list_changed");ids[n]=n;counts[n]=BitConverter.ToInt32(r.Read(item+16,4),0);}
-                            if(r.Ptr(popup+0xe8)!=array||ZonePopup(r,game)!=popup)throw new Exception("zone_list_changed");j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new Exception("zone_list_invalid");j.ZoneListWaiting=false;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;Log(j,"quiet_zone_chosen",",\"zone\":"+j.PlannedZone);}
+                        if(j.ZoneListWaiting){int[] ids,counts;if(TryReadZoneList(r,data,out ids,out counts)){
+j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new Exception("zone_list_invalid");j.ZoneListWaiting=false;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;Log(j,"quiet_zone_chosen",",\"zone\":"+j.PlannedZone);}
                             else if((now-j.ZoneActionAt).TotalSeconds<10)return;else j.ZoneListWaiting=false;
                         }
-                        if(j.PlannedZone<0){if(j.ZoneAttempts>=3){j.ZoneStatus="Chưa đọc được khu; chờ 30 giây để thử lại";if((now-j.ZoneActionAt).TotalSeconds<30)return;j.ZoneAttempts=0;Log(j,"zone_list_retry","");}j.ZoneOldPopup=ZonePopup(r,game);QueueZone(r,data,j,1,-1);j.ZoneListWaiting=true;return;}
+                        if(j.PlannedZone<0){if(j.ZoneAttempts>=3){j.ZoneStatus="Chưa đọc được khu; chờ 30 giây để thử lại";if((now-j.ZoneActionAt).TotalSeconds<30)return;j.ZoneAttempts=0;Log(j,"zone_list_retry","");}QueueZone(r,data,j,1,-1);j.ZoneListWaiting=true;return;}
                     }
                     if(j.ZoneId==j.PlannedZone&&(j.ZonePrepared||state==4&&j.ZoneAttempts>0)){j.ZonePrepared=true;j.ZoneSyncActive=false;j.ZoneStatus="Đã chọn khu ít người: "+j.ZoneId;return;}
                 }else{
@@ -2909,6 +2935,11 @@ namespace TGLL {
                     if(prefix[12]!=0||prefix[13]!=0x48||prefix[14]!=0x8b||prefix[15]!=0xf9)throw new Exception("native_build_unsupported");
                     trampoline=r.Near(update,4096);byte[] relocated=(byte[])prefix.Clone();long comparison=update+13+BitConverter.ToInt32(prefix,8);Array.Copy(BitConverter.GetBytes(checked((int)(comparison-trampoline-13))),0,relocated,8,4);
                     Code64 tr=new Code64();tr.Emit(relocated);tr.Emit(0xff,0x25,0,0,0,0);tr.Q(update+16);r.Write(trampoline,tr.Finish());
+                    long zoneReply=game+0x507300;byte[] zonePrefix=r.Read(zoneReply,5),expectedZonePrefix={0x48,0x89,0x5c,0x24,0x10};
+                    if(!SameBytes(zonePrefix,expectedZonePrefix))throw new Exception("zone_reply_build_unsupported");
+                    j.ZoneResponseData=r.Allocate(4096);long zoneReplyCode=r.Near(zoneReply,4096);Code64 zoneOriginal=new Code64();zoneOriginal.Emit(zonePrefix);zoneOriginal.Emit(0xff,0x25,0,0,0,0);zoneOriginal.Q(zoneReply+5);r.Write(zoneReplyCode+2048,zoneOriginal.Finish());
+                    byte[] replyBytes=NativeCode.ZoneReply(j.ZoneResponseData,zoneReplyCode+2048);if(replyBytes.Length>2048)throw new Exception("native_code_too_large");r.Write(zoneReplyCode,replyBytes);r.Protect(zoneReplyCode,4096,0x20);
+                    byte[] zoneReplyPatch=new byte[5];zoneReplyPatch[0]=0xe9;Array.Copy(BitConverter.GetBytes(checked((int)(zoneReplyCode-zoneReply-5))),0,zoneReplyPatch,1,4);r.Suspended(delegate{r.Install(zoneReply,zoneReplyPatch);});
                     data=r.Allocate(139264);reminderData=r.Allocate(4096);reminderCode=r.Allocate(4096);byte[] reminderBytes=NativeCode.PrepareMap(reminderData,game+0x16ed658,game+0x16ee888,game+0x16eeba8,game+0x1dd900,0,true);r.Write(reminderCode,reminderBytes);r.Protect(reminderCode,4096,0x20);user=r.Utf8(j.Username);pass=r.Utf8(j.Password);r.Write(data+8,BitConverter.GetBytes(user));r.Write(data+16,BitConverter.GetBytes(pass));
                     long partyCode=r.Allocate(4096);byte[] partyBytes=NativeCode.Party(data,game+0x16ee888,game+0x16f0240,game+0x16ee820,game+0x16f760,game+0x2e2aa0,game+0x1dd900);r.Write(partyCode,partyBytes);r.Protect(partyCode,4096,0x20);
                     long npcCode=r.Allocate(8192);byte[] npcBytes=NativeCode.Npc(data,game+0x16ed658,game+0x16ee888,game+0x16ee910,game+0x16efe08,game+0x4e19f0,game+0x2d8f00,game+0x12d9e0,game+0x1dd900,game+0x303250,partyCode);
@@ -2933,7 +2964,7 @@ namespace TGLL {
                     j.CaptchaData=r.Allocate(4096);long captchaCode=r.Allocate(4096);byte[] captchaBytes=NativeCode.Captcha(j.CaptchaData,game);if(captchaBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(captchaCode,captchaBytes);r.Protect(captchaCode,4096,0x20);
                     gemData=r.Allocate(4096);long gemCode=r.Allocate(4096);byte[] gemBytes=NativeCode.GemCombine(gemData,game);if(gemBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(gemCode,gemBytes);r.Protect(gemCode,4096,0x20);
                     j.CuongThiRouteData=r.Allocate(4096);long cuongRouteCode=r.Allocate(8192);byte[] cuongRouteBytes=NativeCode.Quest(j.CuongThiRouteData,game);if(cuongRouteBytes.Length>8192)throw new Exception("native_code_too_large");r.Write(cuongRouteCode,cuongRouteBytes);r.Protect(cuongRouteCode,8192,0x20);
-                    j.CuongThiZoneData=r.Allocate(4096);long cuongZoneCode=r.Allocate(4096);byte[] cuongZoneBytes=NativeCode.Zone(j.CuongThiZoneData,game,game+0x1dd900);if(cuongZoneBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(cuongZoneCode,cuongZoneBytes);r.Protect(cuongZoneCode,4096,0x20);
+                    j.CuongThiZoneData=r.Allocate(4096);long cuongZoneCode=r.Allocate(4096);byte[] cuongZoneBytes=NativeCode.Zone(j.CuongThiZoneData,game,game+0x1dd900,j.ZoneResponseData);if(cuongZoneBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(cuongZoneCode,cuongZoneBytes);r.Protect(cuongZoneCode,4096,0x20);
                     inboxData=r.Allocate(4096);long inboxCode=r.Allocate(4096);r.Write(inboxCode,NativeCode.Inbox(inboxData,game));r.Protect(inboxCode,4096,0x20);
                     long inboxResponse=game+0x4f0300;byte[] inboxPrefix=r.Read(inboxResponse,15);
                     if(NativeCode.InboxPrefixSupported(inboxPrefix)){
@@ -2950,7 +2981,7 @@ namespace TGLL {
                     long moveReleaseCode=r.Allocate(4096);r.Write(moveReleaseCode,NativeCode.ReleaseMovement(game+0x299080,game+0xeed700,game+0x27bf70,game+0x16ee888,game+0x2ab6a0));r.Protect(moveReleaseCode,4096,0x20);settingsData=r.Allocate(4096);long settingsCode=r.Allocate(4096);byte[] settingsBytes=NativeCode.Settings(settingsData,game+0x16ed658,game+0x16ee888,game+0x3632a0,game+0x3610f0,game+0x3634b0,game+0x3621a0,game+0x16ee808,moveReleaseCode);r.Write(settingsCode,settingsBytes);r.Protect(settingsCode,4096,0x20);
                     teamData=r.Allocate(4096);teamCode=r.Allocate(4096);byte[] teamBytes=NativeCode.Team(teamData,game,game+0x1dd900);if(teamBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(teamCode,teamBytes);r.Protect(teamCode,4096,0x20);
                     followCode=r.Allocate(4096);byte[] followBytes=NativeCode.Follow(teamData+1024,game,game+0x1dd900);if(followBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(followCode,followBytes);r.Protect(followCode,4096,0x20);
-                    zoneCode=r.Allocate(4096);byte[] zoneBytes=NativeCode.Zone(teamData+2048,game,game+0x1dd900);if(zoneBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(zoneCode,zoneBytes);r.Protect(zoneCode,4096,0x20);
+                    zoneCode=r.Allocate(4096);byte[] zoneBytes=NativeCode.Zone(teamData+2048,game,game+0x1dd900,j.ZoneResponseData);if(zoneBytes.Length>4096)throw new Exception("native_code_too_large");r.Write(zoneCode,zoneBytes);r.Protect(zoneCode,4096,0x20);
                     loginCode=trampoline+128;byte[] loginBytes=NativeCode.Login(data,game+0x16ee778,trampoline,game+0x161150,game+0x2fced0,game+0x2bc700,characterCode,trainCode,settingsCode,teamCode,followCode,zoneCode,itemCode,questCode,travelItemCode,travelMenuCode,giftCode,mailCode,inboxCode,farmCode,chestCode,cloakCode,marketCode,reminderCode,gemCode,captchaCode,cuongRouteCode,cuongZoneCode);r.Write(loginCode,loginBytes);r.Protect(trampoline,4096,0x20);
                     patch=new byte[16];for(int i=0;i<16;i++)patch[i]=0x90;patch[0]=0xe9;Array.Copy(BitConverter.GetBytes(checked((int)(loginCode-update-5))),0,patch,1,4);
                 }
@@ -3088,11 +3119,8 @@ namespace TGLL {
                 if(j.ZonePlanMap!=j.MapId){j.ZonePlanMap=j.MapId;j.ZonePrepared=false;j.PlannedZone=-1;j.ZoneAttempts=0;j.ZoneListWaiting=false;j.ZoneActionAt=DateTime.MinValue;}
                 if(j.PlannedZone<0){
                     j.ZoneSyncActive=true;j.ZoneStatus="Đọc số người từng khu";
-                    if(j.ZoneListWaiting){long popup=ZonePopup(r,game);if(popup!=0&&popup==r.Ptr(data+32)&&r.Ptr(popup+0xe8)!=r.Ptr(data+24)){
-                        long array=r.Ptr(popup+0xe8);int length=array==0?0:FarmI(r,array+24);if(length<1||length>256)throw new Exception("zone_list_invalid");int[] ids=new int[length],counts=new int[length];
-                        for(int n=0;n<length;n++){long item=r.Ptr(array+32+n*8);if(item==0)throw new Exception("zone_list_changed");ids[n]=n;counts[n]=FarmI(r,item+16);}
-                        if(r.Ptr(popup+0xe8)!=array||ZonePopup(r,game)!=popup)throw new Exception("zone_list_changed");
-                        j.PlannedZone=SelectFarmZone(ids,counts,j.ZoneId,j.FarmTarget.Zone);if(j.PlannedZone<0)throw new Exception("farm_zone_unavailable");j.ZoneListWaiting=false;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;Log(j,j.FarmTarget.Zone>=0?"farm_fixed_zone":"farm_quiet_zone",",\"map\":"+j.MapId+",\"zone\":"+j.PlannedZone);
+                    if(j.ZoneListWaiting){int[] ids,counts;if(TryReadZoneList(r,data,out ids,out counts)){
+j.PlannedZone=SelectFarmZone(ids,counts,j.ZoneId,j.FarmTarget.Zone);if(j.PlannedZone<0)throw new Exception("farm_zone_unavailable");j.ZoneListWaiting=false;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;Log(j,j.FarmTarget.Zone>=0?"farm_fixed_zone":"farm_quiet_zone",",\"map\":"+j.MapId+",\"zone\":"+j.PlannedZone);
                     }else if((now-j.ZoneActionAt).TotalSeconds<10)return;else j.ZoneListWaiting=false;}
                     if(j.PlannedZone<0){if(j.ZoneAttempts>=3){j.ZoneStatus="Không đọc được danh sách khu sau 3 lần";return;}QueueZone(r,data,j,1,-1);j.ZoneListWaiting=true;return;}
                 }
@@ -4244,10 +4272,8 @@ namespace TGLL {
     int target=ReserveBeastCombatZone(j,j.MapId,j.ZoneId,j.BeastZoneIds,j.BeastZoneCounts);
     if(target<0){
      j.ZoneStatus="Linh thú: đọc danh sách khu để né các acc cùng bãi";
-     if(j.ZoneListWaiting){long popup=ZonePopup(r,game);if(popup!=0&&popup==r.Ptr(data+32)&&r.Ptr(popup+0xe8)!=r.Ptr(data+24)){
-      long array=r.Ptr(popup+0xe8);int length=array==0?0:BitConverter.ToInt32(r.Read(array+24,4),0);if(length<1||length>256)throw new Exception("zone_list_invalid");int[] ids=new int[length],counts=new int[length];
-      for(int n=0;n<length;n++){long item=r.Ptr(array+32+n*8);if(item==0)throw new Exception("zone_list_changed");ids[n]=n;counts[n]=BitConverter.ToInt32(r.Read(item+16,4),0);}
-      if(r.Ptr(popup+0xe8)!=array||ZonePopup(r,game)!=popup)throw new Exception("zone_list_changed");j.BeastZoneIds=ids;j.BeastZoneCounts=counts;j.BeastZoneListAt=now;j.ZoneListWaiting=false;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;target=ReserveBeastCombatZone(j,j.MapId,j.ZoneId,ids,counts);
+     if(j.ZoneListWaiting){int[] ids,counts;if(TryReadZoneList(r,data,out ids,out counts)){
+j.BeastZoneIds=ids;j.BeastZoneCounts=counts;j.BeastZoneListAt=now;j.ZoneListWaiting=false;j.ZoneAttempts=0;j.ZoneActionAt=DateTime.MinValue;target=ReserveBeastCombatZone(j,j.MapId,j.ZoneId,ids,counts);
      }else if((now-j.ZoneActionAt).TotalSeconds<10)return;else j.ZoneListWaiting=false;}
      if(target<0){
       if(j.BeastZoneIds.Length>0){j.ZoneStatus="Linh thú: các khu đang được acc khác giữ; đợi khu trống";j.BeastZoneRetryAt=now.AddSeconds(5);return;}
@@ -4657,13 +4683,13 @@ namespace TGLL {
    if(FarmI(r,data)!=0)return true;if(!j.CuongThiCancelSent){r.Write(data,BitConverter.GetBytes(6));j.CuongThiCancelSent=true;return true;}
    if(zone!=0){int state=FarmI(r,zone);if(state==1||state==2||state==3)return true;}r.Write(data+4,new byte[4]);j.CuongThiMovementStopping=false;j.CuongThiCancelSent=false;j.CuongThiRouteSent=false;j.CuongThiZoneListWaiting=false;j.CuongThiZoneValidated=false;return true;
   }
-  static void CuongThiZoneCommand(Remote r,NativeJob j,int map,int current,int command,int target){long data=j.CuongThiZoneData;r.Write(data+8,BitConverter.GetBytes(map));r.Write(data+12,BitConverter.GetBytes(current));r.Write(data+16,BitConverter.GetBytes(target));r.Write(data,BitConverter.GetBytes(command));j.CuongThiZoneAt=DateTime.UtcNow;j.CuongThiZoneAttempts++;Log(j,"cuong_thi_zone_command",",\"map\":"+map+",\"zone\":"+target+",\"command\":"+command);}
+  static void CuongThiZoneCommand(Remote r,NativeJob j,int map,int current,int command,int target){long data=j.CuongThiZoneData;if(command==1)PrepareZoneReply(r,j);r.Write(data+8,BitConverter.GetBytes(map));r.Write(data+12,BitConverter.GetBytes(current));r.Write(data+16,BitConverter.GetBytes(target));r.Write(data,BitConverter.GetBytes(command));j.CuongThiZoneAt=DateTime.UtcNow;j.CuongThiZoneAttempts++;Log(j,"cuong_thi_zone_command",",\"map\":"+map+",\"zone\":"+target+",\"command\":"+command);}
   static void PumpCuongThiZone(Remote r,long game,NativeJob j,int map,int current,DateTime now){
    int target=j.CuongThiDestination.Zone;long data=j.CuongThiZoneData;if(data==0)return;int state=FarmI(r,data);if(state==1||state==2||state==3)return;
    j.CuongThiRouteStatus="Cương Thi: chuyển tới khu "+target+"; hiện khu "+current;
-   if(j.CuongThiZoneListWaiting){long popup=ZonePopup(r,game);if(popup!=0&&popup==r.Ptr(data+32)&&r.Ptr(popup+0xe8)!=r.Ptr(data+24)){
-    long array=r.Ptr(popup+0xe8);int length=array==0?0:FarmI(r,array+24);if(length<1||length>256)throw new Exception("cuong_zone_list_invalid");if(target>=length){j.CuongThiRouteStatus="Khu "+target+" không có trong map này";return;}
-    if(ZonePopup(r,game)!=popup||r.Ptr(popup+0xe8)!=array)throw new Exception("cuong_zone_list_changed");j.CuongThiZoneListWaiting=false;j.CuongThiZoneValidated=true;j.CuongThiZoneAttempts=0;j.CuongThiZoneAt=DateTime.MinValue;
+   if(j.CuongThiZoneListWaiting){int[] ids,counts;if(TryReadZoneList(r,data,out ids,out counts)){
+    if(Array.IndexOf(ids,target)<0){j.CuongThiRouteStatus="Khu "+target+" không có trong map này";return;}
+    j.CuongThiZoneListWaiting=false;j.CuongThiZoneValidated=true;j.CuongThiZoneAttempts=0;j.CuongThiZoneAt=DateTime.MinValue;
    }else if((now-j.CuongThiZoneAt).TotalSeconds<10)return;else{j.CuongThiZoneListWaiting=false;j.CuongThiZoneValidated=false;}}
    if((now-j.CuongThiZoneAt).TotalSeconds<8)return;if(j.CuongThiZoneAttempts>=3){j.CuongThiRouteStatus="Chưa đổi được khu Cương Thi; đợi thử lại";if((now-j.CuongThiZoneAt).TotalSeconds<30)return;j.CuongThiZoneAttempts=0;j.CuongThiZoneValidated=false;}
    if(!j.CuongThiZoneValidated){CuongThiZoneCommand(r,j,map,current,1,-1);j.CuongThiZoneListWaiting=true;return;}
