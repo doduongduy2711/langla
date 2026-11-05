@@ -19,6 +19,7 @@ $null=$click.Invoke($startFarm,[object[]]@([EventArgs]::Empty))
 if(!$fixture.FarmQuietZone -or !$fixture.FarmEnabled -or $fixture.FarmArrived -or !$fixture.GameAutoWanted -or !$grid.Rows[0].Cells['auto'].Value){throw 'Farm start failed or idles before arrival'}
 $null=$click.Invoke($stopFarm,[object[]]@([EventArgs]::Empty));if($fixture.FarmEnabled -or $fixture.GameAutoWanted){throw 'Farm stop failed'}
 $farmMode.SelectedIndex=0;if($farmLevel.Enabled){throw 'Character mode must not use manual level input'}
+$levelConfig=Get-FarmRunConfig;if(!$levelConfig.CharacterMode -or $levelConfig.Spots.Count -lt 20 -or @($levelConfig.Spots | Where-Object {$_.MapId -eq 74 -and $_.Level -eq 52 -and $_.MobId -eq -2}).Count -ne 1){throw 'Automatic level maps must come from client map catalogue without saved farm spots'}
 $null=$click.Invoke($startFarm,[object[]]@([EventArgs]::Empty));if(!$fixture.FarmEnabled){throw 'Character mode start failed'}
 Set-AccountAuto $grid.Rows[0] $false;if(!$fixture.FarmEnabled){throw 'Auto toggle must retain Up'};$grid.Rows[0].Cells['up'].Value=$false
 $testAddedRow=$grid.Rows.Add();$grid.Rows[$testAddedRow].Tag=[pscustomobject]@{id='farm-second-account';username='farm-second'}

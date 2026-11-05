@@ -1,10 +1,10 @@
 ﻿$script:farmUpRequests=@{}
 $farmPage=New-Object Windows.Forms.TabPage;$farmPage.Text='Auto bãi quái';$farmPage.BackColor=$form.BackColor;$farmPage.AutoScroll=$true;$tabs.TabPages.Add($farmPage)
 $null=Ui-Label 'Chế độ chạy bãi' $farmPage 16 10 220 24
-$farmMode=New-Object Windows.Forms.ComboBox;$farmMode.DropDownStyle='DropDownList';$farmMode.Items.AddRange([object[]]@('Theo level nhân vật','Nhập level quái (gần nhất)','Lấy bãi acc dòng 1','Nhập map và tọa độ'));$farmMode.SelectedIndex=3;$farmMode.SetBounds(16,38,220,26);$farmPage.Controls.Add($farmMode)
+$farmMode=New-Object Windows.Forms.ComboBox;$farmMode.DropDownStyle='DropDownList';$farmMode.Items.AddRange([object[]]@('Theo level nhân vật (±3)','Nhập level quái (gần nhất)','Lấy bãi acc dòng 1','Nhập map và tọa độ'));$farmMode.SelectedIndex=3;$farmMode.SetBounds(16,38,220,26);$farmPage.Controls.Add($farmMode)
 $farmLevel=New-Object Windows.Forms.NumericUpDown;$farmLevel.Minimum=1;$farmLevel.Maximum=500;$farmLevel.Value=54;$farmLevel.SetBounds(245,38,70,26);$farmLevel.Enabled=$true;$farmPage.Controls.Add($farmLevel);$farmMode.Add_SelectedIndexChanged({$farmLevel.Enabled=$farmMode.SelectedIndex -in @(1,3)})
 $script:farmMapCatalogue=Get-Content -LiteralPath (Join-Path $PSScriptRoot 'MapCatalog.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-$farmMaps=New-Object Windows.Forms.ComboBox;$farmMaps.DropDownStyle='DropDownList';$farmMaps.SetBounds(326,38,315,26);foreach($m in $script:farmMapCatalogue){$null=$farmMaps.Items.Add(('{0} • {1}' -f $m.Id,$(if($m.Name){$m.Name}else{'(game không có tên)'})))};$farmMaps.SelectedIndex=59;$farmPage.Controls.Add($farmMaps)
+$farmMaps=New-Object Windows.Forms.ComboBox;$farmMaps.DropDownStyle='DropDownList';$farmMaps.SetBounds(326,38,315,26);foreach($m in $script:farmMapCatalogue){$null=$farmMaps.Items.Add(('{0} • {1}' -f $m.Id,$(if($m.Name){$m.Name+$(if($m.Level -gt 0){' (cấp '+$m.Level+')'}else{''})}else{'(game không có tên)'})))};$farmMaps.SelectedIndex=59;$farmPage.Controls.Add($farmMaps)
 # Tọa độ nhập tay dùng trực tiếp khi Bắt đầu; không cần acc tham chiếu.
 $null=Ui-Label 'Chọn map / làng' $farmPage 326 16 315 20
 $null=Ui-Label 'Level quái' $farmPage 245 16 80 20
@@ -35,6 +35,7 @@ $readFarm=Ui-NewButton 'Lưu bãi các acc đang mở' {
 function Get-FarmSpotZone($spot){if($spot -and $spot.PSObject.Properties['Zone'] -and $null -ne $spot.Zone){return [int]$spot.Zone};return -1}
 function Get-FarmRunConfig {
 $spots=New-Object 'System.Collections.Generic.List[TGLL.FarmSpot]';foreach($s in $script:farmSpots){$o=New-Object TGLL.FarmSpot;$o.MapId=[int]$s.MapId;$o.MapName=[string]$s.MapName;$o.MobId=[int]$s.MobId;$o.MobName=[string]$s.MobName;$o.Level=[int]$s.Level;$o.X=[int]$s.X;$o.Y=[int]$s.Y;$o.Zone=Get-FarmSpotZone $s;$spots.Add($o)}
+        if($farmMode.SelectedIndex -eq 0){$spots.Clear();foreach($m in $script:farmMapCatalogue){if(!$m.PSObject.Properties['Level'] -or [int]$m.Level -lt 1 -or ![TGLL.NativeBackend]::IsOrdinaryFarmMap([int]$m.Id,[int]$m.Type,[string]$m.Name)){continue};$o=New-Object TGLL.FarmSpot;$o.MapId=[int]$m.Id;$o.MapName=[string]$m.Name;$o.MobId=-2;$o.MobName='Tự tìm quái trong map';$o.Level=[int]$m.Level;$o.X=0;$o.Y=0;$o.Zone=[int]$farmZone.Value;$spots.Add($o)}}
         $referenceId=$null;if($farmMode.SelectedIndex -eq 2){if(!$grid.Rows.Count){throw 'Không có tài khoản dòng 1'};$referenceId=[string]$grid.Rows[0].Tag.id;if(!$script:accountJobs.ContainsKey($referenceId)){throw 'Mở acc dòng 1 tại bãi muốn up trước'};$referenceSpot=[TGLL.NativeBackend]::GetReferenceFarmSpot($script:accountJobs[$referenceId]);$spots.Clear();$spots.Add($referenceSpot)}
         if($farmMode.SelectedIndex -eq 3){$spots.Clear();$spots.Add((Get-ManualFarmSpot))}
     if($farmZone.Value -ge 0){foreach($spot in $spots){$spot.Zone=[int]$farmZone.Value}}
@@ -199,7 +200,7 @@ function Sync-DailyPriorityPreferences {
     [TGLL.NativeBackend]::PulseDailyPriority([datetime]::UtcNow)
 }
 $dailyPriority.Add_CheckedChanged({$script:settings.dailyPriority=$dailyPriority.Checked;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings};Sync-DailyPriorityPreferences})
-$farmHint=Ui-Label 'Chọn map/làng, X/Y và khu rồi Bắt đầu đã chọn. Khu -1 dùng khu của bãi đã lưu hoặc chọn khu ít người; khu từ 0 trở lên là khu cố định.' $farmPage 16 378 625 50
+$farmHint=Ui-Label 'Theo level (±3): tự chọn map theo cấp quái, không cần lưu bãi; tới map mới tìm quái và bật treo. Có thể chọn khu cố định hoặc khu ít người. Các chế độ nhập tay vẫn dùng X/Y đã nhập.' $farmPage 16 378 625 50
 function Update-FarmUi {if(!$grid.SelectedRows.Count){return};$a=$grid.SelectedRows[0].Tag;if($null -eq $a -or !$a.id){return};if(!$script:accountJobs.ContainsKey($a.id)){return};$j=Get-AccountJob $script:accountJobs[$a.id];if($j -and $j.PSObject.Properties['FarmStatus']){$farmHint.Text=$a.username+' • Level nhân vật '+$j.CharacterLevel+"`r`n"+$j.FarmStatus}}
 Show-FarmSpots
 $grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $farmPage){Update-FarmUi}})

@@ -173,6 +173,10 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Farm destination test compilation failed'}
           ./FarmDestinationTests.exe
           if($LASTEXITCODE -ne 0){throw 'Farm destination tests failed'}
+          & $compiler /nologo /platform:x64 /out:FarmLevelRangeTests.exe (Join-Path $pwd 'QLTK/NativeBackend.cs') (Join-Path $pwd 'QLTK/FarmLevelRangeTests.cs')
+          if($LASTEXITCODE -ne 0){throw 'Farm level range compilation failed'}
+          ./FarmLevelRangeTests.exe
+          if($LASTEXITCODE -ne 0){throw 'Farm level range tests failed'}
       - name: Cuong Thi real HP and hanging threshold checks
         shell: powershell
         run: |
