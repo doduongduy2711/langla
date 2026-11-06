@@ -131,7 +131,7 @@ function Start-FarmAllOpen {
 }
 function Sync-FarmUpRow($row) {
     if($row.Tag -and (${function:Get-AutoAllStage}) -and (Get-AutoAllStage ([string]$row.Tag.id))){$row.Cells['up'].ToolTipText='Tạm ngưng Up để chạy Auto tất cả';return}
-    if($row.Tag -and $script:accountJobs.ContainsKey([string]$row.Tag.id)){$bj=Get-AccountJob $script:accountJobs[[string]$row.Tag.id];if($bj -is [TGLL.NativeJob] -and $bj.BeastQuestEnabled){return}}
+    if($row.Tag -and $script:accountJobs.ContainsKey([string]$row.Tag.id)){$bj=Get-AccountJob $script:accountJobs[[string]$row.Tag.id];if($bj -is [TGLL.NativeJob] -and $bj.BeastQuestEnabled -and !$bj.SequenceManaged){return}}
     if($null -eq $row.Tag){return};$key=[string]$row.Tag.id;$j=$null
     if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
     if($j -is [TGLL.NativeJob] -and $j.MailQueueOnly){return}
@@ -143,6 +143,10 @@ function Sync-FarmUpRow($row) {
     }
     $request=$script:farmUpRequests[$key];Set-UpCell $row $true
     if($j -is [TGLL.NativeJob]){$j.UpRequested=$true}
+    if($j -is [TGLL.NativeJob] -and $j.SequenceManaged){
+        if([TGLL.NativeBackend]::UpSessionReady($j) -and $request.StartedJob -ne $j.Id){try{$config=$request.Config;[TGLL.NativeBackend]::PrepareUpFarmDestination($j.Id,$config.CharacterMode,$config.Level,[TGLL.FarmSpot[]]$config.Spots,$config.Quiet);$request.StartedJob=$j.Id}catch{$row.Cells['up'].ToolTipText='Up chờ cấu hình: '+$_.Exception.Message;return}}
+        $row.Cells['up'].ToolTipText=$j.DailyStatus;return
+    }
     if($j -is [TGLL.NativeJob] -and $j.DailyActive){$row.Cells['up'].ToolTipText=$j.DailyStatus;return}
     if($null -eq $j -or !($j -is [TGLL.NativeJob]) -or ![TGLL.NativeBackend]::UpSessionReady($j)){
         $row.Cells['up'].ToolTipText='Đã chọn Up — chờ mở acc và nhân vật vào game';return
@@ -193,6 +197,7 @@ $farmManualMap.Add_ValueChanged({
 $script:farmMapBinding=$true;try{for($n=0;$n -lt $script:farmMapCatalogue.Count;$n++){if([int]$script:farmMapCatalogue[$n].Id -eq [int]$farmManualMap.Value){$farmMaps.SelectedIndex=$n;break}}}finally{$script:farmMapBinding=$false}
 $dailyPriority=New-Object Windows.Forms.CheckBox;$dailyPriority.Text='Lặp lại sau 00:00: nhận chìa → địa cung → cấm thuật → nhiệm vụ → Sơn Cáp → Up';$dailyPriority.SetBounds(16,188,625,27);$dailyPriority.Checked=if($script:settings.ContainsKey('dailyPriority')){[bool]$script:settings.dailyPriority}else{$true};$farmPage.Controls.Add($dailyPriority)
 function Sync-DailyPriorityPreferences {
+    if(Get-Command Sync-ActivitySequences -ErrorAction SilentlyContinue){Sync-ActivitySequences}
     if($script:autoAllRun -and $script:autoAllRun.active){return}
     foreach($row in $grid.Rows){$key=[string]$row.Tag.id;if(!$script:farmUpRequests.ContainsKey($key) -or !$script:accountJobs.ContainsKey($key)){continue};$j=Get-AccountJob $script:accountJobs[$key];if(!$j -or !($j -is [TGLL.NativeJob]) -or !$j.DailyManaged){continue};[TGLL.NativeBackend]::ConfigureUpActivities($j.Id,$dailyPriority.Checked,[bool]$row.Tag.receiveKey,[bool]$row.Tag.dungeonHigh,[bool]$row.Tag.izanami,[bool]$row.Tag.autoQuest,[bool]$row.Tag.soncap)}
     [TGLL.NativeBackend]::ConfigureUpActivityTeams((Get-UpActivityGroups 'izanami' ([int]$izanamiGroupSize.Value)),(Get-UpActivityGroups 'soncap' 6))

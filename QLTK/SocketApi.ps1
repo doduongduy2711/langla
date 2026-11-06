@@ -99,9 +99,35 @@ function Get-ActivityLaunchContext([string]$id){
  if([string]$script:questLaunchingAccountId -eq $id){return 'quest'}
  return ''
 }
+function Test-AccountSequence($a) {
+ if(!$a){return $false}
+ $count=0;if($a.receiveKey -or $a.dungeonHigh){$count++};foreach($field in @('izanami','autoQuest','soncap','autoBeast')){if([bool]$a.$field){$count++}}
+ return $count -gt 1
+}
+function Get-SequenceGroups([string]$field,[int]$size){
+ $ids=@(foreach($a in $script:accounts){if(!$a.$field){continue};$j=$null;if($script:accountJobs.ContainsKey([string]$a.id)){$j=Get-AccountJob $script:accountJobs[[string]$a.id]};if($field -eq 'soncap' -and $j -is [TGLL.NativeJob] -and $j.CharacterLevel -gt 0 -and $j.CharacterLevel -lt 50){continue};if($j -is [TGLL.NativeJob] -and $j.SequenceManaged){$j.Id}elseif(Test-AccountSequence $a){''}})
+ $groups=New-Object 'System.Collections.Generic.List[string[]]';for($n=0;$n -lt $ids.Count;$n+=$size){$last=[Math]::Min($n+$size-1,$ids.Count-1);$groups.Add([string[]]$ids[$n..$last])};return ,$groups.ToArray()
+}
+function Sync-ActivitySequences {
+ if(!$script:sequenceApplied){$script:sequenceApplied=@{}}
+ if($script:autoAllRun -and $script:autoAllRun.active){return}
+ foreach($a in $script:accounts){$key=[string]$a.id;if(!$script:accountJobs.ContainsKey($key)){continue};$j=Get-AccountJob $script:accountJobs[$key];if($j -isnot [TGLL.NativeJob] -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','failed','cancelled')){continue}
+  if(!$j.SequenceManaged -and $script:farmUpRequests -and $script:farmUpRequests.ContainsKey($key)){continue}
+  if($j.SequenceFinished -and !$j.SequenceManaged){continue}
+  if(!$j.SequenceManaged -and (!(Test-AccountSequence $a) -or $j.DailyManaged -or $j.SonCapQueueOnly -or $j.DungeonQueueOnly -or $j.IzanamiQueueOnly -or $j.QuestQueueOnly -or $j.MailQueueOnly -or $j.CloakQueueOnly)){continue}
+  $close=([bool]$a.receiveKey -and [bool]$a.closeAfterKey) -or ([bool]$a.dungeonHigh -and $dungeonCloseAfter.Checked) -or ([bool]$a.izanami -and $izanamiCloseAfter.Checked) -or ([bool]$a.autoQuest -and $questCloseAfter.Checked) -or ([bool]$a.soncap -and $soncapCloseAfter.Checked) -or ([bool]$a.autoBeast -and $beastCloseAfter.Checked)
+  $signature=$j.Id+':'+([bool]$a.receiveKey)+':'+([bool]$a.dungeonHigh)+':'+([bool]$a.izanami)+':'+([bool]$a.autoQuest)+':'+([bool]$a.soncap)+':'+([bool]$a.autoBeast)+':'+$close
+  if($script:sequenceApplied[$key] -ne $signature){[TGLL.NativeBackend]::ConfigureActivitySequence($j.Id,[bool]$a.receiveKey,[bool]$a.dungeonHigh,[bool]$a.izanami,[bool]$a.autoQuest,[bool]$a.soncap,[bool]$a.autoBeast,$close);$script:sequenceApplied[$key]=$signature}
+ }
+ [TGLL.NativeBackend]::DailyDungeonLimit=[int]$dungeonMax.Value;[TGLL.NativeBackend]::DailyIzanamiLimit=[int]$izanamiMax.Value;[TGLL.NativeBackend]::DailyQuestLimit=[int]$questMax.Value;[TGLL.NativeBackend]::DailySonCapLimit=[int]$soncapMax.Value;[TGLL.NativeBackend]::SequenceBeastLimit=[int]$beastMax.Value
+ [TGLL.NativeBackend]::ConfigureSequenceTeams((Get-SequenceGroups 'izanami' ([Math]::Min([int]$izanamiGroupSize.Value,[int]$izanamiMax.Value))),(Get-SequenceGroups 'soncap' ([Math]::Min([int]$soncapGroupSize.Value,[int]$soncapMax.Value))))
+}
 function Get-AccountLaunchMode($account) {
     if(${function:Get-AutoAllStage}){$all=Get-AutoAllStage ([string]$account.id);if($all){return $all}}
     $queueStage=Get-ActivityLaunchContext ([string]$account.id);if($queueStage){return $queueStage}
+    if($script:accountJobs -and $script:accountJobs.ContainsKey([string]$account.id)){$current=Get-AccountJob $script:accountJobs[[string]$account.id];if($current -is [TGLL.NativeJob] -and $current.DailyManaged -and !$current.SequenceManaged -and $current.UpRequested){return 'farm'}}
+    if($script:farmUpRequests -and $script:farmUpRequests.ContainsKey([string]$account.id)){return 'farm'}
+    if(Test-AccountSequence $account){return 'sequence'}
     if([bool]$account.autoBeast){return 'beast'}
     if($script:accountJobs -and $script:accountJobs.ContainsKey([string]$account.id)){$bj=Get-AccountJob $script:accountJobs[[string]$account.id];if($bj -is [TGLL.NativeJob] -and $bj.BeastQuestEnabled -and !$bj.CloseRequested -and !$bj.CancelRequested -and $bj.State -notin @('closed','failed','cancelled') -and (Test-AccountOpenBlocked $account)){return 'beast'}}
     if($script:farmUpRequests -and $script:farmUpRequests.ContainsKey([string]$account.id)){return 'farm'}
@@ -153,13 +179,15 @@ function Start-ManagedAccount($account,$proxy,[bool]$autoLogin=$false) {
         $queueStage=Get-ActivityLaunchContext ([string]$account.id);$launchStage=if($allStage){$allStage}else{$queueStage}
         $stageReceive=if($launchStage){$launchStage -eq 'dungeon' -and ([bool]$account.receiveKey -or [bool]$allStage)}else{[bool]$account.receiveKey};$stageDungeon=if($launchStage){$launchStage -eq 'dungeon'}else{[bool]$account.dungeonHigh};$stageIzanami=if($launchStage){$launchStage -eq 'izanami'}else{[bool]$account.izanami}
         $dungeonQueueLaunch=([string]$script:dungeonLaunchingAccountId -eq [string]$account.id)
-        $dailyUp=([bool]$account.soncap -or [string]$script:beastLaunchingAccountId -eq [string]$account.id);if(!$allStage -and (Get-Command Sync-DailyPriorityPreferences -ErrorAction SilentlyContinue) -and $script:farmUpRequests.ContainsKey([string]$account.id)){$dailyUp=$true};if($launchStage){$dailyUp=$launchStage -in @('soncap','beast')}
+        $sequenceLaunch=!$launchStage -and (Test-AccountSequence $account)
+        $dailyUp=([bool]$account.soncap -or [string]$script:beastLaunchingAccountId -eq [string]$account.id);if(!$allStage -and (Get-Command Sync-DailyPriorityPreferences -ErrorAction SilentlyContinue) -and $script:farmUpRequests.ContainsKey([string]$account.id)){$dailyUp=$true};if($launchStage){$dailyUp=$launchStage -in @('soncap','beast')};if($sequenceLaunch){$dailyUp=$true}
         try {$credentials=Get-NativeLaunchCredentials $account ([string]$script:settings.jar);$job=[TGLL.NativeBackend]::Enqueue([string]$script:settings.jar,[string]$credentials.Username,[string]$credentials.Password,$nativeProxy,$autoLogin,($stageReceive -and !$dailyUp),($stageDungeon -and !$dailyUp),($stageIzanami -and !$dungeonQueueLaunch -and !$dailyUp),([string]$script:izanamiLaunchingAccountId -eq [string]$account.id),([string]$script:questLaunchingAccountId -eq [string]$account.id),([string]$script:mailLaunchingAccountId -eq [string]$account.id),([string]$script:cloakLaunchingAccountId -eq [string]$account.id -or [string]$script:chestLaunchingAccountId -eq [string]$account.id))} catch {$queueCode=Get-LaunchQueueErrorCode $_;Write-LaunchQueueFailure $account $queueCode $_;throw ($queueCode+': '+(Get-LoginErrorText $queueCode))} finally {if($credentials){$credentials.Password=$null}}
         $job.UpRequested=!$allStage -and !$job.CloakQueueOnly -and $script:farmUpRequests.ContainsKey([string]$account.id)
         if([string]$script:beastLaunchingAccountId -eq [string]$account.id){[TGLL.NativeBackend]::SetAutoBeast($job.Id,$true)}
         $job.DungeonQueueOnly=$dungeonQueueLaunch
-        [TGLL.NativeBackend]::SetCloseAfterKey($job.Id,([bool]$account.closeAfterKey -and !$dungeonQueueLaunch -and ![bool]$account.soncap))
-        if($script:accountJobs -and $script:accountJobs.ContainsKey([string]$account.id)){[TGLL.NativeBackend]::RebindIzanamiJob([string]$script:accountJobs[[string]$account.id],$job.Id)}
+        if($sequenceLaunch){[TGLL.NativeBackend]::ConfigureActivitySequence($job.Id,[bool]$account.receiveKey,[bool]$account.dungeonHigh,[bool]$account.izanami,[bool]$account.autoQuest,[bool]$account.soncap,[bool]$account.autoBeast,$false)}
+        [TGLL.NativeBackend]::SetCloseAfterKey($job.Id,([bool]$account.closeAfterKey -and !$sequenceLaunch -and !$dungeonQueueLaunch -and ![bool]$account.soncap))
+        if($script:accountJobs -and $script:accountJobs.ContainsKey([string]$account.id)){[void][TGLL.NativeBackend]::TransferDailyPriority([string]$script:accountJobs[[string]$account.id],$job.Id);[TGLL.NativeBackend]::RebindIzanamiJob([string]$script:accountJobs[[string]$account.id],$job.Id)}
         if($null -ne $script:accountJobs){$script:accountJobs[[string]$account.id]=$job.Id}
         return [pscustomobject]@{pid=0;proxy_route=$(if($null -ne $proxy){'native_tcp_queued'}else{'none'});login_route=$(if($autoLogin){'native_queued'}else{'manual'});job_id=$job.Id}
     }

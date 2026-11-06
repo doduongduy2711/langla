@@ -1219,6 +1219,7 @@ namespace TGLL {
     public sealed partial class NativeJob {
         public volatile InventorySnapshot Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"",DateTime.MinValue);
         public volatile bool FollowActive;public volatile string FollowStatus="";public volatile int FollowDistance=-1,FollowMoves;internal bool FollowStopPending;internal DateTime FollowPollAt=DateTime.MinValue;
+        public volatile bool SequenceManaged,SequenceFinished;internal bool[] SequencePlan=new bool[6],SequenceDone=new bool[6];internal string[] SequenceCurseTeam=new string[0],SequenceSonCapTeam=new string[0];internal bool SequenceCloseAfter;internal DateTime SequenceRetryAt;
         public volatile bool PersistentUp;internal bool UpRepeatDaily;internal DateTime UpDay;internal bool[] UpCompleted=new bool[5];internal string[] UpSonCapTeamIds=new string[0];internal bool UpIzanamiFull,UpSonCapFull;public volatile bool DailyManaged,DailyActive,DailyExecuting;internal bool DailyApplying;public volatile int DailyStage;public volatile string DailyStatus="";internal bool[] DailyPlan=new bool[4],DailyRunPlan=new bool[4];internal DateTime DailyLastDate;internal string[] DailyTeamIds=new string[0];internal FarmSpot DailyReturnSpot;internal bool DailyReturnQuiet;public volatile bool KeyReceiptVerified;public volatile bool CurseActive;internal readonly object CaptchaGate=new object();internal long CaptchaData;internal CaptchaFrame CaptchaFrame;internal int CaptchaGeneration,CaptchaEpisodeTries;internal bool CaptchaPending;internal bool CaptchaManual;internal string CaptchaSamplePath="",CaptchaReadKey="",CaptchaAttemptKey="",CaptchaCode="";internal DateTime CaptchaPollAt,CaptchaSubmitAt;internal bool CaptchaUnreadable,CaptchaSubmitTimedOut;public volatile string CaptchaStatus="";public DateTime CurseReadAt=DateTime.MinValue;internal DateTime CursePollAt=DateTime.MinValue;public volatile int MapId=-1,ZoneId=-1;public DateTime ZoneReadAt=DateTime.MinValue;public volatile string ZoneStatus="";public volatile bool ZoneSyncActive;
         internal int PlannedZone=-1,ZonePlanMap=-1,ZoneAttempts;internal volatile bool ZonePrepared;internal DateTime ZoneActionAt=DateTime.MinValue,ZonePollAt=DateTime.MinValue;internal long ZoneResponseData;internal DateTime ZoneReplyRequestAt;internal bool ZoneListWaiting;
         internal long CuongThiRouteData,CuongThiZoneData;internal FarmSpot CuongThiDestination;public volatile string CuongThiDestinationKey="",CuongThiRouteStatus="";public volatile bool CuongThiNavigationReady,CuongThiMovementStopping;internal bool CuongThiCancelSent,CuongThiRouteSent,CuongThiMovePaused,CuongThiZoneListWaiting,CuongThiZoneValidated;internal int CuongThiRouteAttempts,CuongThiZoneAttempts,CuongThiMoveMap=-1,CuongThiMoveZone=-1;internal DateTime CuongThiMoveAt,CuongThiRouteAt,CuongThiZoneAt;
@@ -3278,6 +3279,105 @@ namespace TGLL {
             try{if(j.PersistentUp&&j.SonCapEnabled)SetSonCap(j.Id,false);SetDungeonHigh(j.Id,false);SetReceiveKey(j.Id,false);SetIzanami(j.Id,false);SetAutoQuest(j.Id,false);j.CloseAfterKey=false;j.DungeonQueueOnly=false;j.IzanamiQueueOnly=false;j.QuestQueueOnly=false;j.ReceiveKeyRequested=false;j.IzanamiRequested=false;j.GameAutoWanted=false;j.TrainEnabled=false;j.EntryAutoWaiting=false;}
             finally{j.DailyApplying=false;}
         }
+        // A selected account owns one activity at a time; team members never preempt a previous stage.
+        static readonly string[] SequenceNames={"Nhận chìa","Địa cung","Cấm thuật","Nhiệm vụ tuần hoàn","Sơn Cáp","Linh thú"};
+        public static int SequenceBeastLimit=12;
+        public static void ConfigureActivitySequence(string id,bool key,bool dungeon,bool curse,bool quest,bool soncap,bool beast,bool closeAfter){
+            NativeJob j=Get(id);if(j==null||j.CloseRequested||j.CancelRequested)return;
+            lock(DailyGate){
+                bool[] plan={key,dungeon,curse,quest,soncap,beast};
+                if(!j.SequenceManaged){
+                    if(j.DailyManaged||j.DungeonQueueOnly||j.IzanamiQueueOnly||j.QuestQueueOnly||j.SonCapQueueOnly||j.MailQueueOnly||j.CloakQueueOnly)return;
+                    j.SequenceManaged=true;j.DailyManaged=true;j.DailyActive=true;j.DailyExecuting=false;j.DailyStage=0;j.DailyPlan=new bool[6];j.SequenceDone=new bool[6];
+                    int adopt=beast&&j.BeastQuestEnabled?6:soncap&&j.SonCapEnabled&&Array.IndexOf(SonCapMaps,j.MapId)>=0?5:curse&&j.IzanamiRoundEntered&&j.MapId==89?3:dungeon&&DungeonTierForMap(j.MapId)>0?2:quest&&j.QuestEnabled&&!j.QuestFinished?4:0;
+                    if(adopt>0){j.DailyStage=adopt;j.DailyExecuting=adopt!=2||j.DungeonHighEnabled;j.DailyStatus="Tiếp tục "+SequenceNames[adopt-1]+" đang chạy";}
+                    else if(!j.ReceiveFlowActive&&!j.TravelActive)ClearSequenceActions(j);
+                }
+                for(int n=0;n<6;n++)if(plan[n]&&!j.SequencePlan[n])j.SequenceDone[n]=false;
+                if(!plan.SequenceEqual(j.SequencePlan))j.SequenceFinished=false;
+                j.SequencePlan=plan;j.DailyPlan=(bool[])plan.Clone();j.SequenceCloseAfter=closeAfter;
+            }
+        }
+        public static void ConfigureSequenceTeams(string[][] curse,string[][] soncap){
+            lock(DailyGate){foreach(string[][] groups in new[]{curse,soncap}){if(groups==null)continue;bool sc=Object.ReferenceEquals(groups,soncap);
+                foreach(string[] group in groups)foreach(string id in group){NativeJob j=Get(id??"");if(j==null||!j.SequenceManaged)continue;
+                    if(j.DailyExecuting&&j.DailyStage==(sc?5:3))continue;
+                    if(sc){if(!j.SequenceSonCapTeam.SequenceEqual(group))j.SequenceSonCapTeam=(string[])group.Clone();}else if(!j.SequenceCurseTeam.SequenceEqual(group))j.SequenceCurseTeam=(string[])group.Clone();
+                }
+            }}
+        }
+        static void ClearSequenceActions(NativeJob j){
+            j.DailyApplying=true;
+            try{if(j.BeastQuestEnabled)SetAutoBeast(j.Id,false);if(j.SonCapEnabled)SetSonCap(j.Id,false);ClearDailyActions(j);j.TeamConfirmed=false;j.ZoneSyncActive=false;j.FollowActive=false;}
+            finally{j.DailyApplying=false;}
+        }
+        static bool SequenceStageComplete(NativeJob j,int stage){
+            if(stage==1)return j.KeyReceiptVerified;
+            if(stage==2)return j.DungeonFinished&&DungeonTierForMap(j.MapId)==0;
+            if(stage==4||stage==6)return j.QuestFinished;
+            string[] ids=stage==3?j.SequenceCurseTeam:j.SequenceSonCapTeam;
+            return ids.Length>0&&ids.All(id=>{NativeJob p=Get(id??"");return p!=null&&(p.SequenceDone[stage-1]||(stage==3?(p.IzanamiRunFinished||p.IzanamiNoAttempts)&&p.MapId!=89:p.SonCapFinished&&Array.IndexOf(SonCapMaps,p.MapId)<0));});
+        }
+        internal static NativeJob[] ReadySequenceTeam(NativeJob j,int stage){
+            string[] ids=stage==3?j.SequenceCurseTeam:j.SequenceSonCapTeam;
+            if(ids.Length==0)return null;
+            NativeJob[] team=ids.Select(id=>Get(id??"")).ToArray();
+            if(team.Any(p=>!DailyAlive(p)||!p.SequenceManaged||!p.SequencePlan[stage-1]||p.SequenceDone[stage-1]||p.DailyStage!=stage||!p.DailyActive))return null;
+            return team;
+        }
+        static int SequenceOccupancy(int stage){return jobs.Values.Count(p=>DailyAlive(p)&&(stage<=2?(p.ReceiveKeyEnabled||p.DungeonHighEnabled||p.ReceiveFlowActive&&p.NpcAction==0):stage==3?p.IzanamiEnabled&&!p.SonCapEnabled:stage==4?p.QuestEnabled&&!p.BeastQuestEnabled:stage==5?p.SonCapEnabled:p.BeastQuestEnabled));}
+        static int SequenceLimit(int stage){return Math.Max(1,stage<=2?DailyDungeonLimit:stage==3?DailyIzanamiLimit:stage==4?DailyQuestLimit:stage==5?DailySonCapLimit:SequenceBeastLimit);}
+        static void StartSequenceStage(NativeJob j,int stage){
+            j.DailyApplying=true;
+            try{
+                if(stage==1){j.KeyReceiptVerified=false;SetReceiveKey(j.Id,true);}
+                if(stage==2){SetDungeonHigh(j.Id,true);if(DungeonTierForMap(j.MapId)>0)j.DungeonResumeChecked=false;}
+                if(stage==3){SetIzanami(j.Id,true);j.IzanamiRoundsTarget=Int32.MaxValue;}
+                if(stage==4)SetAutoQuest(j.Id,true);
+                if(stage==5){j.SonCapRebound=true;SetSonCap(j.Id,true);}
+                if(stage==6)SetAutoBeast(j.Id,true);
+                j.DailyExecuting=true;j.DailyStatus="Đang chạy: "+SequenceNames[stage-1];
+            }finally{j.DailyApplying=false;}
+        }
+        internal static void PulseActivitySequence(NativeJob j,DateTime now,Action<NativeJob,int> start=null){
+            if(!j.SequenceManaged||!DailyAlive(j)||j.ReconnectRequested||j.CurseActive||j.SequenceFinished)return;
+            if(j.ReceiveFlowActive||j.TravelActive||j.KeyReceiptPending||j.SonCapStopPending)return;
+            if(j.DailyExecuting){
+                if(!SequenceStageComplete(j,j.DailyStage))return;
+                j.SequenceDone[j.DailyStage-1]=true;Log(j,"sequence_stage_completed",",\"stage\":"+j.DailyStage);ClearSequenceActions(j);j.DailyExecuting=false;j.DailyStage=0;
+            }
+            if(j.DailyStage==0||!j.SequencePlan[j.DailyStage-1]){
+                int next=-1;
+                for(int n=0;n<6;n++)if(j.SequencePlan[n]&&!j.SequenceDone[n]){next=n;break;}
+                if(next<0){if(j.UpRequested&&j.FarmChoices.Length==0){j.DailyStatus="Đã xong hoạt động — đợi cấu hình Up; giữ game";return;}j.SequenceFinished=true;j.DailyActive=false;j.DailyStatus="Đã xong các hoạt động đã tích";
+                    if(j.UpRequested&&j.FarmChoices.Length>0){j.SequenceManaged=false;j.DailyManaged=false;j.PersistentUp=false;ConfigureUpActivities(j.Id,false,j.SequencePlan[0],j.SequencePlan[1],j.SequencePlan[2],j.SequencePlan[3],j.SequencePlan[4]);j.UpCompleted=new[]{true,true,true,true,true};ReturnUpToFarm(j);}
+                    else if(j.SequenceCloseAfter){j.DailyManaged=false;BeginCloseBatch(new[]{j.Id});}
+                    return;
+                }
+                j.DailyStage=next+1;j.DailyActive=true;
+            }
+            if(now<j.SequenceRetryAt)return;
+            int stage=j.DailyStage;
+            if(stage==5&&j.CharacterLevel>0&&j.CharacterLevel<50){j.SequenceDone[4]=true;j.DailyStage=0;j.DailyStatus="Bỏ Sơn Cáp: nhân vật dưới cấp 50; tiếp tục hoạt động khác";return;}
+            NativeJob[] team=stage==3||stage==5?ReadySequenceTeam(j,stage):new[]{j};
+            if(team==null){j.DailyStatus=SequenceNames[stage-1]+" — đợi nhóm xong hoạt động trước; không kéo thành viên khỏi hoạt động";return;}
+            NativeJob[] pending=team.Where(p=>!p.DailyExecuting).ToArray();
+            if(SequenceOccupancy(stage)+pending.Length>SequenceLimit(stage)){j.DailyStatus=SequenceNames[stage-1]+" — chờ giới hạn số acc";return;}
+            try{
+                if(stage==3||stage==5){string[] ids=team.Select(p=>p.Id).ToArray();foreach(NativeJob p in team){p.TeamJobIds=ids;p.TeamManaged=true;}}
+                foreach(NativeJob p in pending)(start??StartSequenceStage)(p,stage);
+                if(start==null&&(stage==3||stage==5)){
+                    foreach(NativeJob p in team)p.DailyApplying=true;
+                    try{if(stage==3)ConfigureIzanamiTeam(team.Select(p=>p.Id).ToArray());else ConfigureSonCapTeams(team.Select(p=>p.Id).ToArray());}
+                    finally{foreach(NativeJob p in team)p.DailyApplying=false;}
+                }
+            }catch(Exception e){j.SequenceRetryAt=now.AddSeconds(5);j.DailyStatus="Chờ thử lại "+SequenceNames[stage-1]+": "+e.Message;}
+        }
+        static void TransferActivitySequence(NativeJob old,NativeJob next){
+            next.SequenceManaged=true;next.SequenceFinished=old.SequenceFinished;next.SequencePlan=(bool[])old.SequencePlan.Clone();next.SequenceDone=(bool[])old.SequenceDone.Clone();next.SequenceCloseAfter=old.SequenceCloseAfter;next.SequenceCurseTeam=old.SequenceCurseTeam;next.SequenceSonCapTeam=old.SequenceSonCapTeam;next.DailyPlan=(bool[])old.DailyPlan.Clone();next.DailyManaged=true;next.DailyActive=old.DailyActive;next.DailyStage=old.DailyStage;next.DailyExecuting=false;next.UpRequested=old.UpRequested;next.FarmChoices=old.FarmChoices;next.FarmLevel=old.FarmLevel;next.FarmCharacterMode=old.FarmCharacterMode;next.FarmQuietZone=old.FarmQuietZone;
+            foreach(NativeJob p in jobs.Values){p.SequenceCurseTeam=p.SequenceCurseTeam.Select(id=>id==old.Id?next.Id:id).ToArray();p.SequenceSonCapTeam=p.SequenceSonCapTeam.Select(id=>id==old.Id?next.Id:id).ToArray();}
+            old.SequenceManaged=false;old.DailyManaged=false;old.DailyActive=false;Log(next,"sequence_reconnect_resume",",\"stage\":"+next.DailyStage);
+        }
         public static void ConfigureDailyPriority(string id,bool enabled,bool key,bool dungeon,bool izanami,bool quest){
             NativeJob j=Get(id);if(j==null)return;
             lock(DailyGate){
@@ -3306,6 +3406,7 @@ namespace TGLL {
         public static bool TransferDailyPriority(string previousId,string nextId){
             lock(DailyGate){
                 NativeJob old=Get(previousId),next=Get(nextId);if(old==null||next==null||!old.DailyManaged)return false;
+                if(old.SequenceManaged){TransferActivitySequence(old,next);return true;}
                 next.PersistentUp=old.PersistentUp;next.UpRequested=old.UpRequested;next.UpRepeatDaily=old.UpRepeatDaily;next.UpDay=old.UpDay;next.UpCompleted=(bool[])old.UpCompleted.Clone();next.UpSonCapTeamIds=old.UpSonCapTeamIds;next.UpIzanamiFull=old.UpIzanamiFull;next.UpSonCapFull=old.UpSonCapFull;next.FarmChoices=old.FarmChoices;next.FarmCharacterMode=old.FarmCharacterMode;next.FarmLevel=old.FarmLevel;next.FarmQuietZone=old.FarmQuietZone;next.DailyManaged=true;next.DailyActive=old.DailyActive;next.DailyPlan=(bool[])old.DailyPlan.Clone();next.DailyRunPlan=(bool[])old.DailyRunPlan.Clone();next.DailyLastDate=old.DailyLastDate;next.DailyStage=old.DailyStage;next.DailyExecuting=false;next.DailyReturnSpot=old.DailyReturnSpot;next.DailyReturnQuiet=old.DailyReturnQuiet;next.DailyTeamIds=old.DailyTeamIds;next.KeyReceiptVerified=old.KeyReceiptVerified;next.DailyStatus="Mở lại — tiếp tục "+DailyStageName(next.DailyStage);
                 next.IzanamiRoundsCompleted=old.IzanamiRoundsCompleted;next.IzanamiRoundsTarget=old.IzanamiRoundsTarget;next.IzanamiRoundEntered=old.IzanamiRoundEntered;next.IzanamiRoundComplete=old.IzanamiRoundComplete;next.IzanamiNoAttempts=old.IzanamiNoAttempts;next.EntryAutoKind=old.EntryAutoKind;next.EntryAutoOrigin=old.EntryAutoOrigin;
                 foreach(NativeJob peer in jobs.Values)if(peer.DailyManaged){peer.UpSonCapTeamIds=peer.UpSonCapTeamIds.Select(id=>id==previousId?nextId:id).ToArray();peer.DailyTeamIds=peer.DailyTeamIds.Select(delegate(string id){return id==previousId?nextId:id;}).ToArray();if(Array.IndexOf(peer.TeamJobIds,previousId)>=0){peer.TeamJobIds=peer.TeamJobIds.Select(delegate(string id){return id==previousId?nextId:id;}).ToArray();peer.TeamConfirmed=false;}}
@@ -3313,8 +3414,10 @@ namespace TGLL {
                 Log(next,"daily_reconnect_resume",",\"stage\":"+next.DailyStage);return true;
             }
         }
+        public static void StopActivitySequence(string id){NativeJob j=Get(id);if(j!=null&&j.SequenceManaged){ClearSequenceActions(j);j.SequenceManaged=false;j.SequenceFinished=false;j.DailyManaged=false;j.DailyActive=false;j.DailyExecuting=false;}}
         static void CancelDailyPriority(NativeJob j){
-            j.DailyManaged=false;j.DailyActive=false;j.DailyExecuting=false;j.DailyStage=0;j.DailyStatus="Đã dừng ưu tiên hằng ngày";
+            if(j.SequenceManaged)ClearSequenceActions(j);
+            j.SequenceManaged=false;j.DailyManaged=false;j.DailyActive=false;j.DailyExecuting=false;j.DailyStage=0;j.DailyStatus="Đã dừng ưu tiên hằng ngày";
             if(!j.CloseRequested&&!j.CancelRequested&&j.State!="closed"&&j.State!="failed")ClearDailyActions(j);
             j.PersistentUp=false;
         }
@@ -3369,6 +3472,7 @@ namespace TGLL {
         }
         public static void PulseDailyPriority(DateTime utcNow){
             lock(DailyGate){foreach(NativeJob j in jobs.Values){
+                if(j.SequenceManaged){if(DailyAlive(j))PulseActivitySequence(j,utcNow);continue;}
                 if(!j.DailyManaged||!DailyAlive(j))continue;
                 if(j.PersistentUp){if(UpSessionReady(j))PulseUpPriority(j,utcNow);continue;}
                 if(CurseDisplayStatus(j).Length>0){if(j.DailyActive)j.DailyStatus="Bị bùa — chờ nhập mã";continue;}
@@ -4121,6 +4225,7 @@ namespace TGLL {
   public static void ConfigureUpActivities(string id,bool repeatDaily,bool key,bool dungeon,bool izanami,bool quest,bool soncap){
    NativeJob j=Get(id);if(j==null||j.CloseRequested||j.CancelRequested)return;
    lock(DailyGate){
+    if(j.SequenceManaged){j.UpRequested=true;return;}
     if(j.MailQueueOnly||j.CloakQueueOnly||j.DungeonQueueOnly||j.IzanamiQueueOnly||j.QuestQueueOnly)throw new Exception("Dừng hàng chờ riêng trước khi bật Up và hoạt động.");
     bool[] plan={key,dungeon,izanami,quest,soncap};
     if(!j.PersistentUp){
@@ -4308,7 +4413,7 @@ namespace TGLL {
    if(enabled){
     j.BeastStartupSandStopped=false;
     if(j.ReceiveFlowActive||j.MailBusy||j.InboxBusy||j.MailEnabled||j.MailQueueOnly||j.CloakQueueOnly||j.SonCapEnabled)throw new Exception("Dừng hoạt động cũ trước khi chạy linh thú.");
-    if(j.DailyManaged)CancelDailyPriority(j);StopFarm(j);
+    if(j.DailyManaged&&!j.DailyApplying)CancelDailyPriority(j);if(!j.SequenceManaged)StopFarm(j);
     SetAutoQuest(id,false);SetReceiveKey(id,false);SetDungeonHigh(id,false);SetIzanami(id,false);j.CloseAfterKey=false;j.DungeonQueueOnly=false;j.IzanamiQueueOnly=false;j.QuestQueueOnly=true;
     SetAutoQuest(id,true);ResetBeastCombatZone(j);ClearBeastTeam(j);j.BeastSoloReady=false;j.QuestRemaining=-1;j.QuestStatus="Linh thú: tự nhận, đánh đúng quái và trả nhiệm vụ tại Rasa";
    }else{ResetBeastCombatZone(j);j.QuestQueueOnly=false;j.QuestEnabled=false;j.QuestFinished=false;j.QuestPauseAuto=false;j.TrainEnabled=false;j.GameAutoWanted=false;j.QuestStatus="Đã dừng linh thú";}

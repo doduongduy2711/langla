@@ -41,6 +41,7 @@ function Prepare-AutoAllGames {
  foreach($a in @(Get-AutoAllAccounts)){
   if(!$script:accountJobs.ContainsKey([string]$a.id)){continue};$j=Get-AccountJob $script:accountJobs[[string]$a.id]
   if(!($j -is [TGLL.NativeJob]) -or $j.CloseRequested -or $j.CancelRequested -or $j.State -in @('closed','failed','cancelled')){continue}
+  if($j.SequenceManaged){[TGLL.NativeBackend]::StopActivitySequence($j.Id)}
   if($j.BeastQuestEnabled){[TGLL.NativeBackend]::SetAutoBeast($j.Id,$false)}
   if($j.SonCapEnabled){[TGLL.NativeBackend]::SetSonCap($j.Id,$false)}
   [TGLL.NativeBackend]::SetAutoQuest($j.Id,$false);[TGLL.NativeBackend]::SetIzanami($j.Id,$false)

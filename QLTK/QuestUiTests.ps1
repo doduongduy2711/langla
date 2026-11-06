@@ -12,7 +12,7 @@ if(!$qs.autoQuest -or !$qfixture.QuestEnabled -or !$qfixture.QuestPauseAuto){thr
 $phaseField=[TGLL.NativeJob].GetField('QuestPhase',[Reflection.BindingFlags]'NonPublic,Instance');$phaseField.SetValue($qfixture,6);Sync-QuestPreferences
 if($phaseField.GetValue($qfixture) -ne 6){throw 'Refresh resets quest cycle'}
 $qs.receiveKey=$true;[TGLL.NativeBackend]::SetReceiveKey($qfixture.Id,$true);Sync-QuestPreferences
-if($qfixture.QuestEnabled -or !$qfixture.ReceiveKeyEnabled -or (Get-AccountLaunchMode $qs) -ne 'dungeon'){throw 'Key receipt must take priority over saved weekly preference'}
+if($qfixture.QuestEnabled -or !$qfixture.ReceiveKeyEnabled -or (Get-AccountLaunchMode $qs) -ne 'sequence'){throw 'Key plus weekly must select the sequential coordinator'}
 [TGLL.NativeBackend]::SetAutoQuest($qfixture.Id,$true)
 if($qfixture.QuestEnabled){throw 'Native quest setter bypasses key priority'}
 $qs.receiveKey=$false;[TGLL.NativeBackend]::SetReceiveKey($qfixture.Id,$false);Sync-QuestPreferences

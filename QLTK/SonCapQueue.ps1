@@ -156,6 +156,7 @@ function Sync-SonCapMinimumLevel {
   $entry=$script:soncapLevelCloseJobs[$j.Id]
   if(!$entry){
    if(!$j.SonCapEnabled -or !$j.TrainReady -or !$j.GameSettingsReady -or $j.CloseRequested -or $j.CancelRequested -or $j.ReconnectRequested -or $j.State -in @('failed','closed','cancelled','reconnecting')){continue}
+   if($j.SequenceManaged){continue}
    if($j.CharacterLevel -lt 1 -or $j.CharacterLevel -ge 50 -or $j.FarmPositionReadAt -eq [datetime]::MinValue -or ($now-$j.FarmPositionReadAt).TotalSeconds -lt 0 -or ($now-$j.FarmPositionReadAt).TotalSeconds -ge 10 -or $j.FarmPositionMap -ne $j.MapId -or !(Test-SonCapLevelProcessRunning $j)){continue}
    $entry=[pscustomobject]@{level=$j.CharacterLevel;pid=$j.ProcessId;operation=$null;attemptAt=[datetime]::MinValue;logged=$false};$script:soncapLevelCloseJobs[$j.Id]=$entry
   }

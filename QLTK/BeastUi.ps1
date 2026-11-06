@@ -111,6 +111,7 @@ function Sync-BeastPreferences {
   if(!$all -and !$a.PSObject.Properties['autoBeast']){continue}
   $key=[string]$a.id;$wanted=if($all){$all -eq 'beast'}else{[bool]$a.autoBeast};$j=$null
   if($script:accountJobs.ContainsKey($key)){$j=Get-AccountJob $script:accountJobs[$key]}
+  if(!$all -and $j -is [TGLL.NativeJob] -and ($j.SequenceManaged -or $j.SequenceFinished)){continue}
   $signature=$(if($j){$j.Id}else{''})+':'+$wanted
   if($script:beastApplied[$key] -eq $signature){continue}
   try{
