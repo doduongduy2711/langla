@@ -1,5 +1,5 @@
 ﻿if($gemPage.Text -ne 'Auto ghép đá 12' -or !$gemPage.AutoScroll -or !$gemReport.ReadOnly -or $tabs.TabPages.Count -ne 26){throw 'Gem combine tab missing'}
-if($gemStart.Text -ne 'Bật đã chọn' -or $gemStop.Text -ne 'Dừng đã chọn'){throw 'Gem combine actions missing'}
+if($gemStop.Text -ne 'Dừng đã chọn' -or @($gemPage.Controls | Where-Object {$_ -is [Windows.Forms.Button] -and $_.Text -eq 'Bật đã chọn'}).Count){throw 'Gem checkboxes must work without a start button'}
 Update-GemCombineUi
 if(!$gemReport.Text){throw 'Gem combine guidance missing'}
 if($gemCheck -isnot [Windows.Forms.CheckBox]){throw 'Per-account gem checkbox missing'}
@@ -31,4 +31,4 @@ try{
 }finally{
  $script:accountJobs=$gemOldJobs;$script:gemApplied=$gemOldApplied;foreach($n in $gemFns.Keys){Set-Item ('Function:\'+$n) $gemFns[$n]};Update-GemCombineUi
 }
-Write-Output 'PASS: Auto gem level 12 tab, selected-account controls and status guidance.'
+Write-Output 'PASS: gem 8/10/12 checkboxes save independently and start directly when ready, untick stops, no start button required, no duplicate start or insufficient-silver restart.'

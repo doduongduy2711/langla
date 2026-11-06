@@ -6,8 +6,8 @@ $script:gemLoading=$false;$script:gemApplied=@{}
 $gemCheck=New-Object Windows.Forms.CheckBox;$gemCheck.Text='Tự ghép đá 12 cho tài khoản đang chọn';$gemCheck.SetBounds(16,165,650,27);$gemPage.Controls.Add($gemCheck)
 $gem8Check=New-Object Windows.Forms.CheckBox;$gem8Check.Text='Tự ghép đá 8 (16 đá cấp 6)';$gem8Check.SetBounds(16,195,650,27);$gemPage.Controls.Add($gem8Check)
 $gem10Check=New-Object Windows.Forms.CheckBox;$gem10Check.Text='Tự ghép đá 10 (16 đá cấp 8)';$gem10Check.SetBounds(16,225,650,27);$gemPage.Controls.Add($gem10Check)
-$gemStart=New-Object Windows.Forms.Button;$gemStart.Text='Bật đã chọn';$gemStart.SetBounds(16,265,180,30);$gemPage.Controls.Add($gemStart)
-$gemStop=New-Object Windows.Forms.Button;$gemStop.Text='Dừng đã chọn';$gemStop.SetBounds(205,265,180,30);$gemPage.Controls.Add($gemStop)
+$null=Ui-Label 'Tích ô ghép đá là tự chạy cho acc đang xem; bỏ tích để dừng cấp đó.' $gemPage 16 265 480 35
+$gemStop=New-Object Windows.Forms.Button;$gemStop.Text='Dừng đã chọn';$gemStop.SetBounds(516,265,180,30);$gemPage.Controls.Add($gemStop)
 $gemReport=New-Object Windows.Forms.TextBox;$gemReport.Multiline=$true;$gemReport.ReadOnly=$true;$gemReport.ScrollBars='Vertical';$gemReport.SetBounds(16,310,680,180);$gemPage.Controls.Add($gemReport)
 function Get-GemCombineTargets($a){$mask=0;if([bool]$a.gemCombineEnabled){$mask+=4};if([bool]$a.gemCombine8Enabled){$mask+=1};if([bool]$a.gemCombine10Enabled){$mask+=2};return $mask}
 function Start-GemCombineJob($j,[int]$targets=4){[TGLL.NativeBackend]::ConfigureGemCombine($j.Id,$targets)}
@@ -33,9 +33,8 @@ function Set-GemCombineTargets($row,[int]$targets){
 function Update-GemCombineUi {
  $script:gemLoading=$true;try{$gem8Check.Enabled=$grid.SelectedRows.Count -gt 0;$gem10Check.Enabled=$grid.SelectedRows.Count -gt 0;$gem8Check.Checked=$grid.SelectedRows.Count -gt 0 -and [bool]$grid.SelectedRows[0].Tag.gemCombine8Enabled;$gem10Check.Checked=$grid.SelectedRows.Count -gt 0 -and [bool]$grid.SelectedRows[0].Tag.gemCombine10Enabled;$gemCheck.Enabled=$grid.SelectedRows.Count -gt 0;$gemCheck.Checked=$grid.SelectedRows.Count -gt 0 -and [bool]$grid.SelectedRows[0].Tag.gemCombineEnabled;$gemCheck.Text=if($grid.SelectedRows.Count){'Tự ghép đá 12: '+$grid.SelectedRows[0].Tag.username}else{'Tự ghép đá 12 cho tài khoản đang chọn'}}finally{$script:gemLoading=$false}
  $lines=@(foreach($row in $grid.Rows){$key=[string]$row.Tag.id;if(!$script:accountJobs.ContainsKey($key)){continue};$j=Get-AccountJob $script:accountJobs[$key];if($j -is [TGLL.NativeJob] -and ($j.GemEnabled -or $j.GemStatus -ne 'Tắt')){$row.Tag.username+': '+$j.GemStatus+' • Đã ghép: '+$j.GemCompleted}})
- $text=if($lines.Count){$lines -join "`r`n"}else{'Tích Chọn các acc đã vào game rồi bấm Bật đã chọn.'};if($gemReport.Text -ne $text){$gemReport.Text=$text}
+ $text=if($lines.Count){$lines -join "`r`n"}else{'Tích ô ghép đá 8, 10 hoặc 12 cho acc đang xem. Tự chạy khi vào game và đủ nguyên liệu; không cần bấm nút bật.'};if($gemReport.Text -ne $text){$gemReport.Text=$text}
 }
-$gemStart.Add_Click({$rows=@(Get-LaunchRows);$mask=0;if($gemCheck.Checked){$mask+=4};if($gem8Check.Checked){$mask+=1};if($gem10Check.Checked){$mask+=2};if(!$mask){$mask=4};foreach($row in $rows){Set-GemCombineTargets $row $mask};$status.Text='Đã chọn tự ghép đá cho '+$rows.Count+' acc; tự chạy khi vào game.';Update-GemCombineUi})
 $gemStop.Add_Click({foreach($row in @(Get-LaunchRows)){Set-GemCombineTargets $row 0};Update-GemCombineUi})
 $gemCheck.Add_CheckedChanged({if($script:gemLoading -or !$grid.SelectedRows.Count){return};Set-GemCombinePreference $grid.SelectedRows[0] $gemCheck.Checked;Update-GemCombineUi})
 $grid.Add_SelectionChanged({if($tabs.SelectedTab -eq $gemPage){Update-GemCombineUi}});Update-GemCombineUi
