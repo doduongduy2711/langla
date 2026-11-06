@@ -2038,6 +2038,9 @@ namespace TGLL {
         }
         static void PumpTraining(Remote r,long data,NativeJob j){
             if(data==0)return;
+            // A replacement process has a new native channel. The idle marker from
+            // its previous process must never prevent the initial readiness scan.
+            if(!j.TrainReady){j.TrainIdleApplied=false;j.SkillScanRequested=true;}
             if(j.HangingAwaiting&&(!j.GameAutoEnabled||CuongThiControlsAuto(j)&&!CuongThiWantsAuto(j,DateTime.UtcNow)))r.Write(data+12,new byte[4]);
             bool focus=j.ThiQuyCombatActive&&ThiQuyPriorityAllowed(j);SkillInfo hanging=HangingLevelOne(j);bool overlay=hanging!=null;
             if(!focus&&!overlay&&!j.TrainEnabled&&!j.SkillScanRequested&&j.TrainIdleApplied)return;
@@ -2922,7 +2925,7 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                     catch(Exception e){
                         if(attempt>=3||j.CancelRequested||j.CloseRequested||!RetryStartup(j.Stage,e))throw;
                         // Run has closed the failed process before returning here.
-                        j.ProcessId=0;j.ReadyPhase=0;j.TrainReady=false;j.GameSettingsReady=false;
+                        j.ProcessId=0;j.ReadyPhase=0;ResetStartupTraining(j);j.GameSettingsReady=false;
                         j.Error=FailureCode(e);j.State="retrying";j.StartAttempts=attempt+1;
                         Log(j,"startup_retry",",\"attempt_failed\":"+attempt+",\"next_attempt\":"+(attempt+1)+",\"stage\":"+Quote(j.Stage)+",\"error\":"+Quote(j.Error));
                         wait(j,attempt*1000);
@@ -2931,6 +2934,12 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
             }catch(OperationCanceledException){j.Error="cancelled";j.State="cancelled";}
             catch(Exception e){j.Error=FailureCode(e);j.State="failed";System.ComponentModel.Win32Exception win=e as System.ComponentModel.Win32Exception;Log(j,"failure",",\"attempts\":"+j.StartAttempts+",\"stage\":"+Quote(j.Stage)+",\"error\":"+Quote(j.Error)+",\"exception_type\":"+Quote(e.GetType().Name)+",\"stack\":"+Quote(e.StackTrace)+",\"win32_code\":"+(win==null?0:win.NativeErrorCode));}
             finally{j.Password=null;if(j.CloseRequested){j.Error="";j.State="closed";}}
+        }
+        internal static void ResetStartupTraining(NativeJob j){
+            j.TrainReady=false;j.TrainIdleApplied=false;j.SkillScanRequested=true;
+            j.SkillGeneration=0;j.Skills=new SkillInfo[0];j.LastSkills="";
+            j.TrainAttempts=0;j.TrainStatus=0;j.TrainTargetId=-1;j.TrainTargetHp=0;
+            j.HangingAwaiting=false;j.LevelOneNextAt=DateTime.MinValue;
         }
         internal static T ReadStartupModules<T>(Func<T> read) where T:class {
             try{return read();}
