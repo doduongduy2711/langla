@@ -50,7 +50,7 @@ $arrangeTimer.Add_Tick({
 })
 $form.Add_Disposed({$arrangeTimer.Stop();$arrangeTimer.Dispose()})
 $buttons[0].Text='Thêm';$buttons[1].Text='Sửa';$buttons[2].Text='Xóa';$buttons[6].Text='Nhập CSV';$bulkAccountButton.Text='Thêm nhiều'
-$bulkOpen.Text='Mở game';$closeAllButton.Text='Tắt tất cả'
+$bulkOpen.Text='Mở đã chọn';$closeAllButton.Text='Tắt tất cả'
 $hideGamesButton=Ui-NewButton 'Ẩn tất cả' {Set-GameWindowsVisible $false}
 $showGamesButton=Ui-NewButton 'Hiện tất cả' {Set-GameWindowsVisible $true}
 function Set-GameWindowsVisible([bool]$visible) {
