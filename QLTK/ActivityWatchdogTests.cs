@@ -50,6 +50,16 @@ class ActivityWatchdogTests {
    AllCloseOptions(true);var daily=J("",59);daily.DailyActive=true;daily.DailyStage=stage;daily.CloseAfterKey=true;C(NativeBackend.ActivityTimeoutCloseEnabled(daily),"daily stage failed to use selected activity option "+stage);
    CloseOption(stages[stage-1],false);if(stage==1)daily.CloseAfterKey=false;C(!NativeBackend.ActivityTimeoutCloseEnabled(daily),"daily stage bypassed unchecked option "+stage);
   }
+  // A sequence reservation is an intentional wait, not an activity fault.
+  foreach(int stage in new[]{3,5}){
+   AllCloseOptions(true);var waiting=J("",59);waiting.SequenceManaged=true;waiting.DailyManaged=true;waiting.DailyActive=true;waiting.DailyStage=stage;waiting.DailyExecuting=false;
+   waiting.ActivityVillageAt=t.AddMinutes(-20);waiting.ActivityFaultAt=t.AddMinutes(-20);waiting.ActivityRetryPending=true;waiting.ActivityWatchStatus="old fault";
+   int before=closed;Tick(waiting,0);Tick(waiting,1800);
+   C(closed==before&&!waiting.ActivityTimeoutClosed&&!waiting.ActivityRetryPending&&waiting.ActivityVillageAt==DateTime.MinValue&&waiting.ActivityFaultAt==DateTime.MinValue,"legitimate sequence wait timed out stage "+stage);
+   waiting.DailyExecuting=true;if(stage==3)waiting.IzanamiEnabled=true;else waiting.SonCapEnabled=true;
+   Tick(waiting,1801);Tick(waiting,2101);C(waiting.ActivityRetryPending,"started activity lost 5-minute retry stage "+stage);
+   Tick(waiting,2401);C(closed==before+1&&waiting.ActivityTimeoutClosed,"started activity lost fresh 10-minute deadline stage "+stage);
+  }
   AllCloseOptions(false);
   Console.WriteLine("PASS: timeout closing follows each activity checkbox, preserves 5-minute retry, rejects other activities' options and rechecks unchecking during close/read/retry. Key per-account and daily stages covered.");
   Console.WriteLine("PASS: four activity watchdogs; exact 5/10-minute boundaries; retry preserves deadline/rounds/current dungeon; actual recovery, village departure/switch, manual stop, idle/completed/healthy combat and Up selection. Village-only close, fresh native map check and transient settings recovery. No real game closed.");

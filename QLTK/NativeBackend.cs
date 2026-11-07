@@ -4504,6 +4504,8 @@ namespace TGLL {
     public static partial class NativeBackend {
         // Timers belong to the fault episode, not to the command being retried.
         internal static string WatchedActivity(NativeJob j){
+            // The sequence has not started this stage: waiting for teammates/capacity is intentional.
+            if(j.SequenceManaged&&!j.DailyExecuting)return "";
             if(j.BeastQuestEnabled||j.MailQueueOnly||j.CloakQueueOnly)return "";
             if(j.SonCapEnabled&&!j.SonCapFinished&&!j.SonCapNoAttempts)return "soncap";
             if(j.IzanamiEnabled&&!j.SonCapEnabled&&!j.IzanamiRunFinished)return "izanami";
