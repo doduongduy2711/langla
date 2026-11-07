@@ -77,6 +77,19 @@ namespace TGLL {
             }}finally{proxy.Stop();Marshal.FreeHGlobal(map);}
         }
         public static string Run(string logDirectory){
+            // All workers share one budget even with many immediately due clients.
+            int budgetCalls=0;bool endBudget=false;
+            var budgetWatch=Stopwatch.StartNew();
+            using(var paced=new ClientPollScheduler(4)){
+                for(int i=0;i<128;i++)paced.Add(delegate(){Interlocked.Increment(ref budgetCalls);return !Volatile.Read(ref endBudget);},delegate(){return 10;});
+                Thread.Sleep(400);
+                long observedMs=budgetWatch.ElapsedMilliseconds;
+                int observed=Volatile.Read(ref budgetCalls);
+                Console.WriteLine("Shared dispatch budget: "+observed+" callbacks / "+observedMs+" ms with 128 clients.");
+                Assert(observed>=40,"Global pacing starved ready clients");
+                Assert(observed<=observedMs/2+8,"Workers exceeded the shared dispatch budget");
+                Volatile.Write(ref endBudget,true);
+            }
             const int clients=200,workers=4;
             int active=0,peak=0,overlap=0,finished=0;
             int[] running=new int[clients],calls=new int[clients];

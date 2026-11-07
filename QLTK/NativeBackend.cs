@@ -18,7 +18,7 @@ namespace TGLL {
         sealed class Entry {internal Func<bool> Tick;internal Func<int> Interval;internal long Due;internal int Phase;}
         readonly object gate=new object();readonly List<Entry> pending=new List<Entry>();
         readonly List<Thread> workers=new List<Thread>();readonly Stopwatch clock=Stopwatch.StartNew();
-        int count,sequence;bool stopping;
+        int count,sequence,dispatchRemaining;long nextDispatch;bool stopping;
         internal int Count {get{lock(gate)return count;}}
         internal ClientPollScheduler(int concurrency){
             if(concurrency<1)throw new ArgumentOutOfRangeException("concurrency");
@@ -34,8 +34,15 @@ namespace TGLL {
                     if(stopping)return;
                     int next=-1;for(int i=0;i<pending.Count;i++)if(next<0||pending[i].Due<pending[next].Due)next=i;
                     if(next<0){Monitor.Wait(gate);continue;}
-                    long wait=pending[next].Due-clock.ElapsedMilliseconds;
+                    // Share a dispatch budget across workers when many games are due.
+                    long now=clock.ElapsedMilliseconds;
+                    bool paced=count>=64;
+                    // Millisecond sleeps round up on Windows. Use a bounded 16 ms
+                    // window so pacing works without raising the system timer rate.
+                    if(paced&&now>=nextDispatch){dispatchRemaining=count>=256?5:8;nextDispatch=now+16;}
+                    long wait=Math.Max(pending[next].Due,paced&&dispatchRemaining<=0?nextDispatch:0)-now;
                     if(wait>0){Monitor.Wait(gate,(int)Math.Min(wait,1000));continue;}
+                    if(paced)dispatchRemaining--;
                     entry=pending[next];pending.RemoveAt(next);break;
                 }}
                 bool again=false;int delay=150;

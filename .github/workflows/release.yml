@@ -77,6 +77,9 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Activity sequence compilation failed'}
           ./ActivitySequenceTests.exe
           if($LASTEXITCODE -ne 0){throw 'Activity sequence tests failed'}
+      - name: Shared client polling budget and proxy checks
+        shell: powershell
+        run: ./QLTK/tests/Run-ClientPollingTests.ps1
       - name: Startup retry readiness checks
         shell: powershell
         run: |
