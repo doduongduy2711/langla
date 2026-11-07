@@ -2,7 +2,7 @@
 $script:autoAllRun=$null;$script:loadingAutoAll=$false;$script:autoAllPumping=$false
 $script:autoAllKinds=@('soncap','izanami','dungeon','quest','beast')
 $script:autoAllNames=@('Sơn Cáp','Cấm thuật','Địa cung','Nhiệm vụ tuần hoàn','Linh thú')
-$autoAllCheck=New-Object Windows.Forms.CheckBox;$autoAllCheck.Appearance='Button';$autoAllCheck.Text='Auto tất cả';$autoAllCheck.TextAlign='MiddleCenter';$autoAllCheck.SetBounds(235,84,115,22);$options.Controls.Add($autoAllCheck)
+$autoAllCheck=New-Object Windows.Forms.CheckBox;$autoAllCheck.Appearance='Button';$autoAllCheck.Text='Auto tất cả';$autoAllCheck.TextAlign='MiddleCenter';$autoAllCheck.SetBounds(232,83,105,20);$options.Controls.Add($autoAllCheck)
 $autoAllTip=New-Object Windows.Forms.ToolTip
 $autoAllTip.SetToolTip($autoAllCheck,'Chọn tất cả acc: Sơn Cáp → Cấm thuật → Địa cung → Nhiệm vụ tuần hoàn → Linh thú. Tắt game sau mỗi hoạt động; chờ đóng hết mới chuyển đợt.')
 function Write-AutoAllProgress([string]$eventName,[string]$kind){

@@ -1,7 +1,7 @@
 ﻿$script:privacyPath=Join-Path $script:dataDir 'privacy.json'
 $script:accountPrivacy=New-Object TGLL.AccountPrivacy($grid)
 $hideAccountInfo=New-Object Windows.Forms.CheckBox
-$hideAccountInfo.Text='Ẩn thông tin';$hideAccountInfo.SetBounds(232,85,105,22)
+$hideAccountInfo.Text='Ẩn thông tin';$hideAccountInfo.SetBounds(154,105,120,22)
 $options.Controls.Add($hideAccountInfo)
 if(!$UiTest -and (Test-Path -LiteralPath $script:privacyPath)){
     try{$hideAccountInfo.Checked=[bool](Read-JsonData $script:privacyPath).hideAccountInfo}catch{$status.Text='Không đọc được tùy chọn ẩn thông tin.'}

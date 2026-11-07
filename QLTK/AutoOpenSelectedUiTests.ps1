@@ -4,7 +4,7 @@
     $blocked=$grid.Rows[$grid.Rows.Add()];$extra=$grid.Rows[$grid.Rows.Add()]
     $blocked.Tag=[pscustomobject]@{id='auto-open-blocked'}
     $extra.Tag=[pscustomobject]@{id='auto-open-extra'}
-    $added=@();$oldLimit=$autoOpenSelectedLimit.Value
+    $added=@();$oldLimit=$autoOpenSelectedLimit.Value;$oldClientSize=$form.ClientSize
     $oldJobs=$script:accountJobs;$oldWindows=$script:accountWindowPids;$oldBeast=$script:beastBatches
     $oldSon=$script:soncapBatches;$oldIzanami=$script:izanamiBatches;$oldQuest=$script:questBatches;$oldDungeon=$script:dungeonBatches
     $oldRuns=@($script:mailRun,$script:distributionRun,$script:cloakRun,$script:chestRun)
@@ -22,11 +22,20 @@
     }
     try{
         if($autoOpenSelected.Checked -or $autoOpenSelected.Bounds.Right -gt $options.ClientSize.Width -or $autoOpenSelectedLimit.Bounds.Right -gt $options.ClientSize.Width -or $autoOpenSelectedLimit.ReadOnly){throw 'Auto open checkbox/limit layout invalid'}
-        Resize-UiLayout
-        foreach($control in @($autoReconnect,$autoOpenSelectedLimit,$hideAccountInfo)){
-            if($control.Bounds.IntersectsWith($autoOpenSelected.Bounds)){throw 'Another control covers the auto-open tick or its hit area'}
+        Initialize-AutoHideUi
+        foreach($size in @((New-Object Drawing.Size(900,640)),(New-Object Drawing.Size(1100,800)))){
+            $form.ClientSize=$size;Resize-UiLayout
+            $controls=@($options.Controls | Where-Object {$_ -ne $optionHint})
+            for($a=0;$a -lt $controls.Count;$a++){
+                $control=$controls[$a]
+                if($control.Right -gt $options.ClientSize.Width -or $control.Bottom -gt $options.ClientSize.Height){throw "Option clipped: $($control.Text)"}
+                for($b=$a+1;$b -lt $controls.Count;$b++){
+                    if($control.Bounds.IntersectsWith($controls[$b].Bounds)){throw "Options overlap: $($control.Text) and $($controls[$b].Text)"}
+                }
+            }
+            if($options.Bottom -ge $grid.Top){throw 'Options overlap the account grid'}
         }
-        if($hideAccountInfo.Bounds.IntersectsWith($autoOpenSelectedLimit.Bounds) -or $hideAccountInfo.Right -gt $options.ClientSize.Width){throw 'Privacy checkbox overlaps the auto-open limit or is clipped'}
+        $form.ClientSize=$oldClientSize;Resize-UiLayout
         $autoOpenSelectedLimit.Value=0
         $original.Cells['pick'].Value=$false;$blocked.Cells['pick'].Value=$true;$extra.Cells['pick'].Value=$false
         $autoOpenSelected.Checked=$true;Invoke-AutoOpenSelected
@@ -66,8 +75,9 @@
         $script:accountJobs=$oldJobs;$script:accountWindowPids=$oldWindows;$script:beastBatches=$oldBeast
         $script:soncapBatches=$oldSon;$script:izanamiBatches=$oldIzanami;$script:questBatches=$oldQuest;$script:dungeonBatches=$oldDungeon
         $script:mailRun,$script:distributionRun,$script:cloakRun,$script:chestRun=$oldRuns
+        $form.ClientSize=$oldClientSize;Resize-UiLayout
         foreach($row in $added){$grid.Rows.Remove($row)}
         $grid.Rows.Remove($extra);$grid.Rows.Remove($blocked);$original.Cells['pick'].Value=$oldPick
     }
 }
-Write-Output 'PASS: Visible auto-open tick, no duplicate requests, pause at cap with the tick retained, and resume when the limit increases.'
+Write-Output 'PASS: All options fit without overlap at compact and wide sizes; auto-open pauses at cap and resumes when the limit increases.'

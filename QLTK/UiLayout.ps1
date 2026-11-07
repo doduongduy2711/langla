@@ -69,32 +69,32 @@ $basic=Ui-Group 'Thông tin cơ bản' $form
 $summaryLabel=Ui-Label '' $basic 12 19 190 57
 $clearUpAllButton=Ui-NewButton 'Bỏ chọn Up all' {Clear-FarmAllUp};Ui-Place $clearUpAllButton $basic 12 81 183 24
 $options=Ui-Group 'Tùy chọn' $form
-Ui-Place $autoLoginCheck $options 12 19 170 22
+Ui-Place $autoLoginCheck $options 12 17 170 20
 $autoLoginCheck.Checked=$true;$autoLoginCheck.Enabled=$false
-Ui-Place $show $options 190 19 145 22
+Ui-Place $show $options 190 17 145 20
 $optionHint=Ui-Label 'Nhận chìa: bật trong tab Auto địa cung' $options 12 42 365 20
 $optionHint.ForeColor=[Drawing.Color]::FromArgb(65,65,65)
 $optionHint.Visible=$false
-$autoReconnect=New-Object Windows.Forms.CheckBox;$autoReconnect.Text='Tự đăng nhập lại khi mất kết nối';$autoReconnect.SetBounds(12,40,203,22)
+$autoReconnect=New-Object Windows.Forms.CheckBox;$autoReconnect.Text='Tự đăng nhập lại khi mất kết nối';$autoReconnect.SetBounds(12,39,203,20)
 $autoReconnect.Checked=$true;$autoReconnect.Enabled=$false;$script:settings.autoReconnect=$true
 $options.Controls.Add($autoReconnect);[TGLL.NativeBackend]::AutoReconnectEnabled=$autoReconnect.Checked
 $autoReconnect.Add_CheckedChanged({[TGLL.NativeBackend]::AutoReconnectEnabled=$autoReconnect.Checked;$script:settings.autoReconnect=$autoReconnect.Checked;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}})
 
-$null=Ui-Label 'Delay mở tab (giây):' $options 12 82 130 22
-$launchDelay=New-Object Windows.Forms.NumericUpDown;$launchDelay.Minimum=0;$launchDelay.Maximum=3600;$launchDelay.DecimalPlaces=1;$launchDelay.Increment=0.1;$launchDelay.SetBounds(145,80,80,24)
+$null=Ui-Label 'Delay mở tab (giây):' $options 12 85 130 18
+$launchDelay=New-Object Windows.Forms.NumericUpDown;$launchDelay.Minimum=0;$launchDelay.Maximum=3600;$launchDelay.DecimalPlaces=1;$launchDelay.Increment=0.1;$launchDelay.SetBounds(145,83,80,20)
 if($script:settings.launchDelaySeconds){$launchDelay.Value=[Math]::Max([decimal]0,[Math]::Min([decimal]3600,[decimal]$script:settings.launchDelaySeconds))};$options.Controls.Add($launchDelay)
 [TGLL.NativeBackend]::SetLaunchDelayMs([int]($launchDelay.Value*1000))
 $launchDelay.Add_ValueChanged({$script:settings.launchDelaySeconds=[double]$launchDelay.Value;[TGLL.NativeBackend]::SetLaunchDelayMs([int]($launchDelay.Value*1000));if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}})
-$null=Ui-Label 'Số acc mở cùng lúc:' $options 12 61 130 20
-$launchConcurrency=New-Object Windows.Forms.NumericUpDown;$launchConcurrency.Minimum=1;$launchConcurrency.Maximum=100;$launchConcurrency.Value=6;$launchConcurrency.SetBounds(145,58,80,22)
+$null=Ui-Label 'Số acc mở cùng lúc:' $options 12 63 130 18
+$launchConcurrency=New-Object Windows.Forms.NumericUpDown;$launchConcurrency.Minimum=1;$launchConcurrency.Maximum=100;$launchConcurrency.Value=6;$launchConcurrency.SetBounds(145,61,80,20)
 if($script:settings.launchConcurrency){$launchConcurrency.Value=[Math]::Max(1,[Math]::Min(100,[int]$script:settings.launchConcurrency))};$options.Controls.Add($launchConcurrency)
 [TGLL.NativeBackend]::SetLaunchConcurrency([int]$launchConcurrency.Value)
 $launchConcurrency.Add_ValueChanged({$script:settings.launchConcurrency=[int]$launchConcurrency.Value;[TGLL.NativeBackend]::SetLaunchConcurrency([int]$launchConcurrency.Value);if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}})
 $launchDelayTip=New-Object Windows.Forms.ToolTip;$launchDelayTip.SetToolTip($launchDelay,'Khoảng cách giữa các lần mở game. 0 = không thêm khoảng chờ.');$launchDelayTip.SetToolTip($launchConcurrency,'Số tài khoản đang mở/đăng nhập song song. Giảm giá trị không đóng game đang mở.')
 $form.Add_Disposed({$launchDelayTip.Dispose()})
 $autoOpenSelected=New-Object Windows.Forms.CheckBox;$autoOpenSelected.Text='Tự mở đã chọn'
-Ui-Place $autoOpenSelected $options 220 40 118 20
-$null=Ui-Label 'Tối đa:' $options 232 63 44 20
+Ui-Place $autoOpenSelected $options 220 39 118 20
+$null=Ui-Label 'Tối đa:' $options 232 63 44 18
 $autoOpenSelectedLimit=New-Object Windows.Forms.NumericUpDown
 $autoOpenSelectedLimit.Minimum=0;$autoOpenSelectedLimit.Maximum=10000
 $autoOpenSelectedLimit.AccessibleName='Số acc online tối đa khi tự mở'
@@ -102,7 +102,7 @@ $savedAutoOpenLimit=0
 if([int]::TryParse([string]$script:settings.autoOpenSelectedLimit,[ref]$savedAutoOpenLimit)){
     $autoOpenSelectedLimit.Value=[Math]::Max(0,[Math]::Min(10000,$savedAutoOpenLimit))
 }
-Ui-Place $autoOpenSelectedLimit $options 276 62 60 22
+Ui-Place $autoOpenSelectedLimit $options 276 61 60 20
 $launchDelayTip.SetToolTip($autoOpenSelected,'Tạm dừng khi đủ giới hạn. Tăng Tối đa để mở thêm acc đã chọn mà không cần tích lại. Acc đã xong hoặc đã tắt không tự mở lại.')
 $launchDelayTip.SetToolTip($autoOpenSelectedLimit,'Tổng số game đang mở và acc đã xếp hàng. 0 = không giới hạn.')
 $autoOpenSelectedLimit.Add_ValueChanged({
@@ -384,9 +384,10 @@ function Resize-UiLayout {
     $w=$form.ClientSize.Width;$h=$form.ClientSize.Height
     $form.SuspendLayout()
     try {
-    $top.SetBounds(6,6,340,106);$basic.SetBounds(350,3,200,109);$options.SetBounds(556,3,($w-562),109)
-    $gridHeight=[Math]::Max(180,[Math]::Min(320,[int](($h-380)*0.75)));$tabTop=118+$gridHeight+8
-    $grid.SetBounds(6,118,($w-12),$gridHeight)
+    $top.SetBounds(6,6,340,106);$basic.SetBounds(350,3,200,109);$options.SetBounds(556,3,($w-562),131)
+    $gridTop=$options.Bottom+6
+    $gridHeight=[Math]::Max(180,[Math]::Min(320,[int](($h-380)*0.75)));$tabTop=$gridTop+$gridHeight+8
+    $grid.SetBounds(6,$gridTop,($w-12),$gridHeight)
     $tabs.SetBounds(6,$tabTop,($w-268),($h-$tabTop-101));$detailsGroup.SetBounds(($w-256),$tabTop,250,($h-$tabTop-101))
     $bottom.SetBounds(6,($h-93),($w-12),63)
     $columns=[Math]::Max(1,[Math]::Min(6,$bottomButtons.Count))
@@ -449,7 +450,7 @@ function Initialize-AutoHideUi {
     if($null -ne $script:autoHideAfterLogin){return}
 $script:autoHideDone=@{};$script:autoHideRetry=@{};$script:autoHideCursor=0
 $script:autoHideAfterLogin=New-Object Windows.Forms.CheckBox
-$autoHideAfterLogin.Text='Ẩn sau khi bật';$autoHideAfterLogin.SetBounds(235,61,115,23)
+$autoHideAfterLogin.Text='Ẩn sau khi bật';$autoHideAfterLogin.SetBounds(12,105,135,22)
 $autoHideAfterLogin.Checked=[bool]$script:settings.autoHideAfterLogin;$options.Controls.Add($autoHideAfterLogin)
 $launchDelayTip.SetToolTip($autoHideAfterLogin,'Tự ẩn cửa sổ game sau khi đăng nhập thành công. Bấm Hiện để mở lại; mỗi phiên chỉ tự ẩn một lần.')
 
