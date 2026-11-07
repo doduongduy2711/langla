@@ -80,6 +80,9 @@ jobs:
       - name: Shared client polling budget and proxy checks
         shell: powershell
         run: ./QLTK/tests/Run-ClientPollingTests.ps1
+      - name: Client tab window restore checks
+        shell: powershell
+        run: ./scripts/Test-ClientTabs.ps1
       - name: Startup retry readiness checks
         shell: powershell
         run: |

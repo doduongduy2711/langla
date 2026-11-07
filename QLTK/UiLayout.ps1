@@ -63,7 +63,16 @@ function Set-GameWindowsVisible([bool]$visible) {
     } catch {Show-Error 'Không đổi được trạng thái cửa sổ game.'}
 }
 $upAllButton=Ui-NewButton 'Chọn Up all' {Start-FarmAllOpen}
-$topButtons=@($bulkOpen,$buttons[0],$buttons[2],$refreshButton,$closeAllButton,$buttons[1],$selectAll,$clearAll,$sortButton,$settingsButton,$hideGamesButton,$showGamesButton,$upAllButton,$bulkAccountButton)
+$clientTabsButton=Ui-NewButton 'Gom client' {
+    try {
+        if($script:clientTabsProcess -and !$script:clientTabsProcess.HasExited){$status.Text='Cửa sổ gom client đang mở.';return}
+        $tabsScript=Join-Path $PSScriptRoot 'ClientTabs.ps1'
+        $argsText='-NoProfile -STA -ExecutionPolicy Bypass -File "'+$tabsScript+'" -DataDirectory "'+$script:dataDir+'"'
+        $script:clientTabsProcess=Start-Process -FilePath (Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe') -ArgumentList $argsText -WindowStyle Hidden -PassThru
+        $status.Text='Đang mở cửa sổ client theo tab.'
+    } catch {Show-Error $_.Exception.Message}
+}
+$topButtons=@($bulkOpen,$buttons[0],$buttons[2],$refreshButton,$closeAllButton,$buttons[1],$selectAll,$clearAll,$sortButton,$settingsButton,$hideGamesButton,$showGamesButton,$upAllButton,$bulkAccountButton,$clientTabsButton)
 for($i=0;$i -lt $topButtons.Count;$i++) {Ui-Place $topButtons[$i] $top (($i%4)*85) ([int][Math]::Floor($i/4)*26) 81 23}
 $basic=Ui-Group 'Thông tin cơ bản' $form
 $summaryLabel=Ui-Label '' $basic 12 19 190 57
