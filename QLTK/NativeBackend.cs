@@ -10,8 +10,45 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace TGLL {
+    // One outstanding callback per client. Workers sleep on the queue, not per game.
+    internal sealed class ClientPollScheduler : IDisposable {
+        sealed class Entry {internal Func<bool> Tick;internal Func<int> Interval;internal long Due;internal int Phase;}
+        readonly object gate=new object();readonly List<Entry> pending=new List<Entry>();
+        readonly List<Thread> workers=new List<Thread>();readonly Stopwatch clock=Stopwatch.StartNew();
+        int count,sequence;bool stopping;
+        internal int Count {get{lock(gate)return count;}}
+        internal ClientPollScheduler(int concurrency){
+            if(concurrency<1)throw new ArgumentOutOfRangeException("concurrency");
+            for(int i=0;i<concurrency;i++){var worker=new Thread(Consume);worker.IsBackground=true;worker.Name="QLTK client poll "+i;workers.Add(worker);worker.Start();}
+        }
+        internal void Add(Func<bool> tick,Func<int> interval){
+            if(tick==null||interval==null)throw new ArgumentNullException();
+            lock(gate){if(stopping)throw new ObjectDisposedException("ClientPollScheduler");int phase=(sequence++*37)%101;pending.Add(new Entry{Tick=tick,Interval=interval,Phase=phase,Due=clock.ElapsedMilliseconds+phase});count++;Monitor.PulseAll(gate);}
+        }
+        void Consume(){
+            while(true){Entry entry;
+                lock(gate){while(true){
+                    if(stopping)return;
+                    int next=-1;for(int i=0;i<pending.Count;i++)if(next<0||pending[i].Due<pending[next].Due)next=i;
+                    if(next<0){Monitor.Wait(gate);continue;}
+                    long wait=pending[next].Due-clock.ElapsedMilliseconds;
+                    if(wait>0){Monitor.Wait(gate,(int)Math.Min(wait,1000));continue;}
+                    entry=pending[next];pending.RemoveAt(next);break;
+                }}
+                bool again=false;int delay=150;
+                try{again=entry.Tick();if(again)delay=Math.Max(10,entry.Interval());}catch{again=false;}
+                lock(gate){
+                    // Schedule from completion: overdue clients never generate catch-up bursts.
+                    if(again&&!stopping){entry.Due=clock.ElapsedMilliseconds+delay+entry.Phase%17;pending.Add(entry);}else count--;
+                    Monitor.PulseAll(gate);
+                }
+            }
+        }
+        public void Dispose(){lock(gate){stopping=true;count-=pending.Count;pending.Clear();Monitor.PulseAll(gate);}foreach(Thread worker in workers)worker.Join(1000);}
+    }
     // Bound startup concurrency; a slow login/popup must not block every account.
     internal sealed class LaunchQueue : IDisposable {
         readonly BlockingCollection<NativeJob> pending;readonly HashSet<NativeJob> urgent=new HashSet<NativeJob>();
@@ -120,12 +157,17 @@ namespace TGLL {
                 if(!QueryFullProcessImageName(handle,0,buffer,ref size))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
                 long creation,exit,kernel,user;
                 if(!GetProcessTimes(handle,out creation,out exit,out kernel,out user))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                if(exit!=0)throw new InvalidOperationException("native_process_exited");
                 path=System.IO.Path.GetFullPath(buffer.ToString());started=DateTime.FromFileTimeUtc(creation).Ticks;
             }finally{CloseIdentityHandle(handle);}
         }
         static bool Matches(Process process,Identity game){
             if(process.HasExited)return false;
             string actual;long started;ReadIdentity(process.Id,out actual,out started);
+            return started==game.Started&&String.Equals(actual,game.Path,StringComparison.OrdinalIgnoreCase);
+        }
+        static bool MatchesIdentity(Identity game){
+            string actual;long started;ReadIdentity(game.Id,out actual,out started);
             return started==game.Started&&String.Equals(actual,game.Path,StringComparison.OrdinalIgnoreCase);
         }
         [DllImport("kernel32.dll",EntryPoint="OpenProcess",SetLastError=true)]static extern IntPtr OpenProcessIdentity(int access,bool inherit,int pid);
@@ -186,31 +228,29 @@ namespace TGLL {
             EnumWindows(callback,IntPtr.Zero);GC.KeepAlive(callback);return found;
         }
         public static VisibilityGamesResult SetAllVisible(bool visible){
-            lock(Gate){
+            List<Identity> snapshot;lock(Gate){snapshot=new List<Identity>(games.Values);}
+            {
                 VisibilityGamesResult result=new VisibilityGamesResult();
-                foreach(Identity game in games.Values){
-                    try{using(Process p=Process.GetProcessById(game.Id)){
-                        if(!Matches(p,game))continue;
-                        IntPtr window=FindGameWindow(p.Id);if(window==IntPtr.Zero){result.NotReady++;continue;}
+                foreach(Identity game in snapshot){
+                    try{
+                        if(!MatchesIdentity(game))continue;
+                        IntPtr window=FindGameWindow(game.Id);if(window==IntPtr.Zero){result.NotReady++;continue;}
                         if(IsWindowVisible(window)==visible){result.Changed++;continue;}
                         if(ShowWindowAsync(window,visible?4:0))result.Changed++;else result.Failed++;
-                    }}catch(ArgumentException){}catch{result.Failed++;}
+                    }catch(ArgumentException){}catch{result.Failed++;}
                 }
                 return result;
             }
         }
         static IntPtr ValidatedWindow(Identity game){
-            using(Process p=Process.GetProcessById(game.Id)){
-                if(!Matches(p,game))return IntPtr.Zero;
-                return FindGameWindow(p.Id);
-            }
+            if(!MatchesIdentity(game))return IntPtr.Zero;
+            return FindGameWindow(game.Id);
         }
         // -1 means unavailable, 0 hidden, 1 visible. Query the actual window,
         // including changes made by Hide/Show All or outside this UI.
         public static int WindowVisibility(int pid){
-            lock(Gate){Identity game;if(!games.TryGetValue(pid,out game))return -1;
-                try{IntPtr window=ValidatedWindow(game);return window==IntPtr.Zero?-1:(IsWindowVisible(window)?1:0);}catch{return -1;}
-            }
+            Identity game;lock(Gate){if(!games.TryGetValue(pid,out game))return -1;}
+            try{IntPtr window=ValidatedWindow(game);return window==IntPtr.Zero?-1:(IsWindowVisible(window)?1:0);}catch{return -1;}
         }
         // Chụp danh sách một lần; kiểm tra identity ngoài khóa để không giữ UI.
         // Chỉ phục vụ hiển thị: dùng PID đã kiểm tra, quét cửa sổ một lần cho cả bảng.
@@ -231,24 +271,26 @@ namespace TGLL {
             List<Identity> snapshot;lock(Gate){snapshot=new List<Identity>(games.Values);}
             List<int> live=new List<int>();
             foreach(Identity game in snapshot){
-                try{using(Process p=Process.GetProcessById(game.Id)){
-                    if(Matches(p,game))live.Add(game.Id);else RemoveClosedIdentity(game.Id,game);
-                }}catch(ArgumentException){RemoveClosedIdentity(game.Id,game);}catch{}
+                try{
+                    if(MatchesIdentity(game)){live.Add(game.Id);if(processReadScope!=null)processReadScope.Add(game);}else RemoveClosedIdentity(game.Id,game);
+                }catch(InvalidOperationException){RemoveClosedIdentity(game.Id,game);}catch(ArgumentException){RemoveClosedIdentity(game.Id,game);}catch{}
             }
             return live.ToArray();
         }
         public static bool IsRunning(int pid){
-            lock(Gate){Identity game;if(!games.TryGetValue(pid,out game))return false;
-                if(processReadScope!=null&&processReadScope.Contains(game))return true;
-                try{using(Process p=Process.GetProcessById(pid)){bool live=Matches(p,game);if(live&&processReadScope!=null)processReadScope.Add(game);return live;}}catch{return false;}
-            }
+            Identity game;lock(Gate){if(!games.TryGetValue(pid,out game))return false;}
+            if(processReadScope!=null&&processReadScope.Contains(game))return true;
+            try{
+                if(!MatchesIdentity(game))return false;
+                lock(Gate){Identity current;if(!games.TryGetValue(pid,out current)||!Object.ReferenceEquals(current,game))return false;}
+                if(processReadScope!=null)processReadScope.Add(game);return true;
+            }catch{return false;}
         }
         public static bool SetVisible(int pid,bool visible){
-            lock(Gate){Identity game;if(!games.TryGetValue(pid,out game))return false;
-                try{IntPtr window=ValidatedWindow(game);if(window==IntPtr.Zero)return false;
-                    return IsWindowVisible(window)==visible||ShowWindowAsync(window,visible?4:0);
-                }catch{return false;}
-            }
+            Identity game;lock(Gate){if(!games.TryGetValue(pid,out game))return false;}
+            try{IntPtr window=ValidatedWindow(game);if(window==IntPtr.Zero)return false;
+                return IsWindowVisible(window)==visible||ShowWindowAsync(window,visible?4:0);
+            }catch{return false;}
         }
         delegate bool EnumWindow(IntPtr window,IntPtr arg);
         [DllImport("user32.dll")]static extern bool EnumWindows(EnumWindow callback,IntPtr arg);
@@ -372,6 +414,39 @@ namespace TGLL {
             }
             a.Emit(0x48,0x83,0xc4,0x20,0x5b,0xc3);return a.Finish();
         }
+        // Resolve only references reachable from the current settings root, on the game thread.
+        // No client object address crosses the manager's command queue.
+        static void SettingsArrayLookup(Code64 a,string key,bool dropdown){
+            // RAX is the live array; RDX/RCX/R10 are traversal scratch registers.
+            a.Emit(0x48,0x85,0xc0);a.J(0x84,key+"_end");a.Emit(0x48,0x89,0xc2,0x48,0x8b,0x4a,24,0x48,0x81,0xf9,128,0,0,0);a.J(0x87,"reject");
+            a.Emit(0x45,0x33,0xd2);a.Label(key+"_loop");a.Emit(0x49,0x39,0xca);a.J(0x83,key+"_end");
+            a.Emit(0x4a,0x8b,0x7c,0xd2,32,0x49,0xff,0xc2,0x48,0x85,0xff);a.J(0x84,key+"_loop");
+            a.Emit(0x8b,0x43,24);
+            if(dropdown){a.Emit(0x4c,0x8b,0x87,0x88,0,0,0,0x4d,0x85,0xc0);a.J(0x84,key+"_loop");a.Emit(0x41,0x39,0x40,16);}
+            else a.Emit(0x39,0x87,0x80,0,0,0);
+            a.J(0x84,"settings_resolved");a.Jump(key+"_loop");a.Label(key+"_end");
+        }
+        static void ResolveSettingsControl(Code64 a){
+            a.Emit(0x83,0x7b,28,2);a.J(0x84,"settings_resolve_model");a.Emit(0x83,0x7b,28,0);a.J(0x84,"settings_resolve_checks");
+            a.Emit(0x83,0x7b,28,1);a.J(0x85,"reject");
+            foreach(int offset in new[]{0xb0,0xb8,0xc0}){a.Emit(0x48,0x8b,0x86);a.I(offset);SettingsArrayLookup(a,"settings_drop_"+offset,true);}a.Jump("reject");
+            a.Label("settings_resolve_checks");
+            for(int tab=0;tab<4;tab++){
+                string next="settings_tab_next_"+tab;
+                a.Emit(0x48,0x8b,0x86,0xa8,0,0,0,0x48,0x85,0xc0);a.J(0x84,next);
+                a.Emit(0x48,0x81,0x78,24,128,0,0,0);a.J(0x87,"reject");a.Emit(0x48,0x83,0x78,24,(byte)tab);a.J(0x86,next);
+                a.Emit(0x48,0x8b,0x40,(byte)(32+8*tab));SettingsArrayLookup(a,"settings_check_"+tab,false);a.Label(next);
+            }
+            for(int index=0;index<5;index++){
+                string next="settings_extra_next_"+index;a.Emit(0x48,0x8b,0xbe);a.I(0x100+8*index);a.Emit(0x48,0x85,0xff);a.J(0x84,next);
+                a.Emit(0x8b,0x43,24,0x39,0x87,0x80,0,0,0);a.J(0x84,"settings_resolved");a.Label(next);
+            }a.Jump("reject");
+            a.Label("settings_resolve_model");a.Emit(0x8b,0x43,24,0x3d,0xe8,3,0,0);a.J(0x84,"settings_resolve_keyboard");
+            a.Emit(0x3d,0xed,3,0,0);a.J(0x85,"reject");a.Emit(0x83,0x7b,32,1);a.J(0x87,"reject");
+            a.Emit(0x48,0x8b,0xbe,0x48,1,0,0);a.Jump("settings_model_ready");
+            a.Label("settings_resolve_keyboard");a.Emit(0x83,0x7b,32,2);a.J(0x87,"reject");a.Emit(0x48,0x8b,0xbe,0x40,1,0,0);
+            a.Label("settings_model_ready");a.Emit(0x48,0x85,0xff);a.J(0x84,"reject");a.Jump("model");a.Label("settings_resolved");
+        }
         internal static byte[] Settings(long data,long canvasSlot,long fcSlot,long getter,long toggle,long callback,long save=0,long rootSlot=0,long movementRelease=0) {
             Code64 a=new Code64();a.Emit(0x53,0x56,0x57,0x48,0x83,0xec,0x30);a.Emit(0x48,0xbb);a.Q(data);
             a.Emit(0xc7,0x43,4,0,0,0,0);
@@ -379,15 +454,16 @@ namespace TGLL {
             a.Emit(0x48,0x8b,0xbe,0xb8,1,0,0,0x48,0x85,0xff);a.J(0x84,"done");a.Rax(fcSlot);a.Emit(0x48,0x8b,0,0x48,0x39,0x07);a.J(0x85,"done");
             // Read the current game singleton, rather than retaining an obsolete panel across map changes.
             if(rootSlot!=0){a.Rax(rootSlot);a.Emit(0x48,0x8b,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0xa8,1);a.J(0x85,"done");a.Emit(0x48,0x8b,0x80,0xb8,0,0,0,0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x8b,0x40,8,0x48,0x89,0x43,8);}
+            else a.Emit(0x48,0xc7,0x43,8,0,0,0,0);
             a.Emit(0x48,0x8b,0x73,8,0x48,0x85,0xf6);a.J(0x85,"root");a.Emit(0x33,0xc9);a.Call(getter);a.Emit(0x48,0x85,0xc0);a.J(0x84,"done");a.Emit(0x48,0x89,0x43,8,0x48,0x89,0xc6);
             a.Label("root");a.Emit(0xc7,0x43,4,1,0,0,0,0x0f,0xb6,0x86,0x88,1,0,0,0x89,0x43,16);
             a.Emit(0x83,0x3b,0);a.J(0x84,"done");a.Emit(0x83,0x3b,3);a.J(0x84,"done");a.Emit(0x8b,0x03,0x89,0x43,52,0xc7,0x03,3,0,0,0,0xc7,0x43,48,0,0,0,0,0x83,0xf8,1);a.J(0x85,"option");
             if(movementRelease!=0){a.Emit(0x83,0x7b,32,1);a.J(0x85,"noMovementRelease");a.Emit(0x83,0x7b,60,1);a.J(0x85,"noMovementRelease");a.Call(movementRelease);a.Emit(0xc7,0x43,60,0,0,0,0);a.Label("noMovementRelease");}
             a.Emit(0x48,0x89,0xf1,0x8b,0x53,32,0x45,0x33,0xc0);a.Call(toggle);a.Jump("ok");
-            a.Label("option");a.Emit(0x83,0xf8,2);a.J(0x85,"reject");a.Emit(0x48,0x8b,0x7b,40,0x48,0x85,0xff);a.J(0x84,"reject");a.Emit(0x83,0x7b,28,2);a.J(0x84,"model");
+            a.Label("option");a.Emit(0x83,0xf8,2);a.J(0x85,"reject");ResolveSettingsControl(a);
             // Tab checkboxes are reparented into mj.e0 (the settings panel).
-            a.Emit(0x48,0x39,0x77,0x48);a.J(0x84,"owned");a.Emit(0x48,0x8b,0x86,0xe0,0,0,0,0x48,0x85,0xc0);a.J(0x84,"reject");a.Emit(0x48,0x39,0x47,0x48);a.J(0x85,"reject");a.Label("owned");a.Emit(0x83,0x7b,28,0);a.J(0x85,"dropdown");a.Emit(0x8b,0x43,32,0x88,0x87,0x84,0,0,0,0x45,0x33,0xc0);a.Jump("event");
-            a.Label("dropdown");a.Emit(0x4c,0x8b,0x87,0x88,0,0,0,0x4d,0x85,0xc0);a.J(0x84,"reject");a.Emit(0x8b,0x43,32,0x41,0x89,0x40,20);a.Jump("event");
+            a.Emit(0x48,0x39,0x77,0x48);a.J(0x84,"owned");a.Emit(0x48,0x8b,0x86,0xe0,0,0,0,0x48,0x85,0xc0);a.J(0x84,"reject");a.Emit(0x48,0x39,0x47,0x48);a.J(0x85,"reject");a.Label("owned");a.Emit(0x83,0x7b,28,0);a.J(0x85,"dropdown");a.Emit(0x83,0x7b,32,1);a.J(0x87,"reject");a.Emit(0x8b,0x43,32,0x88,0x87,0x84,0,0,0,0x45,0x33,0xc0);a.Jump("event");
+            a.Label("dropdown");a.Emit(0x4c,0x8b,0x87,0x88,0,0,0,0x4d,0x85,0xc0);a.J(0x84,"reject");a.Emit(0x49,0x8b,0x40,24,0x48,0x85,0xc0);a.J(0x84,"reject");a.Emit(0x48,0x8b,0x48,24,0x48,0x81,0xf9,128,0,0,0);a.J(0x87,"reject");a.Emit(0x8b,0x43,32,0x48,0x39,0xc8);a.J(0x83,"reject");a.Emit(0x41,0x89,0x40,20);a.Jump("event");
             a.Label("model");a.Emit(0x8b,0x43,24,0x3d,0xe8,3,0,0);a.J(0x84,"keyboard");a.Emit(0x3d,0xed,3,0,0);a.J(0x85,"reject");a.Emit(0x48,0x3b,0xbe,0x48,1,0,0);a.J(0x85,"reject");a.Jump("modelWrite");
             a.Label("keyboard");a.Emit(0x48,0x3b,0xbe,0x40,1,0,0);a.J(0x85,"reject");
             a.Label("modelWrite");a.Emit(0x8b,0x43,32,0x89,0x47,20,0x49,0x89,0xf8);
@@ -1070,7 +1146,7 @@ namespace TGLL {
         readonly Remote remote; readonly long slots; readonly SocksConfig config; readonly TcpListener listener;
         readonly List<TcpClient> clients=new List<TcpClient>();volatile bool stopping;
         internal int Port {get{return ((IPEndPoint)listener.LocalEndpoint).Port;}}
-        internal SocksRelay(Remote r,long map,SocksConfig c){remote=r;slots=map;config=c;listener=new TcpListener(IPAddress.Loopback,0);listener.Start(64);Thread t=new Thread(Accept);t.IsBackground=true;t.Start();}
+        internal SocksRelay(Remote r,long map,SocksConfig c){remote=r;slots=map;config=c;listener=new TcpListener(IPAddress.Loopback,0);listener.Start(64);BeginAccept();}
         static byte[] Read(Stream s,int n){byte[] b=new byte[n];int p=0;while(p<n){int k=s.Read(b,p,n-p);if(k==0)throw new IOException("proxy_closed");p+=k;}return b;}
         internal static TcpClient Authenticate(SocksConfig c){
             TcpClient tcp=new TcpClient();try {
@@ -1090,13 +1166,26 @@ namespace TGLL {
             using(MemoryStream header=new MemoryStream()){int end=0;while(header.Length<16384){int b=stream.ReadByte();if(b<0)throw new IOException("http_proxy_closed");header.WriteByte((byte)b);end=(end<<8)|b;if(end==0x0d0a0d0a)break;}if(end!=0x0d0a0d0a)throw new IOException("http_proxy_header_too_large");string line=Encoding.ASCII.GetString(header.ToArray()).Split(new string[]{"\r\n"},StringSplitOptions.None)[0];if(!System.Text.RegularExpressions.Regex.IsMatch(line,@"^HTTP/1\.[01] 200(?: |$)"))throw new IOException(line.Contains(" 407 ")?"http_proxy_auth_failed":"http_proxy_connect_failed");}
             tcp.ReceiveTimeout=0;tcp.SendTimeout=0;
         }
-        void Accept(){while(!stopping){try{TcpClient client=listener.AcceptTcpClient();lock(clients)clients.Add(client);ThreadPool.QueueUserWorkItem(delegate{Serve(client);});}catch{if(!stopping)Thread.Sleep(100);}}}
-        void Serve(TcpClient game){TcpClient upstream=null;try {
+        bool Register(TcpClient client){lock(clients){if(stopping){client.Close();return false;}clients.Add(client);return true;}}
+        void BeginAccept(){try{if(!stopping)listener.BeginAcceptTcpClient(Accept,null);}catch(ObjectDisposedException){}catch(SocketException){}catch(InvalidOperationException){}}
+        void Accept(IAsyncResult result){
+            TcpClient client=null;try{client=listener.EndAcceptTcpClient(result);}catch(ObjectDisposedException){}catch(SocketException){}catch(InvalidOperationException){}
+            finally{BeginAccept();}
+            if(client!=null&&Register(client))Serve(client);
+        }
+        static async Task ForwardToProxy(NetworkStream game,NetworkStream proxy,TcpClient upstream){
+            try{await game.CopyToAsync(proxy,8192).ConfigureAwait(false);upstream.Client.Shutdown(SocketShutdown.Send);}catch{}
+        }
+        // Async accept and forwarding reserve no OS thread while a connection is idle.
+        async void Serve(TcpClient game){TcpClient upstream=null;Task outgoing=null;try {
+            await Task.Yield();
             int port=((IPEndPoint)game.Client.RemoteEndPoint).Port;byte[] destination=null;Stopwatch wait=Stopwatch.StartNew();
-            while(!stopping && wait.ElapsedMilliseconds<5000 && destination==null){byte[] map=remote.Read(slots,2048);for(int i=0;i<64;i++){int p=i*32;int localPort=(map[p+4]<<8)|map[p+5];if(BitConverter.ToInt32(map,p)==1&&localPort==port){destination=new byte[16];Array.Copy(map,p+8,destination,0,16);remote.Write(slots+p,new byte[4]);break;}}if(destination==null)Thread.Sleep(10);}
-            if(destination==null)throw new IOException("proxy_mapping_failed");upstream=Authenticate(config);lock(clients)clients.Add(upstream);if(config.Protocol=="http")ConnectHttp(upstream,config,destination);else ConnectTarget(upstream,destination);
-            NetworkStream gs=game.GetStream(),us=upstream.GetStream();ThreadPool.QueueUserWorkItem(delegate{try{gs.CopyTo(us);upstream.Client.Shutdown(SocketShutdown.Send);}catch{} });us.CopyTo(gs);
-        }catch{}finally{game.Close();if(upstream!=null)upstream.Close();lock(clients){clients.Remove(game);if(upstream!=null)clients.Remove(upstream);}}}
+            while(!stopping && wait.ElapsedMilliseconds<5000 && destination==null){byte[] map=remote.Read(slots,2048);for(int i=0;i<64;i++){int p=i*32;int localPort=(map[p+4]<<8)|map[p+5];if(BitConverter.ToInt32(map,p)==1&&localPort==port){destination=new byte[16];Array.Copy(map,p+8,destination,0,16);remote.Write(slots+p,new byte[4]);break;}}if(destination==null)await Task.Delay(25).ConfigureAwait(false);}
+            if(destination==null||stopping)throw new IOException("proxy_mapping_failed");upstream=Authenticate(config);if(!Register(upstream))return;if(config.Protocol=="http")ConnectHttp(upstream,config,destination);else ConnectTarget(upstream,destination);
+            NetworkStream gs=game.GetStream(),us=upstream.GetStream();outgoing=ForwardToProxy(gs,us,upstream);await us.CopyToAsync(gs,8192).ConfigureAwait(false);
+        }catch{}finally{game.Close();if(upstream!=null)upstream.Close();lock(clients){clients.Remove(game);if(upstream!=null)clients.Remove(upstream);}}
+            if(outgoing!=null)await outgoing.ConfigureAwait(false);
+        }
         public void Dispose(){stopping=true;listener.Stop();lock(clients){foreach(TcpClient c in clients)c.Close();clients.Clear();}}
     }
     public sealed class SkillInfo { public int Id,TemplateId,Mp,CastMs,Level,Type; public string Name; public bool Attack {get{return Type==0;}} public bool Usable {get{return Type==0||Type==1;}} public override string ToString(){return Id+" — "+Name+" (Lv "+Level+")";} }
@@ -1275,7 +1364,7 @@ namespace TGLL {
         public volatile GameOption[] GameOptions=new GameOption[0];
         internal bool GameAutoManaged,SettingsInFlight;internal int SettingsAutoSent=-1;internal DateTime WorkerErrorAt,SettingsAutoAt;internal int SettingsAutoValue=-1;
         internal DateTime SettingsReadAt=DateTime.MinValue;internal readonly ConcurrentQueue<GameOption> SettingsQueue=new ConcurrentQueue<GameOption>();
-        public string LogFile;internal int CaptureGeneration;internal string LastMenu="",LastSkills="";
+        public string LogFile;internal int CaptureGeneration,DiagnosticsMenuGeneration;internal string LastMenu="",LastSkills="";
         internal string Target,Password;internal SocksConfig Proxy;internal bool Auto;public bool AutoLoginEnabled {get{return Auto;}}
         internal NativeJob(string target,string user,string pass,SocksConfig proxy,bool auto){Target=Path.GetFullPath(target);Username=user;Password=pass;Proxy=proxy;Auto=auto;}
     }
@@ -1723,11 +1812,12 @@ namespace TGLL {
             }
             byte[] menu=r.Read(data+2176,24);int mg=BitConverter.ToInt32(menu,0),count=BitConverter.ToInt32(menu,4);
             if(mg==0||(mg&1)!=0||count<0||count>128)return;
+            if(mg==j.DiagnosticsMenuGeneration&&BitConverter.ToInt32(menu,8)==j.MenuTag&&BitConverter.ToInt32(menu,12)==j.MenuSelectedIndex)return;
             byte[] entries=r.Read(data+2240,count*8);if(BitConverter.ToInt32(r.Read(data+2176,4),0)!=mg)return;
             string[] options=new string[count];List<string> quoted=new List<string>();for(int i=0;i<count;i++){options[i]=ReadLabel(r,BitConverter.ToInt64(entries,i*8));quoted.Add(Quote(options[i]));}
             int tag=BitConverter.ToInt32(menu,8),selected=BitConverter.ToInt32(menu,12);
             string fields=",\"tag\":"+tag+",\"options\":["+String.Join(",",quoted.ToArray())+"]";
-            j.MenuTag=tag;j.MenuSelectedIndex=selected;j.MenuOptions=options;j.DynamicMenuJson="{"+fields.Substring(1)+",\"selected_index\":"+selected+"}";
+            j.MenuTag=tag;j.MenuSelectedIndex=selected;j.MenuOptions=options;j.DynamicMenuJson="{"+fields.Substring(1)+",\"selected_index\":"+selected+"}";j.DiagnosticsMenuGeneration=mg;
             if(fields!=j.LastMenu){j.LastMenu=fields;Log(j,"dynamic_menu",fields+",\"npc_id\":"+j.CapturedNpcId+",\"selected_index\":"+selected);}
         }
 
@@ -1743,7 +1833,7 @@ namespace TGLL {
             if(j.GemBusy&&code==307&&value!=0)throw new Exception("Đợi xác nhận lượt ghép đá trước khi bật ghép trên 50%.");
             GameOption found=null;foreach(GameOption o in j.GameOptions)if(o.Code==code)found=o;
             if(found==null||value<0||value>=(found.Kind==0?2:found.Choices.Length))throw new Exception("settings_value_invalid");
-            if(j.SettingsQueue.Count>=128)throw new Exception("settings_queue_full");GameOption command=found.Copy();command.Value=value;j.SettingsQueue.Enqueue(command);
+            if(j.SettingsQueue.Count>=128)throw new Exception("settings_queue_full");j.SettingsQueue.Enqueue(new GameOption{Code=code,Kind=found.Kind,Value=value});
         }
         static long[] ReadArray(Remote r,long p){if(p==0)return new long[0];int n=BitConverter.ToInt32(r.Read(p+24,4),0);if(n<0||n>128)throw new Exception("settings_array_invalid");byte[] b=r.Read(p+32,n*8);long[] a=new long[n];for(int i=0;i<n;i++)a[i]=BitConverter.ToInt64(b,i*8);return a;}
         static void AddCheck(Remote r,List<GameOption> list,long root,long p,int tab){
@@ -1761,7 +1851,7 @@ namespace TGLL {
         internal static void ReadGameSettings(Remote r,long data,NativeJob j){
             j.GameSettingsReady=BitConverter.ToInt32(r.Read(data+4,4),0)==1;if(!j.GameSettingsReady)return;
             long root=r.Ptr(data+8);if(root==0)return;j.GameAutoEnabled=BitConverter.ToInt32(r.Read(data+16,4),0)!=0;
-            if((DateTime.UtcNow-j.SettingsReadAt).TotalMilliseconds<750)return;j.SettingsReadAt=DateTime.UtcNow;
+            if((DateTime.UtcNow-j.SettingsReadAt).TotalMilliseconds<SettingsSnapshotIntervalMs(clientPoller.Count))return;j.SettingsReadAt=DateTime.UtcNow;
             List<GameOption> options=new List<GameOption>();long[] tabs=ReadArray(r,r.Ptr(root+0xa8));
             for(int t=0;t<Math.Min(4,tabs.Length);t++)foreach(long p in ReadArray(r,tabs[t]))AddCheck(r,options,root,p,t);
             string[] autoLabels={"Phạm vi đánh","Bơm HP (%)","Bơm MP (%)","Bình HP","Bình MP","Tự ghép đá","Tự dọn rác"};
@@ -1928,7 +2018,8 @@ namespace TGLL {
             if(j.GameAutoManaged&&j.GameAutoEnabled!=desired){if(!CanSubmitGameAuto(j,desired,DateTime.UtcNow))return;r.Write(data+32,BitConverter.GetBytes(desired?1:0));r.Write(data,BitConverter.GetBytes(1));j.SettingsInFlight=true;return;}
             if(j.GameAutoManaged)j.SettingsAutoSent=desired?1:0;
             GameOption command;if(j.SettingsQueue.TryDequeue(out command)){
-                r.Write(data+24,BitConverter.GetBytes(command.Code));r.Write(data+28,BitConverter.GetBytes(command.Kind));r.Write(data+32,BitConverter.GetBytes(command.Value));r.Write(data+40,BitConverter.GetBytes(command.Handle));r.Write(data,BitConverter.GetBytes(2));j.SettingsInFlight=true;j.SettingsReadAt=DateTime.MinValue;
+                byte[] request=new byte[24];Array.Copy(BitConverter.GetBytes(command.Code),0,request,0,4);Array.Copy(BitConverter.GetBytes(command.Kind),0,request,4,4);Array.Copy(BitConverter.GetBytes(command.Value),0,request,8,4);
+                r.Write(data+24,request);r.Write(data,BitConverter.GetBytes(2));j.SettingsInFlight=true;j.SettingsReadAt=DateTime.MinValue;
             }
         }
 
@@ -1979,6 +2070,14 @@ namespace TGLL {
             }
             return 150;
         }
+        internal static int ClientPollIntervalMs(int requested,int clients){
+            // Preserve the fast path for small sessions; spread memory reads under load.
+            if(clients>=128)return requested>=150?350:Math.Max(75,requested);
+            if(clients>=64)return requested>=150?250:Math.Max(50,requested);
+            if(clients>=32)return requested>=150?200:Math.Max(25,requested);
+            return requested;
+        }
+        internal static int SettingsSnapshotIntervalMs(int clients){return clients>=64?3000:clients>=32?1500:750;}
         public static void SetThiQuyPriority(string id,bool enabled){NativeJob j=Get(id);if(j==null)throw new Exception("train_session_unavailable");j.PrioritizeThiQuy=enabled;j.ThiQuyPriorityAt=DateTime.MinValue;}
         internal static bool ThiQuyPriorityAllowed(NativeJob j){return j!=null&&j.PrioritizeThiQuy&&!j.CuongThiEnabled&&j.Auto&&UpSessionReady(j)&&(j.TrainEnabled||j.GameAutoWanted||j.FarmEnabled)&&!j.QuestEnabled&&!j.QuestPauseAuto&&!j.DailyActive&&!j.IzanamiEnabled&&!j.SonCapEnabled&&!j.DungeonHighEnabled&&!j.ReceiveFlowActive&&!j.ReceiveKeyRequested&&!j.ReplayRequested&&!j.CloseRequested&&!j.CancelRequested&&!j.ReconnectRequested&&!j.CurseActive&&!j.CloakEnabled&&!j.ChestEnabled&&!j.MailEnabled&&!j.MailBusy&&!j.MailQueueOnly&&!j.CloakQueueOnly&&!j.ZoneSyncActive&&!j.FollowActive;}
         internal static bool IsThiQuyName(string name){return String.Equals((name??"").Normalize(NormalizationForm.FormC).Trim(),"Thi Quỷ",StringComparison.OrdinalIgnoreCase);}
@@ -2817,6 +2916,7 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
         const string BaseHash="1e35be4c04d748071d98247c199eaa6ddfcbd297e3de96842c27576777a691fd";
         static readonly ConcurrentDictionary<string,NativeJob> jobs=new ConcurrentDictionary<string,NativeJob>();
         static readonly LaunchQueue queue=new LaunchQueue(6,10000,Work);
+        static readonly ClientPollScheduler clientPoller=new ClientPollScheduler(Math.Max(1,Math.Min(4,Environment.ProcessorCount/2)));
         static readonly FileHashCache buildHashes=new FileHashCache();
         public static NativeJob Enqueue(string target,string username,string password,SocksConfig proxy,bool auto){return Enqueue(target,username,password,proxy,auto,true);}
         public static NativeJob Enqueue(string target,string username,string password,SocksConfig proxy,bool auto,bool receiveKey){return Enqueue(target,username,password,proxy,auto,receiveKey,false);}
@@ -2974,6 +3074,7 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
         }
         static long SocketExport(Process p,string name){IntPtr local=LoadLibrary("ws2_32.dll");IntPtr proc=GetProcAddress(local,name);ProcessModule mod=Module(p,"ws2_32.dll");if(proc==IntPtr.Zero||mod==null)throw new Exception("native_exports_missing");return mod.BaseAddress.ToInt64()+proc.ToInt64()-local.ToInt64();}
         static void Run(NativeJob j){
+            j.DiagnosticsMenuGeneration=0;
             Stopwatch launchTimer=Stopwatch.StartNew();
             Log(j,"startup_begin","");
             j.Stage="verify_build";
@@ -3095,13 +3196,13 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                 // Retain the proxy relay independently of the job; keep QLTK running.
                 if(data!=0&&!j.CancelRequested&&!j.ReceiveFlowActive)r.Write(data,BitConverter.GetBytes(12));
                 Remote keep=r;SocksRelay keepRelay=relay;r=null;relay=null;
-                Thread lifetime=new Thread(delegate(){Stopwatch maintenance=new Stopwatch();bool captchaNpcPaused=false;Stopwatch npcTimer=new Stopwatch();if(j.ReceiveFlowActive)npcTimer.Start();try{while(!p.HasExited){if(data!=0&&!j.CloseRequested){try{
+                Stopwatch maintenance=new Stopwatch();bool captchaNpcPaused=false;Stopwatch npcTimer=new Stopwatch();if(j.ReceiveFlowActive)npcTimer.Start();clientPoller.Add(delegate(){bool finished=false;try{if(p.HasExited){finished=true;return false;}if(data!=0&&!j.CloseRequested){try{
                     if(!j.ReconnectRequested&&(DateTime.UtcNow-j.DisconnectPollAt).TotalSeconds>=1){j.DisconnectPollAt=DateTime.UtcNow;if(ObserveDisconnect(j,ReadDisconnectNotice(keep,game),j.DisconnectPollAt))BeginDisconnectRecovery(j);}
-                    if(j.ReconnectRequested){Thread.Sleep(150);continue;}
+                    if(j.ReconnectRequested)return true;
                     if((DateTime.UtcNow-j.OnlineNoticePollAt).TotalSeconds>=1){j.OnlineNoticePollAt=DateTime.UtcNow;PumpOnlineNotice(keep,reminderData,j,game);}
                     PollCurseNotice(keep,game,j,DateTime.UtcNow);
 
-                    if(j.CurseActive||j.CaptchaFrame!=null)PumpCaptcha(keep,game,j);if(j.CurseActive){if(npcTimer.IsRunning){npcTimer.Stop();captchaNpcPaused=true;}Thread.Sleep(150);continue;}if(captchaNpcPaused){npcTimer.Start();captchaNpcPaused=false;}
+                    if(j.CurseActive||j.CaptchaFrame!=null)PumpCaptcha(keep,game,j);if(j.CurseActive){if(npcTimer.IsRunning){npcTimer.Stop();captchaNpcPaused=true;}return true;}if(captchaNpcPaused){npcTimer.Start();captchaNpcPaused=false;}
                     if(j.CancelRequested&&npcTimer.IsRunning){CancelTravel(keep,j);j.ReceiveKeyEnabled=false;j.DungeonHighEnabled=false;j.IzanamiEnabled=false;j.IzanamiRequested=false;j.DungeonStartAt=DateTime.MinValue;j.ReceiveKeyRequested=false;j.ReplayRequested=false;j.ReceiveFlowActive=false;j.TrainEnabled=false;keep.Write(data,BitConverter.GetBytes(12));npcTimer.Reset();j.State="cancelled";j.Error="cancelled";}
                     if(!maintenance.IsRunning||maintenance.ElapsedMilliseconds>=150){PumpActivityRetry(keep,data,questData,j,npcTimer);PumpQuest(keep,questData,j);PumpCuongThiMovement(keep,game,j);PumpCuongThi(keep,game,j);PumpGameSettings(keep,settingsData,j);}
                     PumpThiQuyPriority(keep,game,trainData,j);PumpTraining(keep,trainData,j);
@@ -3111,7 +3212,7 @@ j.PlannedZone=ChooseQuietZone(ids,counts,j.ZoneId);if(j.PlannedZone<0)throw new 
                         if(state==11){FinishNpcAction(keep,data,j,npcTimer);}
                         else if(npcTimer.ElapsedMilliseconds>60000){j.ReceiveFlowActive=false;j.Error=state==8?(j.NpcAction==2?"onoki_not_found":"npc_not_found"):state==13||state==14||state==15||state==17?"startup_popup_not_ready":(j.NpcAction==2?"npc_izanami_menu_not_ready":j.NpcAction==1?"npc_dungeon_menu_not_ready":"npc_key_menu_not_ready");j.State=j.NpcAction==2?"izanami_unavailable":"npc_unavailable";keep.Write(data,BitConverter.GetBytes(12));npcTimer.Stop();}}
                     }
-                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}Thread.Sleep(TrainingPollMs(j));}}catch{}finally{lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.CuongThiEnabled=false;j.CuongThi=null;j.CuongThiNavigationReady=false;j.CuongThiMovementStopping=false;j.CuongThiRouteSent=false;j.CuongThiRouteStatus="Game đã thoát";j.CuongThiRouteData=0;j.CuongThiZoneData=0;j.CuongThiDestination=null;j.CuongThiDestinationKey="";j.CuongThiStatus="Game đã thoát";j.GemEnabled=false;j.GemBusy=false;j.GemItemPause=false;j.GemStatus="Game đã thoát";j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}});lifetime.IsBackground=true;lifetime.Start();
+                }catch(Exception e){if((DateTime.UtcNow-j.WorkerErrorAt).TotalSeconds>=5){j.WorkerErrorAt=DateTime.UtcNow;Log(j,"worker_error",",\"type\":"+Quote(e.GetType().Name));}}}return true;}catch{finished=true;return false;}finally{if(finished){lock(j.MailGate){j.InboxEnabled=false;j.InboxBusy=false;j.InboxStatus="Game đã thoát";j.MailEnabled=false;j.MailStatus=j.MailBusy?"Game đã thoát khi đang gửi; kiểm tra thư trước khi chạy lại":"Game đã thoát";j.MailBusy=false;}RecordBiMaClosed(j,"process_exit");j.CuongThiEnabled=false;j.CuongThi=null;j.CuongThiNavigationReady=false;j.CuongThiMovementStopping=false;j.CuongThiRouteSent=false;j.CuongThiRouteStatus="Game đã thoát";j.CuongThiRouteData=0;j.CuongThiZoneData=0;j.CuongThiDestination=null;j.CuongThiDestinationKey="";j.CuongThiStatus="Game đã thoát";j.GemEnabled=false;j.GemBusy=false;j.GemItemPause=false;j.GemStatus="Game đã thoát";j.GiftEnabled=false;j.GiftStatus="Game đã thoát";j.QuestEnabled=false;j.QuestPauseAuto=false;j.QuestStatus="Game đã thoát";j.AutoItemEnabled=false;j.AutoItemStatus="Game đã thoát";j.CloakEnabled=false;j.CloakStatus=j.CloakPhase==8?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ChestEnabled=false;j.ChestUseOwned=false;j.ChestStatus=j.ChestPhase==2?"Game đã thoát khi mua; kiểm tra túi trước khi chạy lại":"Game đã thoát";j.ThiQuyCombatActive=false;j.ThiQuyPriorityArmed=false;j.ThiQuyNativeMode=0;j.ThiQuyFarmPaused=false;j.ThiQuyReadSuspended=false;j.ThiQuyMissingAt=DateTime.MinValue;j.ThiQuyPriorityAt=DateTime.MinValue;j.CurseActive=false;j.CurseReadAt=DateTime.MinValue;j.ZoneSyncActive=false;j.MapId=-1;j.ZoneId=-1;j.ZoneReadAt=DateTime.MinValue;j.ZonePrepared=false;j.ZoneStatus="";j.FollowActive=false;j.FollowStatus="";j.Vitals=null;j.CharacterName="";j.TeamMembers=new string[0];j.TeamConfirmed=false;j.InventoryScanning=false;j.Inventory=new InventorySnapshot(new InventoryItem[0],0,false,"game_exited",DateTime.MinValue);j.FarmEnabled=false;j.FarmArrived=false;j.FarmStatus="Game đã thoát";j.GameSettingsReady=false;j.GameAutoEnabled=false;j.TrainReady=false;j.TrainEnabled=false;if(keepRelay!=null)keepRelay.Dispose();keep.Dispose();p.Dispose();}}},delegate(){return ClientPollIntervalMs(TrainingPollMs(j),clientPoller.Count);});
             }catch(Exception startupError){
                 bool stopped=true;
                 if(p!=null){try{if(!p.HasExited){p.Kill();stopped=p.WaitForExit(3000);}}catch{stopped=false;}finally{p.Dispose();}}
