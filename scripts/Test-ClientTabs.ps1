@@ -1,5 +1,8 @@
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
+$parseTokens=$null;$parseErrors=$null
+$null=[Management.Automation.Language.Parser]::ParseFile((Join-Path $root 'QLTK/ClientTabs.ps1'),[ref]$parseTokens,[ref]$parseErrors)
+if($parseErrors.Count){throw ('Client tabs launcher cannot be read by Windows PowerShell: '+(($parseErrors | ForEach-Object Message) -join '; '))}
 $output=Join-Path ([IO.Path]::GetTempPath()) ('qltk-client-tabs-tests-'+[guid]::NewGuid().ToString('N'))
 $null=[IO.Directory]::CreateDirectory($output)
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'

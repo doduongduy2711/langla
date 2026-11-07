@@ -1,4 +1,4 @@
-param([string]$DataDirectory='')
+﻿param([string]$DataDirectory='')
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Windows.Forms,System.Drawing,System.Web.Extensions,System.Security
 if(!$DataDirectory){$DataDirectory=Join-Path (Split-Path $PSScriptRoot -Parent) 'Data'}
