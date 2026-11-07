@@ -3,6 +3,7 @@ $closeAllTimer=New-Object Windows.Forms.Timer;$closeAllTimer.Interval=100;$form.
 function Begin-CloseAllOperation {return [TGLL.NativeBackend]::BeginCloseAllGames()}
 function Start-CloseAllUi {
  if($script:closingAll){return}
+ if($autoOpenSelected){$autoOpenSelected.Checked=$false}
  if(Get-Command Stop-AutoAll -ErrorAction SilentlyContinue){Stop-AutoAll}
  $script:closingAll=$true;$closeAllButton.Enabled=$false;$closeAllButton.Text='Đang tắt...'
  try{

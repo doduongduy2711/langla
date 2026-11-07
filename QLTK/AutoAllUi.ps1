@@ -66,6 +66,7 @@ function Start-AutoAll {
  if(!$script:accounts.Count){throw 'Chưa có tài khoản để chạy Auto tất cả.'}
  if(($script:mailRun -and $script:mailRun.active) -or ($script:distributionRun -and $script:distributionRun.active) -or ($script:cloakRun -and $script:cloakRun.active)){throw 'Dừng gom đồ/chia đồ/mua áo trước khi bật Auto tất cả.'}
  if($script:closingAll){throw 'Đợi tắt tất cả game xong rồi bật Auto tất cả.'}
+ if($autoOpenSelected){$autoOpenSelected.Checked=$false}
  $ids=@{};foreach($a in $script:accounts){$ids[[string]$a.id]=$true}
  $draining=@();foreach($kind in $script:autoAllKinds){foreach($b in @(Get-AutoAllBatches $kind)){if($b.closeOperation){foreach($m in $b.members){$draining+=@([pscustomobject]@{id=$m.id;operation=$b.closeOperation})}}}}
  $script:autoAllRun=[pscustomobject]@{active=$true;stage=0;submitted=$false;prepared=$false;ids=$ids;draining=$draining;retryAt=[datetime]::MinValue;message='Chuẩn bị Auto tất cả'}

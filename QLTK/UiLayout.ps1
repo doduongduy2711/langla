@@ -75,7 +75,7 @@ Ui-Place $show $options 190 19 145 22
 $optionHint=Ui-Label 'Nhận chìa: bật trong tab Auto địa cung' $options 12 42 365 20
 $optionHint.ForeColor=[Drawing.Color]::FromArgb(65,65,65)
 $optionHint.Visible=$false
-$autoReconnect=New-Object Windows.Forms.CheckBox;$autoReconnect.Text='Tự đăng nhập lại khi mất kết nối';$autoReconnect.SetBounds(12,40,365,22)
+$autoReconnect=New-Object Windows.Forms.CheckBox;$autoReconnect.Text='Tự đăng nhập lại khi mất kết nối';$autoReconnect.SetBounds(12,40,203,22)
 $autoReconnect.Checked=$true;$autoReconnect.Enabled=$false;$script:settings.autoReconnect=$true
 $options.Controls.Add($autoReconnect);[TGLL.NativeBackend]::AutoReconnectEnabled=$autoReconnect.Checked
 $autoReconnect.Add_CheckedChanged({[TGLL.NativeBackend]::AutoReconnectEnabled=$autoReconnect.Checked;$script:settings.autoReconnect=$autoReconnect.Checked;if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}})
@@ -92,6 +92,30 @@ if($script:settings.launchConcurrency){$launchConcurrency.Value=[Math]::Max(1,[M
 $launchConcurrency.Add_ValueChanged({$script:settings.launchConcurrency=[int]$launchConcurrency.Value;[TGLL.NativeBackend]::SetLaunchConcurrency([int]$launchConcurrency.Value);if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}})
 $launchDelayTip=New-Object Windows.Forms.ToolTip;$launchDelayTip.SetToolTip($launchDelay,'Khoảng cách giữa các lần mở game. 0 = không thêm khoảng chờ.');$launchDelayTip.SetToolTip($launchConcurrency,'Số tài khoản đang mở/đăng nhập song song. Giảm giá trị không đóng game đang mở.')
 $form.Add_Disposed({$launchDelayTip.Dispose()})
+$autoOpenSelected=New-Object Windows.Forms.CheckBox;$autoOpenSelected.Text='Tự mở đã chọn'
+Ui-Place $autoOpenSelected $options 220 40 118 22
+$launchDelayTip.SetToolTip($autoOpenSelected,'Tự xếp hàng các tài khoản tích cột Chọn, mỗi tài khoản một lần khi bật. Acc đã xong hoặc đã tắt không tự mở lại.')
+$script:autoOpenSelectedSeen=@{};$script:autoOpenSelectedDirty=$false
+$autoOpenSelected.Add_CheckedChanged({
+    if($autoOpenSelected.Checked -and ($script:closingAll -or ($script:autoAllRun -and $script:autoAllRun.active))){
+        $autoOpenSelected.Checked=$false;return
+    }
+    $script:autoOpenSelectedSeen=@{}
+    $script:autoOpenSelectedDirty=$autoOpenSelected.Checked
+})
+function Invoke-AutoOpenSelected {
+    if(!$autoOpenSelected.Checked -or !$script:autoOpenSelectedDirty -or $script:closingAll -or ($script:autoAllRun -and $script:autoAllRun.active)){return}
+    $script:autoOpenSelectedDirty=$false
+    $launchRows=@(foreach($row in $grid.Rows){
+        if(!$row.Tag -or $row.Cells['pick'].Value -ne $true){continue}
+        $id=[string]$row.Tag.id
+        if($script:autoOpenSelectedSeen.ContainsKey($id)){continue}
+        $script:autoOpenSelectedSeen[$id]=$true
+        if(!(Test-AccountOpenBlocked $row.Tag)){$row}
+    })
+    if($launchRows.Count){Start-SelectedLaunchRows $launchRows $true}
+}
+
 $grid.Anchor='Top,Left';$grid.ReadOnly=$false
 foreach($col in $grid.Columns){$col.ReadOnly=$true}
 $pick=New-Object Windows.Forms.DataGridViewCheckBoxColumn;$pick.Name='pick';$pick.HeaderText='Chọn';$pick.ReadOnly=$false;$pick.SortMode='NotSortable';$null=$grid.Columns.Add($pick);$pick.DisplayIndex=0;$pick.FillWeight=40
@@ -192,6 +216,9 @@ $grid.ColumnHeadersHeight=24;$grid.ColumnHeadersHeightSizeMode='DisableResizing'
 $grid.DefaultCellStyle.ForeColor=[Drawing.Color]::Black;$grid.DefaultCellStyle.SelectionBackColor=[Drawing.Color]::FromArgb(51,153,255)
 $grid.DefaultCellStyle.SelectionForeColor=[Drawing.Color]::White;$grid.BorderStyle='FixedSingle';$grid.GridColor=[Drawing.Color]::Silver
 $grid.AlternatingRowsDefaultCellStyle.BackColor=[Drawing.Color]::FromArgb(250,250,250)
+$grid.Add_CellValueChanged({param($sender,$e)
+    if($autoOpenSelected.Checked -and $e.RowIndex -ge 0 -and $e.ColumnIndex -eq $pick.Index){$script:autoOpenSelectedDirty=$true}
+})
 $grid.Add_CurrentCellDirtyStateChanged({if($grid.IsCurrentCellDirty){$grid.CommitEdit([Windows.Forms.DataGridViewDataErrorContexts]::Commit)}})
 $tabs=New-Object Windows.Forms.TabControl;$form.Controls.Add($tabs)
 foreach($name in @('Tài khoản','Đăng nhập / NPC','Proxy / Socket','Nhật ký')) {$page=New-Object Windows.Forms.TabPage;$page.Text=$name;$page.BackColor=$form.BackColor;$tabs.TabPages.Add($page)}
