@@ -94,7 +94,22 @@ $launchDelayTip=New-Object Windows.Forms.ToolTip;$launchDelayTip.SetToolTip($lau
 $form.Add_Disposed({$launchDelayTip.Dispose()})
 $autoOpenSelected=New-Object Windows.Forms.CheckBox;$autoOpenSelected.Text='Tự mở đã chọn'
 Ui-Place $autoOpenSelected $options 220 40 118 22
-$launchDelayTip.SetToolTip($autoOpenSelected,'Tự xếp hàng các tài khoản tích cột Chọn, mỗi tài khoản một lần khi bật. Acc đã xong hoặc đã tắt không tự mở lại.')
+$null=Ui-Label 'Tối đa:' $options 232 61 44 20
+$autoOpenSelectedLimit=New-Object Windows.Forms.NumericUpDown
+$autoOpenSelectedLimit.Minimum=0;$autoOpenSelectedLimit.Maximum=10000
+$autoOpenSelectedLimit.AccessibleName='Số acc online tối đa khi tự mở'
+$savedAutoOpenLimit=0
+if([int]::TryParse([string]$script:settings.autoOpenSelectedLimit,[ref]$savedAutoOpenLimit)){
+    $autoOpenSelectedLimit.Value=[Math]::Max(0,[Math]::Min(10000,$savedAutoOpenLimit))
+}
+Ui-Place $autoOpenSelectedLimit $options 276 58 60 22
+$launchDelayTip.SetToolTip($autoOpenSelected,'Tự xếp hàng các tài khoản tích cột Chọn. Dừng khi đủ giới hạn. Acc đã xong hoặc đã tắt không tự mở lại.')
+$launchDelayTip.SetToolTip($autoOpenSelectedLimit,'Tổng số game đang mở và acc đã xếp hàng. 0 = không giới hạn.')
+$autoOpenSelectedLimit.Add_ValueChanged({
+    $script:settings.autoOpenSelectedLimit=[int]$autoOpenSelectedLimit.Value
+    if($autoOpenSelected.Checked){$script:autoOpenSelectedDirty=$true}
+    if(!$UiTest){Write-JsonAtomic $script:configPath $script:settings}
+})
 $script:autoOpenSelectedSeen=@{};$script:autoOpenSelectedDirty=$false
 $autoOpenSelected.Add_CheckedChanged({
     if($autoOpenSelected.Checked -and ($script:closingAll -or ($script:autoAllRun -and $script:autoAllRun.active))){
@@ -103,17 +118,63 @@ $autoOpenSelected.Add_CheckedChanged({
     $script:autoOpenSelectedSeen=@{}
     $script:autoOpenSelectedDirty=$autoOpenSelected.Checked
 })
+function Get-AutoOpenOccupancy {
+    $jobs=@{};$reserved=@{}
+    # Sample startups first so a job registering its PID during the scan never loses its reservation.
+    foreach($id in $script:accountJobs.Keys){
+        $job=Get-AccountJob $script:accountJobs[$id]
+        if(!$job){continue}
+        $jobs[$id]=$job
+        if(!$job.CloseRequested -and !$job.CancelRequested -and $job.State -in @('queued','starting','retrying','reconnecting')){$reserved[$id]=$true}
+    }
+    $live=@{};foreach($gamePid in @(Get-OpenGamePids)){$live[[int]$gamePid]=$true}
+    $accountsWithLiveGame=@{}
+    foreach($id in $script:accountWindowPids.Keys){
+        if($live.ContainsKey([int]$script:accountWindowPids[$id])){$accountsWithLiveGame[$id]=$true}
+    }
+    foreach($id in $jobs.Keys){
+        if($live.ContainsKey([int]$jobs[$id].ProcessId)){$accountsWithLiveGame[$id]=$true}
+    }
+    # Reserve queued members once, even when a queue member already has a startup job.
+    foreach($batch in (@($script:beastBatches)+@($script:soncapBatches)+@($script:izanamiBatches)+@($script:questBatches)+@($script:dungeonBatches))){
+        if($batch -and $batch.state -ne 'done'){
+            foreach($member in $batch.members){if($member.id -and $member.state -ne 'done'){$reserved[[string]$member.id]=$true}}
+        }
+    }
+    foreach($run in @($script:mailRun,$script:distributionRun,$script:cloakRun,$script:chestRun)){
+        if($run -and $run.active){
+            foreach($member in $run.members){if($member.id -and $member.state -ne 'done'){$reserved[[string]$member.id]=$true}}
+        }
+    }
+    $occupied=$live.Count
+    foreach($id in $reserved.Keys){if(!$accountsWithLiveGame.ContainsKey($id)){$occupied++}}
+    return [pscustomobject]@{Count=$occupied;Reserved=$reserved;LiveAccounts=$accountsWithLiveGame}
+}
 function Invoke-AutoOpenSelected {
     if(!$autoOpenSelected.Checked -or !$script:autoOpenSelectedDirty -or $script:closingAll -or ($script:autoAllRun -and $script:autoAllRun.active)){return}
     $script:autoOpenSelectedDirty=$false
+    $limit=[int]$autoOpenSelectedLimit.Value
+    $occupancy=if($limit -gt 0){Get-AutoOpenOccupancy}else{$null}
+    $available=if($occupancy){[Math]::Max(0,$limit-$occupancy.Count)}else{[int]::MaxValue}
+    if($available -eq 0){
+        $autoOpenSelected.Checked=$false
+        $status.Text="Đã đủ giới hạn $limit acc đang mở hoặc chờ mở."
+        return
+    }
+    $submitted=0
     $launchRows=@(foreach($row in $grid.Rows){
+        if($submitted -ge $available){break}
         if(!$row.Tag -or $row.Cells['pick'].Value -ne $true){continue}
         $id=[string]$row.Tag.id
         if($script:autoOpenSelectedSeen.ContainsKey($id)){continue}
         $script:autoOpenSelectedSeen[$id]=$true
-        if(!(Test-AccountOpenBlocked $row.Tag)){$row}
+        if($occupancy -and ($occupancy.Reserved.ContainsKey($id) -or $occupancy.LiveAccounts.ContainsKey($id))){continue}
+        if(!(Test-AccountOpenBlocked $row.Tag)){$row;$submitted++}
     })
-    if($launchRows.Count){Start-SelectedLaunchRows $launchRows $true}
+    if($launchRows.Count){
+        if($submitted -ge $available){$autoOpenSelected.Checked=$false}
+        Start-SelectedLaunchRows $launchRows $true
+    }
 }
 
 $grid.Anchor='Top,Left';$grid.ReadOnly=$false

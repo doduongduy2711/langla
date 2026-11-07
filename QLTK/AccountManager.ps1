@@ -155,7 +155,7 @@ try {
     if (!$UiTest -and (Test-Path $script:storePath)) { $decoded = Read-JsonData $script:storePath; $script:accounts = @($decoded) }
     if (!$UiTest -and (Test-Path $script:configPath)) {
         $loaded = Read-JsonData $script:configPath
-        foreach ($key in @('jar','java','mode','arguments','socketPort','socketEnabled','proxyBridge','dungeonMaxOnline','dungeonCloseAfter','izanamiMaxOnline','izanamiGroupSize','izanamiCloseAfter','dailyPriority','soncapGroupSize','soncapPortals','soncapMaxOnline','soncapCloseAfter','questMaxOnline','questCloseAfter','beastMaxOnline','beastCloseAfter','launchDelaySeconds','launchConcurrency','autoReconnect','cloakMaxOnline','mailMaxOnline','chestMaxOnline')) { if ($null -ne $loaded.$key) { $script:settings[$key] = $loaded.$key } }
+        foreach ($key in @('jar','java','mode','arguments','socketPort','socketEnabled','proxyBridge','dungeonMaxOnline','dungeonCloseAfter','izanamiMaxOnline','izanamiGroupSize','izanamiCloseAfter','dailyPriority','soncapGroupSize','soncapPortals','soncapMaxOnline','soncapCloseAfter','questMaxOnline','questCloseAfter','beastMaxOnline','beastCloseAfter','launchDelaySeconds','launchConcurrency','autoOpenSelectedLimit','autoReconnect','cloakMaxOnline','mailMaxOnline','chestMaxOnline')) { if ($null -ne $loaded.$key) { $script:settings[$key] = $loaded.$key } }
     }
 } catch { Show-Error "Không đọc được dữ liệu. Ứng dụng sẽ dừng để tránh ghi đè: $($_.Exception.Message)"; exit 1 }
 if(!$UiTest -and $script:defaultGame -and ([string]::IsNullOrWhiteSpace([string]$script:settings.jar) -or !(Test-Path -LiteralPath ([string]$script:settings.jar) -PathType Leaf))){$script:settings.jar=$script:defaultGame}
