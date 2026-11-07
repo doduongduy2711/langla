@@ -22,6 +22,11 @@
     }
     try{
         if($autoOpenSelected.Checked -or $autoOpenSelected.Bounds.Right -gt $options.ClientSize.Width -or $autoOpenSelectedLimit.Bounds.Right -gt $options.ClientSize.Width -or $autoOpenSelectedLimit.ReadOnly){throw 'Auto open checkbox/limit layout invalid'}
+        Resize-UiLayout
+        foreach($control in @($autoReconnect,$autoOpenSelectedLimit,$hideAccountInfo)){
+            if($control.Bounds.IntersectsWith($autoOpenSelected.Bounds)){throw 'Another control covers the auto-open tick or its hit area'}
+        }
+        if($hideAccountInfo.Bounds.IntersectsWith($autoOpenSelectedLimit.Bounds) -or $hideAccountInfo.Right -gt $options.ClientSize.Width){throw 'Privacy checkbox overlaps the auto-open limit or is clipped'}
         $autoOpenSelectedLimit.Value=0
         $original.Cells['pick'].Value=$false;$blocked.Cells['pick'].Value=$true;$extra.Cells['pick'].Value=$false
         $autoOpenSelected.Checked=$true;Invoke-AutoOpenSelected
@@ -44,12 +49,17 @@
         $autoOpenSelectedLimit.Value=20
         if($script:settings.autoOpenSelectedLimit -ne 20 -or (Get-AutoOpenOccupancy).Count -ne 14){throw 'Limit not stored or live/queued accounts counted twice'}
         $autoOpenSelected.Checked=$true;Invoke-AutoOpenSelected;Invoke-AutoOpenSelected
-        if($autoOpenSelected.Checked -or $script:autoOpenFixtureBatches.Count -ne 3 -or $script:autoOpenFixtureBatches[-1] -ne 'cap-1,cap-2,cap-3,cap-4,cap-5,cap-6'){throw 'Auto open did not stop at 20 including live and queued clients'}
-        $autoOpenSelectedLimit.Value=12;$autoOpenSelected.Checked=$true;Invoke-AutoOpenSelected
-        if($autoOpenSelected.Checked -or $script:autoOpenFixtureBatches.Count -ne 3){throw 'Auto open submitted at an already full limit'}
+        if(!$autoOpenSelected.Checked -or $script:autoOpenFixtureBatches.Count -ne 3 -or $script:autoOpenFixtureBatches[-1] -ne 'cap-1,cap-2,cap-3,cap-4,cap-5,cap-6'){throw 'Auto open did not pause at 20 and keep its tick'}
+        for($i=1;$i -le 6;$i++){
+            $id="cap-$i";$fixtureJobs[$id]=[pscustomobject]@{ProcessId=0;State='queued'};$script:accountJobs[$id]=$id
+        }
+        $autoOpenSelectedLimit.Value=21;Invoke-AutoOpenSelected;Invoke-AutoOpenSelected
+        if(!$autoOpenSelected.Checked -or $script:autoOpenFixtureBatches.Count -ne 4 -or $script:autoOpenFixtureBatches[-1] -ne 'cap-7'){throw 'Raising the limit did not resume without another click'}
+        $autoOpenSelectedLimit.Value=12;Invoke-AutoOpenSelected
+        if(!$autoOpenSelected.Checked -or $script:autoOpenFixtureBatches.Count -ne 4){throw 'Auto open submitted at an already full limit'}
         $fixtureJobs.race=[pscustomobject]@{ProcessId=0;State='starting'};$script:accountJobs['race']='race'
         $promoteDuringSnapshot=$true
-        if((Get-AutoOpenOccupancy).Count -ne 15){throw 'A job registering during the process snapshot lost its reserved slot'}
+        if((Get-AutoOpenOccupancy).Count -ne 21){throw 'A job registering during the process snapshot lost its reserved slot'}
     }finally{
         $autoOpenSelected.Checked=$false
         $autoOpenSelectedLimit.Value=$oldLimit
@@ -60,4 +70,4 @@
         $grid.Rows.Remove($extra);$grid.Rows.Remove($blocked);$original.Cells['pick'].Value=$oldPick
     }
 }
-Write-Output 'PASS: Auto open checkbox, explicit selection only, duplicate guard, editable limit and auto stop at cap including live and queued clients.'
+Write-Output 'PASS: Visible auto-open tick, no duplicate requests, pause at cap with the tick retained, and resume when the limit increases.'

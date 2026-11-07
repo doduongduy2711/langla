@@ -93,8 +93,8 @@ $launchConcurrency.Add_ValueChanged({$script:settings.launchConcurrency=[int]$la
 $launchDelayTip=New-Object Windows.Forms.ToolTip;$launchDelayTip.SetToolTip($launchDelay,'Khoảng cách giữa các lần mở game. 0 = không thêm khoảng chờ.');$launchDelayTip.SetToolTip($launchConcurrency,'Số tài khoản đang mở/đăng nhập song song. Giảm giá trị không đóng game đang mở.')
 $form.Add_Disposed({$launchDelayTip.Dispose()})
 $autoOpenSelected=New-Object Windows.Forms.CheckBox;$autoOpenSelected.Text='Tự mở đã chọn'
-Ui-Place $autoOpenSelected $options 220 40 118 22
-$null=Ui-Label 'Tối đa:' $options 232 61 44 20
+Ui-Place $autoOpenSelected $options 220 40 118 20
+$null=Ui-Label 'Tối đa:' $options 232 63 44 20
 $autoOpenSelectedLimit=New-Object Windows.Forms.NumericUpDown
 $autoOpenSelectedLimit.Minimum=0;$autoOpenSelectedLimit.Maximum=10000
 $autoOpenSelectedLimit.AccessibleName='Số acc online tối đa khi tự mở'
@@ -102,8 +102,8 @@ $savedAutoOpenLimit=0
 if([int]::TryParse([string]$script:settings.autoOpenSelectedLimit,[ref]$savedAutoOpenLimit)){
     $autoOpenSelectedLimit.Value=[Math]::Max(0,[Math]::Min(10000,$savedAutoOpenLimit))
 }
-Ui-Place $autoOpenSelectedLimit $options 276 58 60 22
-$launchDelayTip.SetToolTip($autoOpenSelected,'Tự xếp hàng các tài khoản tích cột Chọn. Dừng khi đủ giới hạn. Acc đã xong hoặc đã tắt không tự mở lại.')
+Ui-Place $autoOpenSelectedLimit $options 276 62 60 22
+$launchDelayTip.SetToolTip($autoOpenSelected,'Tạm dừng khi đủ giới hạn. Tăng Tối đa để mở thêm acc đã chọn mà không cần tích lại. Acc đã xong hoặc đã tắt không tự mở lại.')
 $launchDelayTip.SetToolTip($autoOpenSelectedLimit,'Tổng số game đang mở và acc đã xếp hàng. 0 = không giới hạn.')
 $autoOpenSelectedLimit.Add_ValueChanged({
     $script:settings.autoOpenSelectedLimit=[int]$autoOpenSelectedLimit.Value
@@ -157,8 +157,7 @@ function Invoke-AutoOpenSelected {
     $occupancy=if($limit -gt 0){Get-AutoOpenOccupancy}else{$null}
     $available=if($occupancy){[Math]::Max(0,$limit-$occupancy.Count)}else{[int]::MaxValue}
     if($available -eq 0){
-        $autoOpenSelected.Checked=$false
-        $status.Text="Đã đủ giới hạn $limit acc đang mở hoặc chờ mở."
+        $status.Text="Đã đủ giới hạn $limit acc đang mở hoặc chờ mở. Tăng Tối đa để mở thêm."
         return
     }
     $submitted=0
@@ -171,10 +170,7 @@ function Invoke-AutoOpenSelected {
         if($occupancy -and ($occupancy.Reserved.ContainsKey($id) -or $occupancy.LiveAccounts.ContainsKey($id))){continue}
         if(!(Test-AccountOpenBlocked $row.Tag)){$row;$submitted++}
     })
-    if($launchRows.Count){
-        if($submitted -ge $available){$autoOpenSelected.Checked=$false}
-        Start-SelectedLaunchRows $launchRows $true
-    }
+    if($launchRows.Count){Start-SelectedLaunchRows $launchRows $true}
 }
 
 $grid.Anchor='Top,Left';$grid.ReadOnly=$false
@@ -389,7 +385,6 @@ function Resize-UiLayout {
     $form.SuspendLayout()
     try {
     $top.SetBounds(6,6,340,106);$basic.SetBounds(350,3,200,109);$options.SetBounds(556,3,($w-562),109)
-    $autoReconnect.Width=220
     $gridHeight=[Math]::Max(180,[Math]::Min(320,[int](($h-380)*0.75)));$tabTop=118+$gridHeight+8
     $grid.SetBounds(6,118,($w-12),$gridHeight)
     $tabs.SetBounds(6,$tabTop,($w-268),($h-$tabTop-101));$detailsGroup.SetBounds(($w-256),$tabTop,250,($h-$tabTop-101))
